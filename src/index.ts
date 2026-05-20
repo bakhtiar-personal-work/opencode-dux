@@ -832,7 +832,6 @@ const OhMyOpenCodeLite: Plugin = async (ctx) => {
           console.log(
             `  \u{1F4E6} Current version: \x1b[31mv${currentVersion}\x1b[0m \u2192 \x1b[33mv${latestVersion}\x1b[0m`,
           );
-          console.log('     Please restart OpenCode to complete the update.');
           log(`[version] Current version: v${currentVersion} \u2192 v${latestVersion}`);
           log('[version] Please restart OpenCode to complete the update.');
         } else {
