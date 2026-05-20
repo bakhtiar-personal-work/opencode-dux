@@ -1,0 +1,634 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "preset": {
+      "type": "string"
+    },
+    "setDefaultAgent": {
+      "type": "boolean"
+    },
+    "scoringEngineVersion": {
+      "type": "string",
+      "enum": [
+        "v1",
+        "v2-shadow",
+        "v2"
+      ]
+    },
+    "balanceProviderUsage": {
+      "type": "boolean"
+    },
+    "autoUpdate": {
+      "description": "Disable automatic installation of plugin updates when false. Defaults to true.",
+      "type": "boolean"
+    },
+    "manualPlan": {
+      "type": "object",
+      "properties": {
+        "orchestrator": {
+          "type": "object",
+          "properties": {
+            "primary": {
+              "type": "string",
+              "pattern": "^[^/\\s]+\\/[^\\s]+$"
+            },
+            "fallback1": {
+              "type": "string",
+              "pattern": "^[^/\\s]+\\/[^\\s]+$"
+            },
+            "fallback2": {
+              "type": "string",
+              "pattern": "^[^/\\s]+\\/[^\\s]+$"
+            },
+            "fallback3": {
+              "type": "string",
+              "pattern": "^[^/\\s]+\\/[^\\s]+$"
+            }
+          },
+          "required": [
+            "primary",
+            "fallback1",
+            "fallback2",
+            "fallback3"
+          ]
+        },
+        "oracle": {
+          "type": "object",
+          "properties": {
+            "primary": {
+              "type": "string",
+              "pattern": "^[^/\\s]+\\/[^\\s]+$"
+            },
+            "fallback1": {
+              "type": "string",
+              "pattern": "^[^/\\s]+\\/[^\\s]+$"
+            },
+            "fallback2": {
+              "type": "string",
+              "pattern": "^[^/\\s]+\\/[^\\s]+$"
+            },
+            "fallback3": {
+              "type": "string",
+              "pattern": "^[^/\\s]+\\/[^\\s]+$"
+            }
+          },
+          "required": [
+            "primary",
+            "fallback1",
+            "fallback2",
+            "fallback3"
+          ]
+        },
+        "designer": {
+          "type": "object",
+          "properties": {
+            "primary": {
+              "type": "string",
+              "pattern": "^[^/\\s]+\\/[^\\s]+$"
+            },
+            "fallback1": {
+              "type": "string",
+              "pattern": "^[^/\\s]+\\/[^\\s]+$"
+            },
+            "fallback2": {
+              "type": "string",
+              "pattern": "^[^/\\s]+\\/[^\\s]+$"
+            },
+            "fallback3": {
+              "type": "string",
+              "pattern": "^[^/\\s]+\\/[^\\s]+$"
+            }
+          },
+          "required": [
+            "primary",
+            "fallback1",
+            "fallback2",
+            "fallback3"
+          ]
+        },
+        "explorer": {
+          "type": "object",
+          "properties": {
+            "primary": {
+              "type": "string",
+              "pattern": "^[^/\\s]+\\/[^\\s]+$"
+            },
+            "fallback1": {
+              "type": "string",
+              "pattern": "^[^/\\s]+\\/[^\\s]+$"
+            },
+            "fallback2": {
+              "type": "string",
+              "pattern": "^[^/\\s]+\\/[^\\s]+$"
+            },
+            "fallback3": {
+              "type": "string",
+              "pattern": "^[^/\\s]+\\/[^\\s]+$"
+            }
+          },
+          "required": [
+            "primary",
+            "fallback1",
+            "fallback2",
+            "fallback3"
+          ]
+        },
+        "librarian": {
+          "type": "object",
+          "properties": {
+            "primary": {
+              "type": "string",
+              "pattern": "^[^/\\s]+\\/[^\\s]+$"
+            },
+            "fallback1": {
+              "type": "string",
+              "pattern": "^[^/\\s]+\\/[^\\s]+$"
+            },
+            "fallback2": {
+              "type": "string",
+              "pattern": "^[^/\\s]+\\/[^\\s]+$"
+            },
+            "fallback3": {
+              "type": "string",
+              "pattern": "^[^/\\s]+\\/[^\\s]+$"
+            }
+          },
+          "required": [
+            "primary",
+            "fallback1",
+            "fallback2",
+            "fallback3"
+          ]
+        },
+        "fixer": {
+          "type": "object",
+          "properties": {
+            "primary": {
+              "type": "string",
+              "pattern": "^[^/\\s]+\\/[^\\s]+$"
+            },
+            "fallback1": {
+              "type": "string",
+              "pattern": "^[^/\\s]+\\/[^\\s]+$"
+            },
+            "fallback2": {
+              "type": "string",
+              "pattern": "^[^/\\s]+\\/[^\\s]+$"
+            },
+            "fallback3": {
+              "type": "string",
+              "pattern": "^[^/\\s]+\\/[^\\s]+$"
+            }
+          },
+          "required": [
+            "primary",
+            "fallback1",
+            "fallback2",
+            "fallback3"
+          ]
+        }
+      },
+      "required": [
+        "orchestrator",
+        "oracle",
+        "designer",
+        "explorer",
+        "librarian",
+        "fixer"
+      ],
+      "additionalProperties": false
+    },
+    "presets": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "propertyNames": {
+          "type": "string"
+        },
+        "additionalProperties": {
+          "type": "object",
+          "properties": {
+            "model": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "variant": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id"
+                        ]
+                      }
+                    ]
+                  }
+                }
+              ]
+            },
+            "temperature": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 2
+            },
+            "variant": {
+              "type": "string"
+            },
+            "options": {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {}
+            },
+            "displayName": {
+              "type": "string",
+              "minLength": 1
+            },
+            "skills": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "always-load": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "mandatory": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "wildcard": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              ]
+            },
+            "mcps": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "always-load": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "mandatory": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "wildcard": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "additionalProperties": false
+        }
+      }
+    },
+    "agents": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "variant": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id"
+                      ]
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          "temperature": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 2
+          },
+          "variant": {
+            "type": "string"
+          },
+          "options": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {}
+          },
+          "displayName": {
+            "type": "string",
+            "minLength": 1
+          },
+          "skills": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "always-load": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "mandatory": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "wildcard": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            ]
+          },
+          "mcps": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "always-load": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "mandatory": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "wildcard": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "websearch": {
+      "type": "object",
+      "properties": {
+        "provider": {
+          "default": "exa",
+          "type": "string",
+          "enum": [
+            "exa",
+            "tavily"
+          ]
+        }
+      }
+    },
+    "sessionManager": {
+      "type": "object",
+      "properties": {
+        "maxSessionsPerAgent": {
+          "default": 2,
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10
+        },
+        "readContextMinLines": {
+          "default": 10,
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "readContextMaxFiles": {
+          "default": 8,
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 50
+        }
+      }
+    },
+    "todoContinuation": {
+      "type": "object",
+      "properties": {
+        "maxContinuations": {
+          "default": 5,
+          "description": "Maximum consecutive auto-continuations before stopping to ask user",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 50
+        },
+        "cooldownMs": {
+          "default": 3000,
+          "description": "Delay in ms before auto-continuing (gives user time to abort)",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 30000
+        },
+        "autoEnable": {
+          "default": false,
+          "description": "Automatically enable auto-continue when the orchestrator session has enough todos",
+          "type": "boolean"
+        },
+        "autoEnableThreshold": {
+          "default": 4,
+          "description": "Number of todos that triggers auto-enable (only used when autoEnable is true)",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 50
+        }
+      }
+    },
+    "contextPressure": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "default": true,
+          "description": "When true, warn the orchestrator on high context usage before the model fails.",
+          "type": "boolean"
+        },
+        "warnThresholdPct": {
+          "default": 75,
+          "description": "Inject a /compact reminder when context (used ÷ limit) is at least this percent.",
+          "type": "number",
+          "minimum": 1,
+          "maximum": 99
+        }
+      }
+    },
+    "fallback": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "default": true,
+          "type": "boolean"
+        },
+        "timeoutMs": {
+          "default": 15000,
+          "type": "number",
+          "minimum": 0
+        },
+        "retryDelayMs": {
+          "default": 500,
+          "type": "number",
+          "minimum": 0
+        },
+        "chains": {
+          "default": {},
+          "type": "object",
+          "properties": {
+            "orchestrator": {
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "oracle": {
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "designer": {
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "explorer": {
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "librarian": {
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "fixer": {
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "steward": {
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "interpreter": {
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "additionalProperties": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "retry_on_empty": {
+          "default": true,
+          "description": "When true (default), empty provider responses are treated as failures, triggering fallback/retry. Set to false to treat them as successes.",
+          "type": "boolean"
+        }
+      }
+    }
+  },
+  "title": "opencode-dux",
+  "description": "Configuration schema for opencode-dux plugin for OpenCode"
+}
