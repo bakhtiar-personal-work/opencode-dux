@@ -875,7 +875,7 @@ const OhMyOpenCodeLite: Plugin = async (ctx) => {
           } catch (err) {
             log('[auto-update-checker] Post-init cache clear failed:', err);
           }
-        }, 1000);
+        }, 5000);
       }
 
       return true;

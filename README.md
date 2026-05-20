@@ -41,7 +41,6 @@ Or run the installer: `bunx opencode-dux install`
 
 1. **On startup**, the plugin checks npm for the latest version
 2. **If an update is available** (e.g., v1.3.6 → v1.3.7):
-   - The plugin displays: `📦 Update available: v1.3.6 → v1.3.7. Please restart OpenCode to complete the update.`
    - OpenCode's package cache is automatically cleared
    - The plugin continues working with the current version
 3. **Restart OpenCode** to complete the update
