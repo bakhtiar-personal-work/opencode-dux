@@ -1453,7 +1453,6 @@ function renderSidebar(
           text({ fg: theme.accent }, [`v${PLUGIN_VERSION}`]),
         ],
       ),
-      box({ width: '100%', height: 1 }),
       box(
         {
           width: '100%',
