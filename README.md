@@ -7,8 +7,10 @@ Agent orchestration, management, and operations plugin for OpenCode. Routes task
 1. Add to `~/.config/opencode/opencode.json` and `~/.config/opencode/tui.json`:
 
 ```json
-{ "plugin": ["opencode-dux"] }
+{ "plugin": ["opencode-dux@latest"] }
 ```
+
+> Using `@latest` ensures auto-update support - the plugin will check for updates automatically on load.
 
 2. Create `~/.config/opencode/opencode-dux.jsonc`:
 

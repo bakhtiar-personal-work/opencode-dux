@@ -39,6 +39,21 @@ function getPluginVersion(): string {
 
 const PLUGIN_VERSION = getPluginVersion();
 
+function getPluginVersionInfo(): {
+  installed: string;
+  latest?: string;
+  isLatest: boolean;
+} {
+  const installed = PLUGIN_VERSION;
+  const snapshot = readTuiSnapshot();
+  const latest = snapshot.versionCheck?.latestVersion ?? undefined;
+  return {
+    installed,
+    latest,
+    isLatest: !latest || installed === latest,
+  };
+}
+
 const PLUGIN_NAME = 'opencode-dux';
 const BORDER = { type: 'single' };
 const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
@@ -1535,7 +1550,18 @@ function renderSidebar(
         },
         [
           text({ fg: theme.accent }, ['opencode-dux']),
-          text({ fg: theme.accent }, [`v${PLUGIN_VERSION}`]),
+          (() => {
+            const versionInfo = getPluginVersionInfo();
+            if (versionInfo.isLatest) {
+              return text({ fg: theme.accent }, [
+                `v${versionInfo.installed} (latest)`,
+              ]);
+            }
+            return box({ flexDirection: 'row' }, [
+              text({ fg: '#E74C3C' }, [`v${versionInfo.installed}`]),
+              text({ fg: '#F39C12' }, [` (→ v${versionInfo.latest})`]),
+            ]);
+          })(),
         ],
       ),
       box(

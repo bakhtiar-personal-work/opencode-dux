@@ -64,6 +64,10 @@ export interface TuiSessionBundle {
 export interface TuiSnapshot {
   version: 6;
   pluginVersion?: string;
+  versionCheck?: {
+    latestVersion: string | null;
+    lastChecked: number | null;
+  };
   updatedAt: number;
   sessions: Record<string, TuiSessionBundle>;
   subscriptionUsage: Record<string, SubscriptionUsageEntry>;
@@ -628,6 +632,8 @@ function parseSnapshot(value: string): TuiSnapshot | null {
       version: 6,
       updatedAt:
         typeof parsed.updatedAt === 'number' ? parsed.updatedAt : Date.now(),
+      pluginVersion: parsed.pluginVersion,
+      versionCheck: parsed.versionCheck,
       sessions: parseSessionBundles(parsed.sessions ?? {}),
       subscriptionUsage: normalizeSubscriptionUsage(
         typeof parsed.subscriptionUsage === 'object' && parsed.subscriptionUsage

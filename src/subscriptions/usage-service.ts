@@ -294,7 +294,7 @@ export class UsageService {
     const activeByProvider: Partial<Record<SubscriptionProvider, string>> = {};
     const accounts = this.getAccounts();
     for (const provider of PROVIDERS) {
-      // Find matching auth entry — both 'api' and 'oauth' formats
+      // Find matching auth entry - both 'api' and 'oauth' formats
       const entry = auth[provider];
       const key =
         entry?.type === 'oauth'

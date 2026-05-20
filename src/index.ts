@@ -808,6 +808,12 @@ const OhMyOpenCodeLite: Plugin = async (ctx) => {
       if (latestVersion) {
         lastChecked = Date.now();
         writeVersionCache({ latestVersion, lastChecked });
+        updateSnapshot((s) => {
+          s.versionCheck = {
+            latestVersion,
+            lastChecked,
+          };
+        });
       }
 
       // 3. Display version with fresh npm data

@@ -294,7 +294,7 @@ export async function refreshCodexToken(
 /**
  * Decode the `chatgpt_account_id` claim from a Codex JWT access token.
  * The JWT payload is the second base64url-encoded segment.
- * This is a pure decode — no signature verification (we trust our own token).
+ * This is a pure decode - no signature verification (we trust our own token).
  * Returns the account ID string, or null if the claim is missing or the token is malformed.
  */
 export function decodeCodexAccountId(accessToken: string): string | null {
