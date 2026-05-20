@@ -10,8 +10,6 @@ Agent orchestration, management, and operations plugin for OpenCode. Routes task
 { "plugin": ["opencode-dux@latest"] }
 ```
 
-> Using `@latest` ensures auto-update support - the plugin will check for updates automatically on load.
-
 2. Create `~/.config/opencode/opencode-dux.jsonc`:
 
 ```jsonc
@@ -34,6 +32,31 @@ Agent orchestration, management, and operations plugin for OpenCode. Routes task
 3. Authenticate: `opencode auth login`
 
 Or run the installer: `bunx opencode-dux install`
+
+## Auto-Update
+
+**Important:** OpenCode's built-in plugin auto-update has known issues with cached packages. This plugin implements its own robust update detection system.
+
+### How it works
+
+1. **On startup**, the plugin checks npm for the latest version
+2. **If an update is available** (e.g., v1.3.6 → v1.3.7):
+   - The plugin displays: `📦 Update available: v1.3.6 → v1.3.7. Please restart OpenCode to complete the update.`
+   - OpenCode's package cache is automatically cleared
+   - The plugin continues working with the current version
+3. **Restart OpenCode** to complete the update
+   - OpenCode re-fetches the latest version from npm
+   - The new version is installed automatically
+
+### Installation requirement
+
+Auto-update works with both `"opencode-dux"` and `"opencode-dux@latest"`. OpenCode treats them identically.
+
+```json
+{ "plugin": ["opencode-dux"] }
+```
+
+**Avoid version pinning** (e.g., `"opencode-dux@1.3.6"`) - this disables auto-update.
 
 ## Agents
 

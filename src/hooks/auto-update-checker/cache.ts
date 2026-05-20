@@ -186,3 +186,45 @@ export function preparePackageUpdate(
     return null;
   }
 }
+
+/**
+ * Deletes ALL opencode-dux package cache directories under the OpenCode
+ * packages directory. This forces OpenCode to re-fetch from npm on
+ * next startup.
+ *
+ * Returns the number of directories deleted (0 if none found).
+ */
+export function clearPackageCache(): number {
+  const packagesDir = path.join(CACHE_DIR, 'packages');
+  if (!fs.existsSync(packagesDir)) return 0;
+
+  let deleted = 0;
+  try {
+    const entries = fs.readdirSync(packagesDir);
+    for (const entry of entries) {
+      // Match: opencode-dux@latest, opencode-dux@1.3.6, etc.
+      if (entry.startsWith(`${PACKAGE_NAME}@`)) {
+        const fullPath = path.join(packagesDir, entry);
+        fs.rmSync(fullPath, { recursive: true, force: true });
+        log(`[auto-update-checker] Package cache deleted: ${fullPath}`);
+        deleted++;
+      }
+    }
+  } catch (err) {
+    log('[auto-update-checker] Failed to clear package cache:', err);
+  }
+
+  // Also try the legacy path: CACHE_DIR/node_modules/opencode-dux/
+  const legacyPkgDir = path.join(CACHE_DIR, 'node_modules', PACKAGE_NAME);
+  try {
+    if (fs.existsSync(legacyPkgDir)) {
+      fs.rmSync(legacyPkgDir, { recursive: true, force: true });
+      log(`[auto-update-checker] Legacy cache deleted: ${legacyPkgDir}`);
+      deleted++;
+    }
+  } catch (err) {
+    log('[auto-update-checker] Failed to clear legacy cache:', err);
+  }
+
+  return deleted;
+}

@@ -195,6 +195,7 @@ async function runBunInstallSafe(installDir: string): Promise<boolean> {
   }
 }
 
+export { clearPackageCache } from './cache';
 export { getLatestVersion } from './checker';
 
 export type { AutoUpdateCheckerOptions } from './types';

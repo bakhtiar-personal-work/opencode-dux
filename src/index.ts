@@ -38,7 +38,7 @@ import {
   createTodoContinuationHook,
   ForegroundFallbackManager,
 } from './hooks';
-import { getLatestVersion } from './hooks/auto-update-checker';
+import { clearPackageCache, getLatestVersion } from './hooks/auto-update-checker';
 import { processImageAttachments } from './hooks/image-hook';
 import { createBuiltinMcps } from './mcp';
 import { discoverSkills } from './skills/registry';
@@ -82,7 +82,7 @@ import {
 import { initLogger, log } from './utils/logger';
 import { SubagentDepthTracker } from './utils/subagent-depth';
 import { collapseSystemInPlace } from './utils/system-collapse';
-import { logVersionDisplay, writeVersionCache } from './version-store';
+import { logVersionDisplay, VERSION_CACHE_STALE_MS, writeVersionCache } from './version-store';
 
 /**
  * Best-effort log to opencode's app logger.
@@ -818,6 +818,28 @@ const OhMyOpenCodeLite: Plugin = async (ctx) => {
 
       // 3. Display version with fresh npm data
       logVersionDisplay(currentVersion, savedVersion, latestVersion, lastChecked);
+
+      // If a newer version is available, clear the package cache so OpenCode
+      // re-fetches from npm on the next restart.
+      const cacheFresh =
+        latestVersion !== null &&
+        lastChecked !== null &&
+        Date.now() - lastChecked < VERSION_CACHE_STALE_MS;
+
+      if (cacheFresh && latestVersion !== currentVersion) {
+        const deleted = clearPackageCache();
+        if (deleted > 0) {
+          console.log(
+            `  📦 Update available: v${currentVersion} → v${latestVersion}. Please restart OpenCode to complete the update.`,
+          );
+          log(`[auto-update-checker] Cache cleared (${deleted} dirs). User notified to restart.`);
+        }
+      }
+
+      // Wait for logs to settle (5s when update available, 2s otherwise)
+      const delayMs = (cacheFresh && latestVersion !== currentVersion) ? 5000 : 2000;
+      await new Promise((r) => setTimeout(r, delayMs));
+
       return true;
     } catch (err) {
       const verErrMsg =
