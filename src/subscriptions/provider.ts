@@ -30,10 +30,10 @@ export function resolveProvider(
 
   // Check display label (case-sensitive match)
   const displayMatch = Object.entries(PROVIDER_DISPLAY).find(
-    ([, display]) => display.toLowerCase() === raw.toLowerCase()
+    ([, display]) => display.toLowerCase() === raw.toLowerCase(),
   );
   if (displayMatch) return displayMatch[0] as SubscriptionProvider;
-  
+
   // Check full provider name (case-insensitive)
   const normalized = raw.toLowerCase();
   return PROVIDERS.find((p) => p.toLowerCase() === normalized);

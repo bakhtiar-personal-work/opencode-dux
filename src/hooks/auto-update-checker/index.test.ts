@@ -16,6 +16,10 @@ const cacheMocks = {
   resolveInstallContext: mock(() => ({ installDir: '/tmp/opencode' })),
 };
 
+const versionStoreMocks = {
+  writeVersionCache: mock(() => {}),
+};
+
 const crossSpawnMock = mock((_command: string[]) => ({
   exited: Promise.resolve(0),
   exitCode: 0,
@@ -33,6 +37,8 @@ mock.module('./checker', () => checkerMocks);
 
 mock.module('./cache', () => cacheMocks);
 
+mock.module('../../version-store', () => versionStoreMocks);
+
 mock.module('../../utils/compat', () => ({
   crossSpawn: crossSpawnMock,
   crossWrite: mock(() => Promise.resolve()),
@@ -42,18 +48,18 @@ mock.module('../../utils/compat', () => ({
 let importCounter = 0;
 
 function createCtx() {
-  const showToast = mock(() => Promise.resolve(undefined));
-
   return {
     ctx: {
       directory: '/test',
       client: {
         tui: {
-          showToast,
+          showToast: mock(() => Promise.resolve(undefined)),
+        },
+        app: {
+          log: mock(() => Promise.resolve(undefined)),
         },
       },
     },
-    showToast,
   };
 }
 
@@ -117,24 +123,23 @@ describe('auto-update-checker/index', () => {
     expect(getAutoUpdateInstallDir()).toBe('/tmp/opencode');
   });
 
-  test('skips background update for local dev installs without startup toast', async () => {
+  test('skips background update for local dev installs without logs', async () => {
     checkerMocks.getLocalDevVersion.mockImplementation(() => '0.9.11-dev');
 
     const { createAutoUpdateCheckerHook } = await import(
       `./index?test=${importCounter++}`
     );
-    const { ctx, showToast } = createCtx();
+    const { ctx } = createCtx();
 
     const hook = createAutoUpdateCheckerHook(ctx as never);
     hook.event({ event: { type: 'session.created', properties: {} } });
     await waitForCalls(logMock);
 
-    expect(showToast).not.toHaveBeenCalled();
     expect(checkerMocks.findPluginEntry).not.toHaveBeenCalled();
     expect(checkerMocks.getLatestVersion).not.toHaveBeenCalled();
   });
 
-  test('shows success toast after updating the active install root', async () => {
+  test('logs success message after updating the active install root', async () => {
     checkerMocks.findPluginEntry.mockImplementation(() => ({
       pinnedVersion: null,
       isPinned: false,
@@ -154,11 +159,11 @@ describe('auto-update-checker/index', () => {
     const { createAutoUpdateCheckerHook } = await import(
       `./index?test=${importCounter++}`
     );
-    const { ctx, showToast } = createCtx();
+    const { ctx } = createCtx();
 
     const hook = createAutoUpdateCheckerHook(ctx as never);
     hook.event({ event: { type: 'session.created', properties: {} } });
-    await waitForCalls(showToast);
+    await waitForCalls(logMock, 2);
 
     expect(cacheMocks.preparePackageUpdate).toHaveBeenCalledWith(
       '0.9.11',
@@ -168,17 +173,16 @@ describe('auto-update-checker/index', () => {
       ['bun', 'install'],
       expect.objectContaining({ cwd: '/tmp/opencode' }),
     );
-    expect(showToast).toHaveBeenCalledWith({
-      body: {
-        title: 'Opencode Dux Updated!',
-        message: 'Updated from v0.9.1 to v0.9.11\nRestart OpenCode to apply.',
-        variant: 'success',
-        duration: 8000,
-      },
+    expect(logMock).toHaveBeenCalledWith(
+      '[auto-update-checker] Update installed: 0.9.1 → 0.9.11',
+    );
+    expect(versionStoreMocks.writeVersionCache).toHaveBeenCalledWith({
+      latestVersion: '0.9.11',
+      lastChecked: expect.any(Number),
     });
   });
 
-  test('shows notification-only toast when auto-update is disabled', async () => {
+  test('logs message when auto-update is disabled', async () => {
     checkerMocks.findPluginEntry.mockImplementation(() => ({
       pinnedVersion: null,
       isPinned: false,
@@ -189,28 +193,22 @@ describe('auto-update-checker/index', () => {
     const { createAutoUpdateCheckerHook } = await import(
       `./index?test=${importCounter++}`
     );
-    const { ctx, showToast } = createCtx();
+    const { ctx } = createCtx();
 
     const hook = createAutoUpdateCheckerHook(ctx as never, {
       autoUpdate: false,
     });
     hook.event({ event: { type: 'session.created', properties: {} } });
-    await waitForCalls(showToast);
+    await waitForCalls(logMock, 2);
 
-    expect(showToast).toHaveBeenCalledWith({
-      body: {
-        title: 'Opencode Dux 0.9.11',
-        message:
-          'Update from v0.9.1 to v0.9.11 available. Auto-update is disabled.',
-        variant: 'info',
-        duration: 8000,
-      },
-    });
+    expect(logMock).toHaveBeenCalledWith(
+      '[auto-update-checker] Auto-update disabled; update available: v0.9.1 → v0.9.11',
+    );
     expect(cacheMocks.preparePackageUpdate).not.toHaveBeenCalled();
     expect(crossSpawnMock).not.toHaveBeenCalled();
   });
 
-  test('shows prepare failure toast and skips installation when active install cannot be resolved', async () => {
+  test('logs prepare failure when active install cannot be resolved', async () => {
     checkerMocks.findPluginEntry.mockImplementation(() => ({
       pinnedVersion: null,
       isPinned: false,
@@ -222,25 +220,19 @@ describe('auto-update-checker/index', () => {
     const { createAutoUpdateCheckerHook } = await import(
       `./index?test=${importCounter++}`
     );
-    const { ctx, showToast } = createCtx();
+    const { ctx } = createCtx();
 
     const hook = createAutoUpdateCheckerHook(ctx as never);
     hook.event({ event: { type: 'session.created', properties: {} } });
-    await waitForCalls(showToast);
+    await waitForCalls(logMock, 2);
 
     expect(crossSpawnMock).not.toHaveBeenCalled();
-    expect(showToast).toHaveBeenCalledWith({
-      body: {
-        title: 'Opencode Dux 0.9.11',
-        message:
-          'Update from v0.9.1 to v0.9.11 available. Auto-update could not prepare the active install.',
-        variant: 'info',
-        duration: 8000,
-      },
-    });
+    expect(logMock).toHaveBeenCalledWith(
+      '[auto-update-checker] Failed to prepare install root for auto-update',
+    );
   });
 
-  test('shows install failure toast without telling users to restart', async () => {
+  test('logs install failure without telling users to restart', async () => {
     checkerMocks.findPluginEntry.mockImplementation(() => ({
       pinnedVersion: null,
       isPinned: false,
@@ -260,24 +252,18 @@ describe('auto-update-checker/index', () => {
     const { createAutoUpdateCheckerHook } = await import(
       `./index?test=${importCounter++}`
     );
-    const { ctx, showToast } = createCtx();
+    const { ctx } = createCtx();
 
     const hook = createAutoUpdateCheckerHook(ctx as never);
     hook.event({ event: { type: 'session.created', properties: {} } });
-    await waitForCalls(showToast);
+    await waitForCalls(logMock, 2);
 
     expect(crossSpawnMock).toHaveBeenCalledWith(
       ['bun', 'install'],
       expect.objectContaining({ cwd: '/tmp/opencode' }),
     );
-    expect(showToast).toHaveBeenCalledWith({
-      body: {
-        title: 'Opencode Dux 0.9.11',
-        message:
-          'Update from v0.9.1 to v0.9.11 available, but auto-update failed to install it. Check logs or retry manually.',
-        variant: 'error',
-        duration: 8000,
-      },
-    });
+    expect(logMock).toHaveBeenCalledWith(
+      '[auto-update-checker] bun install failed; update not installed',
+    );
   });
 });

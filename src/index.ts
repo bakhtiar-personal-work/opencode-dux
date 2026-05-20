@@ -78,6 +78,7 @@ import {
 import { initLogger, log } from './utils/logger';
 import { SubagentDepthTracker } from './utils/subagent-depth';
 import { collapseSystemInPlace } from './utils/system-collapse';
+import { readVersionCache, VERSION_CACHE_STALE_MS } from './version-store';
 
 /**
  * Best-effort log to opencode's app logger.
@@ -686,35 +687,42 @@ const OhMyOpenCodeLite: Plugin = async (ctx) => {
       );
       didLogVerboseInit = true;
 
-      // Check if plugin was updated since last run
-      try {
-        const snap = readTuiSnapshot();
-        const savedVersion = snap.pluginVersion;
-        const currentVersion = readPluginVersion();
-        if (savedVersion && currentVersion && savedVersion !== currentVersion) {
-          appLog(
-            ctx,
-            'info',
-            `Updated from v${savedVersion} to v${currentVersion}`,
-          ).catch(() => {});
-          ctx.client.tui
-            .showToast({
-              body: {
-                title: 'OpenCode Dux',
-                message: `Updated to v${currentVersion}`,
-                variant: 'info',
-                duration: 5000,
-              },
-            })
-            .catch(() => {});
+      // ── Version status display ──────────────────────────────────────
+      const currentVersion = readPluginVersion();
+      const savedVersion = readTuiSnapshot().pluginVersion;
+
+      if (currentVersion) {
+        if (savedVersion && savedVersion !== currentVersion) {
+          // "Just updated" — previous version in red → current in green (Updated)
+          console.log(
+            `  \u{1F4E6} version: \x1b[31mv${savedVersion}\x1b[0m → \x1b[32mv${currentVersion} (Updated)\x1b[0m`,
+          );
+        } else {
+          // Check cached latest version from previous NPM check
+          const { latestVersion, lastChecked } = readVersionCache();
+          const cacheFresh =
+            latestVersion !== null &&
+            lastChecked !== null &&
+            Date.now() - lastChecked < VERSION_CACHE_STALE_MS;
+
+          if (cacheFresh && latestVersion !== currentVersion) {
+            // "Update available" — current in red → latest in yellow
+            console.log(
+              `  \u{1F4E6} version: \x1b[31mv${currentVersion}\x1b[0m → \x1b[33mv${latestVersion}\x1b[0m`,
+            );
+            console.log('     Restart OpenCode to update');
+          } else {
+            // "No update" — green version
+            console.log(
+              `  \u{1F4E6} version: \x1b[32mv${currentVersion}\x1b[0m`,
+            );
+          }
         }
-        if (currentVersion) {
-          updateSnapshot((s) => {
-            s.pluginVersion = currentVersion;
-          });
-        }
-      } catch {
-        // best-effort
+
+        // Persist currentVersion to tui-state for "just updated" detection on next startup
+        updateSnapshot((s) => {
+          s.pluginVersion = currentVersion;
+        });
       }
     }
   } catch (err) {

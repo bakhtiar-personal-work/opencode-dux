@@ -1,6 +1,7 @@
 import type { PluginInput } from '@opencode-ai/plugin';
 import { crossSpawn } from '../../utils/compat';
 import { log } from '../../utils/logger';
+import { writeVersionCache } from '../../version-store';
 import { preparePackageUpdate, resolveInstallContext } from './cache';
 import {
   extractChannel,
@@ -86,6 +87,9 @@ async function runBackgroundUpdateCheck(
     return;
   }
 
+  // Persist latest version to cache for startup display
+  writeVersionCache({ latestVersion, lastChecked: Date.now() });
+
   if (currentVersion === latestVersion) {
     log(
       '[auto-update-checker] Already on latest version for channel:',
@@ -98,65 +102,61 @@ async function runBackgroundUpdateCheck(
     `[auto-update-checker] Update available (${channel}): ${currentVersion} → ${latestVersion}`,
   );
 
+  console.log(
+    `\n  \u26A0\uFE0F Update available: v${currentVersion} \u2192 v${latestVersion}`,
+  );
+  console.log('     Restart OpenCode to update\n');
+
   if (pluginInfo.isPinned) {
-    showToast(
-      ctx,
-      `Opencode Dux ${latestVersion}`,
-      `Update from v${currentVersion} to v${latestVersion} available.\nVersion is pinned. Update your plugin config to apply.`,
-      'info',
-      8000,
+    log(
+      `[auto-update-checker] Version is pinned; skipping auto-update. Update available: v${currentVersion} → v${latestVersion}`,
     );
-    log(`[auto-update-checker] Version is pinned; skipping auto-update.`);
     return;
   }
 
   if (!autoUpdate) {
-    showToast(
-      ctx,
-      `Opencode Dux ${latestVersion}`,
-      `Update from v${currentVersion} to v${latestVersion} available. Auto-update is disabled.`,
-      'info',
-      8000,
+    log(
+      `[auto-update-checker] Auto-update disabled; update available: v${currentVersion} → v${latestVersion}`,
     );
-    log('[auto-update-checker] Auto-update disabled, notification only');
     return;
   }
 
   const installDir = preparePackageUpdate(latestVersion, PACKAGE_NAME);
   if (!installDir) {
-    showToast(
-      ctx,
-      `Opencode Dux ${latestVersion}`,
-      `Update from v${currentVersion} to v${latestVersion} available. Auto-update could not prepare the active install.`,
-      'info',
-      8000,
-    );
     log('[auto-update-checker] Failed to prepare install root for auto-update');
+    ctx.client.app
+      .log({
+        body: {
+          service: 'opencode-dux',
+          level: 'error',
+          message: `Auto-update could not prepare the active install for v${latestVersion}`,
+        },
+      })
+      .catch(() => {});
     return;
   }
 
   const installSuccess = await runBunInstallSafe(installDir);
 
   if (installSuccess) {
-    showToast(
-      ctx,
-      'Opencode Dux Updated!',
-      `Updated from v${currentVersion} to v${latestVersion}\nRestart OpenCode to apply.`,
-      'success',
-      8000,
+    console.log(
+      `\n  \u2705 Update installed: v${currentVersion} \u2192 v${latestVersion}`,
     );
+    console.log('     Restart OpenCode to apply\n');
     log(
       `[auto-update-checker] Update installed: ${currentVersion} → ${latestVersion}`,
     );
   } else {
-    showToast(
-      ctx,
-      `Opencode Dux ${latestVersion}`,
-      `Update from v${currentVersion} to v${latestVersion} available, but auto-update failed to install it. Check logs or retry manually.`,
-      'error',
-      8000,
-    );
     log('[auto-update-checker] bun install failed; update not installed');
+    ctx.client.app
+      .log({
+        body: {
+          service: 'opencode-dux',
+          level: 'error',
+          message: `Auto-update install failed for v${latestVersion}: bun install returned non-zero exit code`,
+        },
+      })
+      .catch(() => {});
   }
 }
 
@@ -198,28 +198,6 @@ async function runBunInstallSafe(installDir: string): Promise<boolean> {
     log('[auto-update-checker] bun install error:', err);
     return false;
   }
-}
-
-/**
- * Helper to display a toast notification in the OpenCode TUI.
- * @param ctx The plugin input context.
- * @param title The toast title.
- * @param message The toast message.
- * @param variant The visual style of the toast.
- * @param duration How long to show the toast in milliseconds.
- */
-function showToast(
-  ctx: PluginInput,
-  title: string,
-  message: string,
-  variant: 'info' | 'success' | 'error' = 'info',
-  duration = 3000,
-): void {
-  ctx.client.tui
-    .showToast({
-      body: { title, message, variant, duration },
-    })
-    .catch(() => {});
 }
 
 export type { AutoUpdateCheckerOptions } from './types';
