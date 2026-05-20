@@ -1,5 +1,4 @@
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import { stripJsonComments } from '../../cli/config-manager';
 import { log } from '../../utils/logger';
@@ -283,46 +282,4 @@ export function clearPackageCache(): number {
     `[auto-update-checker] Package cache clearing complete. ${deleted} directories deleted`,
   );
   return deleted;
-}
-
-const RESTART_MARKER_DIR = path.join(
-  os.homedir(),
-  '.cache',
-  'opencode-dux',
-);
-const RESTART_MARKER_PATH = path.join(RESTART_MARKER_DIR, 'restart-update-pending.json');
-
-export function writeRestartMarker(latestVersion: string, currentVersion: string): void {
-  try {
-    if (!fs.existsSync(RESTART_MARKER_DIR)) {
-      fs.mkdirSync(RESTART_MARKER_DIR, { recursive: true });
-    }
-    fs.writeFileSync(
-      RESTART_MARKER_PATH,
-      JSON.stringify({ latestVersion, currentVersion, timestamp: Date.now() }, null, 2),
-      'utf-8',
-    );
-    log(`[auto-update-checker] Restart marker written: v${currentVersion} → v${latestVersion}`);
-  } catch (err) {
-    log('[auto-update-checker] Failed to write restart marker:', err);
-  }
-}
-
-export function processRestartMarker(): { currentVersion: string; latestVersion: string } | null {
-  try {
-    if (!fs.existsSync(RESTART_MARKER_PATH)) return null;
-    const content = JSON.parse(fs.readFileSync(RESTART_MARKER_PATH, 'utf-8')) as {
-      latestVersion: string;
-      currentVersion: string;
-    };
-    const deleted = clearPackageCache();
-    log(`[auto-update-checker] Restart marker processed: ${deleted} cache dir(s) deleted for update v${content.currentVersion} → v${content.latestVersion}`);
-    // Clean up marker file
-    fs.rmSync(RESTART_MARKER_PATH, { force: true });
-    return content;
-  } catch (err) {
-    log('[auto-update-checker] Failed to process restart marker:', err);
-    try { fs.rmSync(RESTART_MARKER_PATH, { force: true }); } catch {}
-    return null;
-  }
 }
