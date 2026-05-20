@@ -1,3 +1,6 @@
+# Build output (rebuilt before npm publish via build script)
+dist/
+
 # Dependencies
 node_modules/
 
