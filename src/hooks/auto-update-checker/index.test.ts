@@ -14,7 +14,9 @@ const checkerMocks = {
 const cacheMocks = {
   clearPackageCache: mock(() => 0),
   preparePackageUpdate: mock(() => '/tmp/opencode'),
+  processRestartMarker: mock(() => null),
   resolveInstallContext: mock(() => ({ installDir: '/tmp/opencode' })),
+  writeRestartMarker: mock(() => {}),
 };
 
 const versionStoreMocks = {

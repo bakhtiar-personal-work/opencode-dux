@@ -38,7 +38,7 @@ import {
   createTodoContinuationHook,
   ForegroundFallbackManager,
 } from './hooks';
-import { clearPackageCache, getLatestVersion } from './hooks/auto-update-checker';
+import { getLatestVersion, processRestartMarker, writeRestartMarker } from './hooks/auto-update-checker';
 import { processImageAttachments } from './hooks/image-hook';
 import { createBuiltinMcps } from './mcp';
 import { discoverSkills } from './skills/registry';
@@ -790,6 +790,15 @@ const OhMyOpenCodeLite: Plugin = async (ctx) => {
     currentVersion: string,
   ): Promise<boolean> {
     try {
+      // 0. Process any pending restart marker from previous session
+      const restartInfo = processRestartMarker();
+      if (restartInfo) {
+        console.log(
+          `  📦 Update pending: clearing cache for v${restartInfo.currentVersion} → v${restartInfo.latestVersion} from previous session.`,
+        );
+        log(`[auto-update-checker] Processed restart marker from previous session: v${restartInfo.currentVersion} → v${restartInfo.latestVersion}`);
+      }
+
       // 1. Get saved version (for "just updated" detection)
       const snapshot = readTuiSnapshot();
       const savedVersion = snapshot.pluginVersion ?? null;
@@ -845,23 +854,19 @@ const OhMyOpenCodeLite: Plugin = async (ctx) => {
         }
       }
 
-      // If a newer version is available, clear the package cache so OpenCode
-      // re-fetches from npm on the next restart.
+      // If a newer version is available, write a restart marker so the cache
+      // is deleted on next startup before the plugin loads.
       const cacheFresh =
         latestVersion !== null &&
         lastChecked !== null &&
         Date.now() - lastChecked < VERSION_CACHE_STALE_MS;
 
       if (cacheFresh && latestVersion !== currentVersion) {
-        log(`[auto-update-checker] Update detected: v${currentVersion} → v${latestVersion}. Clearing cache...`);
-        const deleted = clearPackageCache();
-        log(`[auto-update-checker] Cache clear result: ${deleted} directories deleted`);
-        if (deleted > 0) {
-          console.log(
-            `  📦 Update available: v${currentVersion} → v${latestVersion}. Please restart OpenCode to complete the update.`,
-          );
-          log(`[auto-update-checker] Cache cleared (${deleted} dirs). User notified to restart.`);
-        }
+        writeRestartMarker(latestVersion, currentVersion);
+        console.log(
+          `  📦 Update available: v${currentVersion} → v${latestVersion}. Please restart OpenCode to complete the update.`,
+        );
+        log(`[auto-update-checker] Restart marker written: v${currentVersion} → v${latestVersion}`);
       }
 
       // Wait for logs to settle (5s when update available, 2s otherwise)
