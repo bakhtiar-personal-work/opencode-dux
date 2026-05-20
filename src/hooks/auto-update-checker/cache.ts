@@ -124,10 +124,32 @@ export function resolveInstallContext(
       path.basename(nodeModulesDir) === 'node_modules'
     ) {
       const installDir = path.dirname(nodeModulesDir);
+
       const packageJsonPath = path.join(installDir, 'package.json');
-      if (fs.existsSync(packageJsonPath)) {
-        return { installDir, packageJsonPath };
+      if (!fs.existsSync(packageJsonPath)) {
+        // OpenCode doesn't create a workspace package.json in its cache;
+        // synthesize one so bun install can manage the dependency.
+        try {
+          fs.writeFileSync(
+            packageJsonPath,
+            JSON.stringify(
+              {
+                name: `workspace-${PACKAGE_NAME}`,
+                private: true,
+                dependencies: { [PACKAGE_NAME]: 'latest' },
+              },
+              null,
+              2,
+            ),
+            'utf-8',
+          );
+          log(`[auto-update-checker] Created synthetic workspace package.json: ${packageJsonPath}`);
+        } catch (err) {
+          log('[auto-update-checker] Failed to create synthetic package.json:', err);
+          return null;
+        }
       }
+      return { installDir, packageJsonPath };
     }
 
     return null;

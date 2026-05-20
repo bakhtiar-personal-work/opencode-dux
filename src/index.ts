@@ -854,8 +854,10 @@ const OhMyOpenCodeLite: Plugin = async (ctx) => {
         }
       }
 
-      // If a newer version is available, write a restart marker so the cache
-      // is deleted on next startup before the plugin loads.
+      // If a newer version is available, notify the user to restart.
+      // The background auto-update checker (on session.created) will
+      // attempt to run `bun install` to update the package automatically.
+      // If that fails, the restart marker ensures cache is cleared on next startup.
       const cacheFresh =
         latestVersion !== null &&
         lastChecked !== null &&
