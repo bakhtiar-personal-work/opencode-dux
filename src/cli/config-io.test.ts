@@ -19,6 +19,7 @@ import {
   enableLspByDefault,
   parseConfig,
   parseConfigFile,
+  resolvePluginEntryFromOpenCodeConfig,
   stripJsonComments,
   writeConfig,
   writeLiteConfig,
@@ -532,5 +533,100 @@ describe('config-io', () => {
     const detected = detectCurrentConfig();
 
     expect(detected.isInstalled).toBe(true);
+  });
+
+  describe('resolvePluginEntryFromOpenCodeConfig', () => {
+    test('returns PACKAGE_NAME when opencode.json does not exist', () => {
+      const result = resolvePluginEntryFromOpenCodeConfig();
+      expect(result).toBe('opencode-dux');
+    });
+
+    test('returns PACKAGE_NAME when opencode.json has no plugin list', () => {
+      const configPath = join(tmpDir, 'opencode', 'opencode.json');
+      paths.ensureConfigDir();
+      writeFileSync(configPath, JSON.stringify({}));
+
+      const result = resolvePluginEntryFromOpenCodeConfig();
+      expect(result).toBe('opencode-dux');
+    });
+
+    test('returns PACKAGE_NAME when opencode.json has no matching entry', () => {
+      const configPath = join(tmpDir, 'opencode', 'opencode.json');
+      paths.ensureConfigDir();
+      writeFileSync(configPath, JSON.stringify({ plugin: ['other-plugin'] }));
+
+      const result = resolvePluginEntryFromOpenCodeConfig();
+      expect(result).toBe('opencode-dux');
+    });
+
+    test('returns the matching entry string when opencode.json has "opencode-dux"', () => {
+      const configPath = join(tmpDir, 'opencode', 'opencode.json');
+      paths.ensureConfigDir();
+      writeFileSync(
+        configPath,
+        JSON.stringify({ plugin: ['other', 'opencode-dux'] }),
+      );
+
+      const result = resolvePluginEntryFromOpenCodeConfig();
+      expect(result).toBe('opencode-dux');
+    });
+
+    test('returns the local path when opencode.json has a local path entry', () => {
+      const configPath = join(tmpDir, 'opencode', 'opencode.json');
+      const packageRoot = join(tmpDir, 'repo');
+      paths.ensureConfigDir();
+      writePackageJson(packageRoot);
+      writeFileSync(configPath, JSON.stringify({ plugin: [packageRoot] }));
+
+      const result = resolvePluginEntryFromOpenCodeConfig();
+      expect(result).toBe(packageRoot);
+    });
+
+    test('returns the entry from a matching tuple', () => {
+      const configPath = join(tmpDir, 'opencode', 'opencode.json');
+      paths.ensureConfigDir();
+      writeFileSync(
+        configPath,
+        JSON.stringify({
+          plugin: ['other', ['opencode-dux', { enabled: true }]],
+        }),
+      );
+
+      const result = resolvePluginEntryFromOpenCodeConfig();
+      expect(result).toBe('opencode-dux');
+    });
+
+    test('handles file:// URI entries containing PACKAGE_NAME', () => {
+      const configPath = join(tmpDir, 'opencode', 'opencode.json');
+      const packageRoot = join(tmpDir, 'repo');
+      // isPluginEntry requires file:// URIs to include PACKAGE_NAME in the path
+      const duxDir = join(packageRoot, 'node_modules', 'opencode-dux');
+      const fileUri = `file://${duxDir.replace(/\\/g, '/')}`;
+      paths.ensureConfigDir();
+      writePackageJson(duxDir);
+      writeFileSync(
+        configPath,
+        JSON.stringify({
+          plugin: [fileUri],
+        }),
+      );
+
+      const result = resolvePluginEntryFromOpenCodeConfig();
+      expect(result).toBe(fileUri);
+    });
+
+    test('ignores non-matching entries in a mixed list', () => {
+      const configPath = join(tmpDir, 'opencode', 'opencode.json');
+      paths.ensureConfigDir();
+      writeFileSync(
+        configPath,
+        JSON.stringify({
+          plugin: ['other-plugin', 'some-other-plugin', 'opencode-dux'],
+        }),
+      );
+
+      const result = resolvePluginEntryFromOpenCodeConfig();
+      expect(result).toBe('opencode-dux');
+    });
   });
 });

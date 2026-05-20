@@ -55,7 +55,7 @@ export function logVersionDisplay(
 ): void {
   if (savedVersion && savedVersion !== currentVersion) {
     console.log(
-      `  \u{1F4E6} version: \x1b[31mv${savedVersion}\x1b[0m \u2192 \x1b[32mv${currentVersion} (Updated)\x1b[0m`,
+      `  \u{1F4E6} Current version: \x1b[31mv${savedVersion}\x1b[0m \u2192 \x1b[32mv${currentVersion} (Updated)\x1b[0m`,
     );
   } else {
     const cacheFresh =
@@ -65,13 +65,14 @@ export function logVersionDisplay(
 
     if (cacheFresh && latestVersion !== currentVersion) {
       console.log(
-        `  \u{1F4E6} version: \x1b[31mv${currentVersion}\x1b[0m \u2192 \x1b[33mv${latestVersion}\x1b[0m`,
+        `  \u{1F4E6} Current version: \x1b[31mv${currentVersion}\x1b[0m \u2192 \x1b[33mv${latestVersion}\x1b[0m`,
       );
       console.log('     Restart OpenCode to update');
     } else {
-      const latestIndicator = cacheFresh && latestVersion === currentVersion ? ' (latest)' : '';
+      const latestIndicator =
+        cacheFresh && latestVersion === currentVersion ? ' (latest)' : '';
       console.log(
-        `  \u{1F4E6} version: \x1b[32mv${currentVersion}${latestIndicator}\x1b[0m`,
+        `  \u{1F4E6} Current version: \x1b[32mv${currentVersion}${latestIndicator}\x1b[0m`,
       );
     }
   }

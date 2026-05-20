@@ -139,20 +139,28 @@ function getPluginEntry(): string {
 }
 
 /**
- * Read opencode-dux plugin entry from opencode.json's plugin array.
- * Returns the exact string value the user specified, or null if not found.
- * This ensures tui.json stays in sync with opencode.json's authoritative entry.
+ * Read opencode.json, find the existing opencode-dux plugin entry,
+ * and return its spec string (e.g. "opencode-dux" or "F:\\opencode-dux").
+ * Falls back to PACKAGE_NAME if no matching entry is found or config
+ * can't be read.
  */
-function getPluginEntryFromOpenCodeConfig(): string | null {
-  const configPath = getExistingConfigPath();
-  const { config } = parseConfig(configPath);
-  if (!config) return null;
+export function resolvePluginEntryFromOpenCodeConfig(): string {
+  try {
+    const configPath = getExistingConfigPath();
+    const { config } = parseConfig(configPath);
+    if (!config) return PACKAGE_NAME;
 
-  const plugins = getPlugins(config);
-  const duxEntry = plugins.find(isMatchingPluginEntry);
-  if (!duxEntry) return null;
-
-  return getPluginSpec(duxEntry) ?? null;
+    const plugins = getPlugins(config);
+    for (const plugin of plugins) {
+      const spec = getPluginSpec(plugin);
+      if (spec && isPluginEntry(spec)) {
+        return spec;
+      }
+    }
+  } catch {
+    // silent fall-through to PACKAGE_NAME
+  }
+  return PACKAGE_NAME;
 }
 
 /**
@@ -272,7 +280,9 @@ export async function addPluginToOpenCodeConfig(): Promise<ConfigMergeResult> {
   }
 }
 
-export async function addPluginToOpenCodeTuiConfig(): Promise<ConfigMergeResult> {
+export async function addPluginToOpenCodeTuiConfig(
+  explicitEntry?: string,
+): Promise<ConfigMergeResult> {
   const configPath = getExistingTuiConfigPath();
 
   try {
@@ -297,8 +307,7 @@ export async function addPluginToOpenCodeTuiConfig(): Promise<ConfigMergeResult>
     const config = parsedConfig ?? {};
     const plugins = getPlugins(config);
 
-    // Use the exact value from opencode.json to stay in sync; fall back to CLI detection.
-    const pluginEntry = getPluginEntryFromOpenCodeConfig() ?? getPluginEntry();
+    const pluginEntry = explicitEntry ?? getPluginEntry();
 
     // Check whether the correct entry already exists to avoid unnecessary writes
     const duxEntries = plugins.filter(isMatchingPluginEntry);

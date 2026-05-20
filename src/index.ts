@@ -4,7 +4,10 @@ import { fileURLToPath } from 'node:url';
 import type { Plugin } from '@opencode-ai/plugin';
 import { createAgents, getAgentConfigs } from './agents';
 import { buildOrchestratorPrompt } from './agents/orchestrator';
-import { addPluginToOpenCodeTuiConfig } from './cli/config-io';
+import {
+  addPluginToOpenCodeTuiConfig,
+  resolvePluginEntryFromOpenCodeConfig,
+} from './cli/config-io';
 import {
   type AgentOverrideConfig,
   ALL_AGENT_NAMES,
@@ -79,10 +82,7 @@ import {
 import { initLogger, log } from './utils/logger';
 import { SubagentDepthTracker } from './utils/subagent-depth';
 import { collapseSystemInPlace } from './utils/system-collapse';
-import {
-  logVersionDisplay,
-  writeVersionCache,
-} from './version-store';
+import { logVersionDisplay, writeVersionCache } from './version-store';
 
 /**
  * Best-effort log to opencode's app logger.
@@ -453,7 +453,10 @@ const OhMyOpenCodeLite: Plugin = async (ctx) => {
 
     // Auto-register opencode-dux in OpenCode's tui.json so it appears in the TUI plugin list.
     // Fire-and-forget so failures (e.g., tui.json not writable) don't block init.
-    if (isFirstInit) addPluginToOpenCodeTuiConfig().catch(() => {});
+    if (isFirstInit) {
+      const entry = resolvePluginEntryFromOpenCodeConfig();
+      addPluginToOpenCodeTuiConfig(entry).catch(() => {});
+    }
 
     rewriteDisplayNameMentions = createDisplayNameMentionRewriter(config);
     agentDefs = await createAgents(config);
@@ -700,8 +703,15 @@ const OhMyOpenCodeLite: Plugin = async (ctx) => {
           s.pluginVersion = currentVersion;
         });
 
-        // Deferred version display: async + delayed so user can read it
-        scheduleVersionDisplay(currentVersion).catch(() => {});
+        // Version display: block init so the user sees the result before TUI opens
+        try {
+          await scheduleVersionDisplay(currentVersion);
+        } catch (err) {
+          console.log(
+            '  📦 Version check failed:',
+            err instanceof Error ? err.message : String(err),
+          );
+        }
       }
     }
   } catch (err) {
@@ -755,26 +765,38 @@ const OhMyOpenCodeLite: Plugin = async (ctx) => {
   });
 
   // ── Deferred version display ────────────────────────────────
-  async function scheduleVersionDisplay(currentVersion: string): Promise<void> {
-    // 1. Get saved version (for "just updated" detection)
-    const snapshot = readTuiSnapshot();
-    const savedVersion = snapshot.pluginVersion ?? null;
+  async function scheduleVersionDisplay(
+    currentVersion: string,
+  ): Promise<boolean> {
+    try {
+      // 1. Get saved version (for "just updated" detection)
+      const snapshot = readTuiSnapshot();
+      const savedVersion = snapshot.pluginVersion ?? null;
 
-    // 2. Always fetch latest version from npm on every startup
-    const latestVersion = await getLatestVersion('latest');
-    let lastChecked: number | null = null;
+      // 2. Always fetch latest version from npm on every startup
+      console.log('  📦 Checking for updates...');
+      const latestVersion = await getLatestVersion('latest');
+      console.log(
+        `  📦 Fetched latest version: ${latestVersion ?? 'failed'}`,
+      );
+      let lastChecked: number | null = null;
 
-    // Persist to cache for background check reference
-    if (latestVersion) {
-      lastChecked = Date.now();
-      writeVersionCache({ latestVersion, lastChecked });
+      // Persist to cache for background check reference
+      if (latestVersion) {
+        lastChecked = Date.now();
+        writeVersionCache({ latestVersion, lastChecked });
+      }
+
+      // 3. Display version with fresh npm data
+      logVersionDisplay(currentVersion, savedVersion, latestVersion, lastChecked);
+      return true;
+    } catch (err) {
+      console.log(
+        '  📦 Version check failed:',
+        err instanceof Error ? err.message : String(err),
+      );
+      return false;
     }
-
-    // 3. Wait for logs to settle
-    await new Promise((r) => setTimeout(r, 2000));
-
-    // 4. Display version with fresh npm data
-    logVersionDisplay(currentVersion, savedVersion, latestVersion, lastChecked);
   }
 
   return {
