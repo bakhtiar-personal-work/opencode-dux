@@ -81,8 +81,6 @@ import { SubagentDepthTracker } from './utils/subagent-depth';
 import { collapseSystemInPlace } from './utils/system-collapse';
 import {
   logVersionDisplay,
-  readVersionCache,
-  VERSION_CACHE_STALE_MS,
   writeVersionCache,
 } from './version-store';
 
@@ -758,33 +756,24 @@ const OhMyOpenCodeLite: Plugin = async (ctx) => {
 
   // ── Deferred version display ────────────────────────────────
   async function scheduleVersionDisplay(currentVersion: string): Promise<void> {
-    // 1. Brief cooldown after init logs settle
-    await new Promise((r) => setTimeout(r, 2000));
-
-    // 2. Get saved version and cache
+    // 1. Get saved version (for "just updated" detection)
     const snapshot = readTuiSnapshot();
     const savedVersion = snapshot.pluginVersion ?? null;
-    const currentLatest = readVersionCache();
 
-    let latestVersion = currentLatest.latestVersion;
-    let lastChecked = currentLatest.lastChecked;
+    // 2. Always fetch latest version from npm on every startup
+    const latestVersion = await getLatestVersion('latest');
+    let lastChecked: number | null = null;
 
-    // 3. If cache is stale, eagerly fetch from npm
-    const cacheFresh =
-      latestVersion !== null &&
-      lastChecked !== null &&
-      Date.now() - lastChecked < VERSION_CACHE_STALE_MS;
-
-    if (!cacheFresh) {
-      const fetched = await getLatestVersion('latest');
-      if (fetched) {
-        latestVersion = fetched;
-        lastChecked = Date.now();
-        writeVersionCache({ latestVersion, lastChecked });
-      }
+    // Persist to cache for background check reference
+    if (latestVersion) {
+      lastChecked = Date.now();
+      writeVersionCache({ latestVersion, lastChecked });
     }
 
-    // 4. Display version
+    // 3. Wait for logs to settle
+    await new Promise((r) => setTimeout(r, 2000));
+
+    // 4. Display version with fresh npm data
     logVersionDisplay(currentVersion, savedVersion, latestVersion, lastChecked);
   }
 
