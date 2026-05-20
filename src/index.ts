@@ -82,7 +82,7 @@ import {
 import { initLogger, log } from './utils/logger';
 import { SubagentDepthTracker } from './utils/subagent-depth';
 import { collapseSystemInPlace } from './utils/system-collapse';
-import { logVersionDisplay, VERSION_CACHE_STALE_MS, writeVersionCache } from './version-store';
+import { VERSION_CACHE_STALE_MS, writeVersionCache } from './version-store';
 
 /**
  * Best-effort log to opencode's app logger.
@@ -817,7 +817,33 @@ const OhMyOpenCodeLite: Plugin = async (ctx) => {
       }
 
       // 3. Display version with fresh npm data
-      logVersionDisplay(currentVersion, savedVersion, latestVersion, lastChecked);
+      if (savedVersion && savedVersion !== currentVersion) {
+        console.log(
+          `  \u{1F4E6} Current version: \x1b[31mv${savedVersion}\x1b[0m \u2192 \x1b[32mv${currentVersion} (Updated)\x1b[0m`,
+        );
+        log(`[version] Current version: v${savedVersion} \u2192 v${currentVersion} (Updated)`);
+      } else {
+        const cacheFresh =
+          latestVersion !== null &&
+          lastChecked !== null &&
+          Date.now() - lastChecked < VERSION_CACHE_STALE_MS;
+
+        if (cacheFresh && latestVersion !== currentVersion) {
+          console.log(
+            `  \u{1F4E6} Current version: \x1b[31mv${currentVersion}\x1b[0m \u2192 \x1b[33mv${latestVersion}\x1b[0m`,
+          );
+          console.log('     Please restart OpenCode to complete the update.');
+          log(`[version] Current version: v${currentVersion} \u2192 v${latestVersion}`);
+          log('[version] Please restart OpenCode to complete the update.');
+        } else {
+          const latestIndicator =
+            cacheFresh && latestVersion === currentVersion ? ' (latest)' : '';
+          console.log(
+            `  \u{1F4E6} Current version: \x1b[32mv${currentVersion}${latestIndicator}\x1b[0m`,
+          );
+          log(`[version] Current version: v${currentVersion}${latestIndicator}`);
+        }
+      }
 
       // If a newer version is available, clear the package cache so OpenCode
       // re-fetches from npm on the next restart.
@@ -827,7 +853,9 @@ const OhMyOpenCodeLite: Plugin = async (ctx) => {
         Date.now() - lastChecked < VERSION_CACHE_STALE_MS;
 
       if (cacheFresh && latestVersion !== currentVersion) {
+        log(`[auto-update-checker] Update detected: v${currentVersion} → v${latestVersion}. Clearing cache...`);
         const deleted = clearPackageCache();
+        log(`[auto-update-checker] Cache clear result: ${deleted} directories deleted`);
         if (deleted > 0) {
           console.log(
             `  📦 Update available: v${currentVersion} → v${latestVersion}. Please restart OpenCode to complete the update.`,

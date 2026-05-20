@@ -195,36 +195,69 @@ export function preparePackageUpdate(
  * Returns the number of directories deleted (0 if none found).
  */
 export function clearPackageCache(): number {
+  log(`[auto-update-checker] Clearing package cache. CACHE_DIR: ${CACHE_DIR}`);
+
   const packagesDir = path.join(CACHE_DIR, 'packages');
-  if (!fs.existsSync(packagesDir)) return 0;
+  if (!fs.existsSync(packagesDir)) {
+    log(`[auto-update-checker] Packages directory does not exist: ${packagesDir}`);
+    return 0;
+  }
+
+  log(`[auto-update-checker] Packages directory exists: ${packagesDir}`);
 
   let deleted = 0;
   try {
     const entries = fs.readdirSync(packagesDir);
+    log(
+      `[auto-update-checker] Found ${entries.length} entries in packages directory`,
+    );
+
     for (const entry of entries) {
+      log(`[auto-update-checker] Checking entry: ${entry}`);
       // Match: opencode-dux@latest, opencode-dux@1.3.6, etc.
-      if (entry.startsWith(`${PACKAGE_NAME}@`)) {
+      if (entry === PACKAGE_NAME || entry.startsWith(`${PACKAGE_NAME}@`)) {
         const fullPath = path.join(packagesDir, entry);
-        fs.rmSync(fullPath, { recursive: true, force: true });
-        log(`[auto-update-checker] Package cache deleted: ${fullPath}`);
-        deleted++;
+        log(`[auto-update-checker] Deleting cache directory: ${fullPath}`);
+        try {
+          fs.rmSync(fullPath, { recursive: true, force: true });
+          log(`[auto-update-checker] Deleted cache directory: ${fullPath}`);
+          deleted++;
+        } catch (rmErr) {
+          log(
+            `[auto-update-checker] Failed to delete directory: ${fullPath}`,
+            rmErr,
+          );
+        }
       }
     }
   } catch (err) {
-    log('[auto-update-checker] Failed to clear package cache:', err);
+    log('[auto-update-checker] Failed to read packages directory:', err);
   }
 
   // Also try the legacy path: CACHE_DIR/node_modules/opencode-dux/
   const legacyPkgDir = path.join(CACHE_DIR, 'node_modules', PACKAGE_NAME);
+  log(`[auto-update-checker] Checking legacy cache path: ${legacyPkgDir}`);
   try {
     if (fs.existsSync(legacyPkgDir)) {
+      log(
+        `[auto-update-checker] Deleting legacy cache directory: ${legacyPkgDir}`,
+      );
       fs.rmSync(legacyPkgDir, { recursive: true, force: true });
-      log(`[auto-update-checker] Legacy cache deleted: ${legacyPkgDir}`);
+      log(
+        `[auto-update-checker] Deleted legacy cache directory: ${legacyPkgDir}`,
+      );
       deleted++;
+    } else {
+      log(
+        `[auto-update-checker] Legacy cache path does not exist: ${legacyPkgDir}`,
+      );
     }
   } catch (err) {
     log('[auto-update-checker] Failed to clear legacy cache:', err);
   }
 
+  log(
+    `[auto-update-checker] Package cache clearing complete. ${deleted} directories deleted`,
+  );
   return deleted;
 }

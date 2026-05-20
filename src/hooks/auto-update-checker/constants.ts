@@ -7,9 +7,6 @@ export const NPM_REGISTRY_URL = `https://registry.npmjs.org/-/package/${PACKAGE_
 export const NPM_FETCH_TIMEOUT = 5000;
 
 function getCacheDir(): string {
-  if (process.platform === 'win32') {
-    return path.join(process.env.LOCALAPPDATA ?? os.homedir(), 'opencode');
-  }
   return path.join(os.homedir(), '.cache', 'opencode');
 }
 

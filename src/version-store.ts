@@ -2,7 +2,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { log } from './utils/logger';
 
 export interface VersionCache {
   latestVersion: string | null;
@@ -47,38 +46,3 @@ export function writeVersionCache(cache: VersionCache): void {
 
 /** Staleness threshold: cache older than this is ignored at startup */
 export const VERSION_CACHE_STALE_MS = 24 * 60 * 60 * 1000; // 24 hours
-
-export function logVersionDisplay(
-  currentVersion: string,
-  savedVersion: string | null,
-  latestVersion: string | null,
-  lastChecked: number | null,
-): void {
-  if (savedVersion && savedVersion !== currentVersion) {
-    console.log(
-      `  \u{1F4E6} Current version: \x1b[31mv${savedVersion}\x1b[0m \u2192 \x1b[32mv${currentVersion} (Updated)\x1b[0m`,
-    );
-    log(`[version] Current version: v${savedVersion} \u2192 v${currentVersion} (Updated)`);
-  } else {
-    const cacheFresh =
-      latestVersion !== null &&
-      lastChecked !== null &&
-      Date.now() - lastChecked < VERSION_CACHE_STALE_MS;
-
-    if (cacheFresh && latestVersion !== currentVersion) {
-      console.log(
-        `  \u{1F4E6} Current version: \x1b[31mv${currentVersion}\x1b[0m \u2192 \x1b[33mv${latestVersion}\x1b[0m`,
-      );
-      console.log('     Restart OpenCode to update');
-      log(`[version] Current version: v${currentVersion} \u2192 v${latestVersion}`);
-      log('[version] Restart OpenCode to update');
-    } else {
-      const latestIndicator =
-        cacheFresh && latestVersion === currentVersion ? ' (latest)' : '';
-      console.log(
-        `  \u{1F4E6} Current version: \x1b[32mv${currentVersion}${latestIndicator}\x1b[0m`,
-      );
-      log(`[version] Current version: v${currentVersion}${latestIndicator}`);
-    }
-  }
-}
