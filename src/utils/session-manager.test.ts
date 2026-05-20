@@ -61,9 +61,7 @@ describe('SessionManager', () => {
 
     const prompt = manager.formatForPrompt('parent-1');
     expect(prompt).toContain('exp-1 session manager');
-    expect(prompt).toContain(
-      'Context read by exp-1: src/index.ts (42 lines)',
-    );
+    expect(prompt).toContain('Context read by exp-1: src/index.ts (42 lines)');
   });
 
   test('filters tiny reads and caps read context files', () => {

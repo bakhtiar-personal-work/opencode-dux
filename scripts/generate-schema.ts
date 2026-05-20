@@ -25,8 +25,7 @@ const jsonSchema = {
   ...schema,
   $schema: 'https://json-schema.org/draft/2020-12/schema',
   title: 'opencode-dux',
-  description:
-    'Configuration schema for opencode-dux plugin for OpenCode',
+  description: 'Configuration schema for opencode-dux plugin for OpenCode',
 };
 
 const json = JSON.stringify(jsonSchema, null, 2);

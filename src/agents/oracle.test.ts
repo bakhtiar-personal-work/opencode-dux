@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { createOracleAgent } from './oracle';
+import { buildOraclePrompt, createOracleAgent } from './oracle';
 
 describe('createOracleAgent', () => {
   test('creates agent with correct name', () => {
@@ -85,5 +85,85 @@ describe('createOracleAgent', () => {
     const prompt = agent.config.prompt ?? '';
     expect(prompt).not.toContain('if (customPrompt)');
     expect(prompt).not.toContain('else if (customAppendPrompt)');
+  });
+});
+
+describe('buildOraclePrompt', () => {
+  test('includes model_tier block when hasSmartModel is true', () => {
+    const prompt = buildOraclePrompt(true);
+    expect(prompt).toContain('<model_tier>');
+    expect(prompt).toContain('default (flash)');
+    expect(prompt).toContain('smart (pro)');
+  });
+
+  test('omits model_tier block when hasSmartModel is false', () => {
+    const prompt = buildOraclePrompt(false);
+    expect(prompt).not.toContain('<model_tier>');
+    expect(prompt).not.toContain('default (flash)');
+    expect(prompt).not.toContain('smart (pro)');
+  });
+
+  test('true output contains all required sections', () => {
+    const prompt = buildOraclePrompt(true);
+    const requiredSections = [
+      '<role>',
+      '<capabilities>',
+      '<tool_routing>',
+      '<model_tier>',
+      '<constraints>',
+      '<user_choice_policy>',
+      '<variant_policy>',
+      '<output_format>',
+      '<diagnosis>',
+      '<recommendation>',
+      '<tradeoffs>',
+      '<risks>',
+      '<confidence>',
+      '<action_items>',
+      '<blocked>',
+      '<good_example>',
+      '<bad_example>',
+    ];
+    for (const section of requiredSections) {
+      expect(prompt).toContain(section);
+    }
+  });
+
+  test('false output contains all sections except model_tier', () => {
+    const prompt = buildOraclePrompt(false);
+    const requiredSections = [
+      '<role>',
+      '<capabilities>',
+      '<tool_routing>',
+      '<constraints>',
+      '<user_choice_policy>',
+      '<variant_policy>',
+      '<output_format>',
+      '<diagnosis>',
+      '<recommendation>',
+      '<tradeoffs>',
+      '<risks>',
+      '<confidence>',
+      '<action_items>',
+      '<blocked>',
+      '<good_example>',
+      '<bad_example>',
+    ];
+    for (const section of requiredSections) {
+      expect(prompt).toContain(section);
+    }
+    expect(prompt).not.toContain('<model_tier>');
+  });
+
+  test('true and false outputs are structurally identical except for model_tier block', () => {
+    const promptTrue = buildOraclePrompt(true);
+    const promptFalse = buildOraclePrompt(false);
+
+    // Both should have the same block count ordering - the only difference
+    // is the presence of <model_tier> in the true case
+    expect(promptTrue.startsWith('<role>')).toBe(true);
+    expect(promptFalse.startsWith('<role>')).toBe(true);
+    expect(promptTrue.endsWith('</bad_example>')).toBe(true);
+    expect(promptFalse.endsWith('</bad_example>')).toBe(true);
   });
 });

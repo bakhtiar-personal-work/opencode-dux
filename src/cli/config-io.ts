@@ -466,7 +466,6 @@ export function detectCurrentConfig(): DetectedConfig {
         result.hasChutes = true;
       }
     }
-
   }
 
   return result;

@@ -1,9 +1,10 @@
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Plugin } from '@opencode-ai/plugin';
 import { createAgents, getAgentConfigs } from './agents';
 import { buildOrchestratorPrompt } from './agents/orchestrator';
+import { addPluginToOpenCodeTuiConfig } from './cli/config-io';
 import {
   type AgentOverrideConfig,
   ALL_AGENT_NAMES,
@@ -398,7 +399,8 @@ const OhMyOpenCodeLite: Plugin = async (ctx) => {
   try {
     const isFirstInit = !didLogVerboseInit;
 
-    if (isFirstInit) console.log('\u{2699}\u{FE0F} Initializing opencode-dux...');
+    if (isFirstInit)
+      console.log('\u{2699}\u{FE0F} Initializing opencode-dux...');
 
     config = loadPluginConfig(ctx.directory);
 
@@ -444,11 +446,16 @@ const OhMyOpenCodeLite: Plugin = async (ctx) => {
 
     if (isFirstInit) console.log('  \u{1F4C1} plugin config: loaded');
 
+    // Auto-register opencode-dux in OpenCode's tui.json so it appears in the TUI plugin list.
+    // Fire-and-forget so failures (e.g., tui.json not writable) don't block init.
+    if (isFirstInit) addPluginToOpenCodeTuiConfig().catch(() => {});
+
     rewriteDisplayNameMentions = createDisplayNameMentionRewriter(config);
     agentDefs = await createAgents(config);
     agents = await getAgentConfigs(config);
 
-    if (isFirstInit) console.log(`  \u{1F916} agents: ${Object.keys(agents).join(', ')}`);
+    if (isFirstInit)
+      console.log(`  \u{1F916} agents: ${Object.keys(agents).join(', ')}`);
 
     // Build a map of agent name → priority model array for runtime
     // fallback. Populated when the user configures model as an array in
@@ -492,15 +499,12 @@ const OhMyOpenCodeLite: Plugin = async (ctx) => {
     depthTracker = new SubagentDepthTracker();
 
     // Initialize delegate tools for orchestrator variant-based subagent spawning
-    delegateTools = createDelegateTools(
-      ctx,
-      config,
-      depthTracker,
-    );
+    delegateTools = createDelegateTools(ctx, config, depthTracker);
 
     builtinMcps = createBuiltinMcps(undefined, config.websearch);
 
-    if (isFirstInit) console.log(`  \u{1F50C} MCPs: ${Object.keys(builtinMcps).join(', ')}`);
+    if (isFirstInit)
+      console.log(`  \u{1F50C} MCPs: ${Object.keys(builtinMcps).join(', ')}`);
 
     // Warm the local discovery cache asynchronously (non-blocking init).
     // Subsequent hooks/tools will read from cache on first use.
@@ -524,7 +528,10 @@ const OhMyOpenCodeLite: Plugin = async (ctx) => {
       log('[plugin] failed to create discover_skills_online tool', String(err));
       discoverSkillTool = undefined;
     }
-    if (isFirstInit) console.log(`  \u{1F527} tools: webfetch, ast_grep_search, ast_grep_replace${toolsOnline.length ? `, ${toolsOnline.join(', ')}` : ''}`);
+    if (isFirstInit)
+      console.log(
+        `  \u{1F527} tools: webfetch, ast_grep_search, ast_grep_replace${toolsOnline.length ? `, ${toolsOnline.join(', ')}` : ''}`,
+      );
 
     // Initialize auto-update checker hook
     autoUpdateChecker = createAutoUpdateCheckerHook(ctx, {
@@ -660,7 +667,10 @@ const OhMyOpenCodeLite: Plugin = async (ctx) => {
     usageService = createUsageService(ctx.client);
     usageService.syncActiveAccounts();
 
-    if (isFirstInit) console.log('  \u{1F517} hooks: auto-update, phase-reminder, skills-filter, apply-patch, json-recovery, fallback, todo-continuation, session-manager, pressure-reminder');
+    if (isFirstInit)
+      console.log(
+        '  \u{1F517} hooks: auto-update, phase-reminder, skills-filter, apply-patch, json-recovery, fallback, todo-continuation, session-manager, pressure-reminder',
+      );
 
     toolCount =
       Object.keys(delegateTools).length +
@@ -671,7 +681,9 @@ const OhMyOpenCodeLite: Plugin = async (ctx) => {
       (discoverSkillTool ? 1 : 0); // discover_skills_online
 
     if (isFirstInit) {
-      console.log(`\u{2705} opencode-dux initialized (${Object.keys(agents).length} agents, ${toolCount} tools, ${Object.keys(builtinMcps).length} MCPs)`);
+      console.log(
+        `\u{2705} opencode-dux initialized (${Object.keys(agents).length} agents, ${toolCount} tools, ${Object.keys(builtinMcps).length} MCPs)`,
+      );
       didLogVerboseInit = true;
 
       // Check if plugin was updated since last run
@@ -1049,11 +1061,15 @@ const OhMyOpenCodeLite: Plugin = async (ctx) => {
         const bundledSkillsDir = join(ctx.directory, 'src', 'skills');
         if (existsSync(bundledSkillsDir)) {
           try {
-            const skills = readdirSync(bundledSkillsDir, { withFileTypes: true })
+            const skills = readdirSync(bundledSkillsDir, {
+              withFileTypes: true,
+            })
               .filter((d) => d.isDirectory())
               .map((d) => d.name);
             if (skills.length > 0) {
-              console.log(`\u{1F4E6} Bundled skills available: ${skills.join(', ')}`);
+              console.log(
+                `\u{1F4E6} Bundled skills available: ${skills.join(', ')}`,
+              );
             }
           } catch {
             // Silently ignore scan failures
@@ -1067,7 +1083,9 @@ const OhMyOpenCodeLite: Plugin = async (ctx) => {
           );
         }
 
-        const mcpKeys = Object.keys(opencodeConfig.mcp as Record<string, unknown> ?? builtinMcps);
+        const mcpKeys = Object.keys(
+          (opencodeConfig.mcp as Record<string, unknown>) ?? builtinMcps,
+        );
         if (mcpKeys.length > 0) {
           console.log(`\u{1F50C} MCP servers: ${mcpKeys.join(', ')}`);
         }

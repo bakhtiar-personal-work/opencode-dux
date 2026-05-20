@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { chmod, mkdir, readFile, stat, writeFile } from 'node:fs/promises';
-import path from 'node:path';
 import { platform } from 'node:os';
+import path from 'node:path';
 
 import { parsePatch } from './codec';
 import { createApplyPatchHook } from './index';
@@ -404,31 +404,34 @@ garbage
   });
 
   const testGuardError = platform() === 'win32' ? test.skip : test;
-  testGuardError('blocks internal guard errors before native execution', async () => {
-    const root = await createTempDir('apply-patch-hook-');
-    const lockedDir = path.join(root, 'locked');
-    await mkdir(lockedDir, { recursive: true });
-    await chmod(lockedDir, 0o000);
-    const hook = createHook();
-    const patchText = `*** Begin Patch
+  testGuardError(
+    'blocks internal guard errors before native execution',
+    async () => {
+      const root = await createTempDir('apply-patch-hook-');
+      const lockedDir = path.join(root, 'locked');
+      await mkdir(lockedDir, { recursive: true });
+      await chmod(lockedDir, 0o000);
+      const hook = createHook();
+      const patchText = `*** Begin Patch
 *** Add File: locked/child.txt
 +fresh
 *** End Patch`;
-    const output = { args: { patchText } };
+      const output = { args: { patchText } };
 
-    try {
-      await expect(
-        hook['tool.execute.before'](
-          { tool: 'apply_patch', directory: root },
-          output,
-        ),
-      ).rejects.toThrow('apply_patch internal error:');
+      try {
+        await expect(
+          hook['tool.execute.before'](
+            { tool: 'apply_patch', directory: root },
+            output,
+          ),
+        ).rejects.toThrow('apply_patch internal error:');
 
-      expect(output.args.patchText).toBe(patchText);
-    } finally {
-      await chmod(lockedDir, 0o755);
-    }
-  });
+        expect(output.args.patchText).toBe(patchText);
+      } finally {
+        await chmod(lockedDir, 0o755);
+      }
+    },
+  );
 
   test('blocks a dangerous indented case as verification', async () => {
     const root = await createTempDir('apply-patch-hook-');

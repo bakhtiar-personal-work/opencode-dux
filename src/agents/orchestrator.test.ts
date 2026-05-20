@@ -113,4 +113,36 @@ describe('buildOrchestratorPrompt', () => {
     // Should still produce valid prompt without template placeholders
     expect(prompt).not.toContain('{{');
   });
+
+  test('includes only enabled agent descriptions when set provided', () => {
+    const prompt = buildOrchestratorPrompt(
+      undefined,
+      undefined,
+      new Set(['oracle', 'fixer']),
+    );
+    // Included descriptions
+    expect(prompt).toContain(
+      'technical analysis and code review; uses orchestrator',
+    );
+    expect(prompt).toContain('implementation specialist');
+    // Excluded descriptions - these unique strings only appear in their descriptions
+    expect(prompt).not.toContain('codebase search specialist');
+    expect(prompt).not.toContain('external docs and API reference specialist');
+    expect(prompt).not.toContain('UI/UX specialist for ALL user-facing UI');
+    expect(prompt).not.toContain('rules citation from steward_paths');
+    expect(prompt).not.toContain('screenshot / attached-image analyst');
+  });
+
+  test('includes all agent descriptions when no set provided (backward compat)', () => {
+    const prompt = buildOrchestratorPrompt();
+    expect(prompt).toContain('codebase search specialist');
+    expect(prompt).toContain('external docs and API reference specialist');
+    expect(prompt).toContain(
+      'technical analysis and code review; uses orchestrator',
+    );
+    expect(prompt).toContain('UI/UX specialist for ALL user-facing UI');
+    expect(prompt).toContain('implementation specialist');
+    expect(prompt).toContain('rules citation from steward_paths');
+    expect(prompt).toContain('screenshot / attached-image analyst');
+  });
 });

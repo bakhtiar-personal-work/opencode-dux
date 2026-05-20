@@ -127,8 +127,7 @@ describe('logger', () => {
     const files = fs
       .readdirSync(tmpDir)
       .filter(
-        (file) =>
-          file.startsWith('opencode-dux.') && file.endsWith('.log'),
+        (file) => file.startsWith('opencode-dux.') && file.endsWith('.log'),
       )
       .sort();
 
@@ -153,8 +152,7 @@ describe('logger', () => {
     const files = fs
       .readdirSync(tmpDir)
       .filter(
-        (file) =>
-          file.startsWith('opencode-dux.') && file.endsWith('.log'),
+        (file) => file.startsWith('opencode-dux.') && file.endsWith('.log'),
       );
 
     expect(files.length).toBe(10);

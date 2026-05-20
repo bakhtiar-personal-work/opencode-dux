@@ -200,7 +200,8 @@ describe('auto-update-checker/index', () => {
     expect(showToast).toHaveBeenCalledWith({
       body: {
         title: 'Opencode Dux 0.9.11',
-        message: 'Update from v0.9.1 to v0.9.11 available. Auto-update is disabled.',
+        message:
+          'Update from v0.9.1 to v0.9.11 available. Auto-update is disabled.',
         variant: 'info',
         duration: 8000,
       },
@@ -231,7 +232,8 @@ describe('auto-update-checker/index', () => {
     expect(showToast).toHaveBeenCalledWith({
       body: {
         title: 'Opencode Dux 0.9.11',
-        message: 'Update from v0.9.1 to v0.9.11 available. Auto-update could not prepare the active install.',
+        message:
+          'Update from v0.9.1 to v0.9.11 available. Auto-update could not prepare the active install.',
         variant: 'info',
         duration: 8000,
       },
@@ -271,7 +273,8 @@ describe('auto-update-checker/index', () => {
     expect(showToast).toHaveBeenCalledWith({
       body: {
         title: 'Opencode Dux 0.9.11',
-        message: 'Update from v0.9.1 to v0.9.11 available, but auto-update failed to install it. Check logs or retry manually.',
+        message:
+          'Update from v0.9.1 to v0.9.11 available, but auto-update failed to install it. Check logs or retry manually.',
         variant: 'error',
         duration: 8000,
       },

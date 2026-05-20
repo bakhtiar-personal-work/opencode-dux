@@ -9,7 +9,6 @@ import {
   loadAccountsResult,
   removeAccount,
   saveAccount,
-  setAccountKey,
 } from './accounts-store';
 
 let previousXdgDataHome: string | undefined;
@@ -53,14 +52,14 @@ describe('accounts-store (subscriptions)', () => {
   test('saveAccount and loadAccounts for neuralwatt', () => {
     saveAccount({
       provider: 'neuralwatt',
-      name: 'my-neuralwatt',
+      name: 'nwaccount',
       apiKey: 'sk-test-key',
     });
 
     const accounts = loadAccounts();
     expect(accounts).toHaveLength(1);
     expect(accounts[0].provider).toBe('neuralwatt');
-    expect(accounts[0].name).toBe('my-neuralwatt');
+    expect(accounts[0].name).toBe('nwaccount');
     expect(accounts[0].apiKey).toBe('sk-test-key');
   });
 
@@ -139,26 +138,6 @@ describe('accounts-store (subscriptions)', () => {
     expect(account).toBeUndefined();
   });
 
-  test('setAccountKey sets provider and apiKey', () => {
-    saveAccount({
-      provider: 'opencode-go',
-      name: 'personal',
-      workspaceId: 'wrk_123',
-      authCookie: 'cookie-abc',
-    });
-    const updated = setAccountKey('personal', 'opencode-go', 'sk-test-key');
-    expect(updated).toBe(true);
-
-    const account = getAccount('personal');
-    expect(account?.provider).toBe('opencode-go');
-    expect(account?.apiKey).toBe('sk-test-key');
-  });
-
-  test('setAccountKey returns false for unknown name', () => {
-    const updated = setAccountKey('nonexistent', 'opencode-go', 'sk-test-key');
-    expect(updated).toBe(false);
-  });
-
   test('getAccountsByProvider filters by provider', () => {
     saveAccount({
       provider: 'opencode-go',
@@ -168,7 +147,7 @@ describe('accounts-store (subscriptions)', () => {
     });
     saveAccount({
       provider: 'neuralwatt',
-      name: 'my-neuralwatt',
+      name: 'nwaccount',
       apiKey: 'sk-test-key',
     });
     saveAccount({
@@ -184,7 +163,7 @@ describe('accounts-store (subscriptions)', () => {
 
     const nwAccounts = getAccountsByProvider('neuralwatt');
     expect(nwAccounts).toHaveLength(1);
-    expect(nwAccounts[0].name).toBe('my-neuralwatt');
+    expect(nwAccounts[0].name).toBe('nwaccount');
   });
 
   test('loadAccountsResult reports parse failures', () => {

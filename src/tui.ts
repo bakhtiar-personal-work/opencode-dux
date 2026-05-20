@@ -1,4 +1,4 @@
-import { readFileSync, existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { TuiPluginModule } from '@opencode-ai/plugin/tui';
@@ -6,6 +6,7 @@ import type { JSX } from '@opentui/solid';
 import { createElement, insert, setProp } from '@opentui/solid';
 import { createSignal } from 'solid-js';
 import { AGENT_SIDEBAR_DESCRIPTIONS } from './agents/descriptions';
+import { tuiProviderLabel } from './subscriptions/provider';
 import type {
   CodexUsageEntry,
   NeuralwattUsage,
@@ -592,14 +593,21 @@ function renderCodexUsage(
     const timeLeft = formatUsageTime(w.resetTimeIso);
 
     rows.push(
-      box({ width: '100%', flexDirection: 'row', justifyContent: 'space-between' }, [
-        box({ flexDirection: 'row' }, [
-          text({ fg: theme.accent }, ['5H ']),
-          text({ fg: usageColor || theme.text }, [bar]),
-          text({ fg: usageColor || theme.textMuted }, [` ${pct}%`]),
-        ]),
-        text({ fg: theme.textMuted }, [timeLeft]),
-      ]),
+      box(
+        {
+          width: '100%',
+          flexDirection: 'row',
+          justifyContent: 'space-between',
+        },
+        [
+          box({ flexDirection: 'row' }, [
+            text({ fg: theme.accent }, ['5H ']),
+            text({ fg: usageColor || theme.text }, [bar]),
+            text({ fg: usageColor || theme.textMuted }, [` ${pct}%`]),
+          ]),
+          text({ fg: theme.textMuted }, [timeLeft]),
+        ],
+      ),
     );
   }
 
@@ -612,14 +620,21 @@ function renderCodexUsage(
     const timeLeft = formatUsageTime(w.resetTimeIso);
 
     rows.push(
-      box({ width: '100%', flexDirection: 'row', justifyContent: 'space-between' }, [
-        box({ flexDirection: 'row' }, [
-          text({ fg: theme.accent }, ['7D ']),
-          text({ fg: usageColor || theme.text }, [bar]),
-          text({ fg: usageColor || theme.textMuted }, [` ${pct}%`]),
-        ]),
-        text({ fg: theme.textMuted }, [timeLeft]),
-      ]),
+      box(
+        {
+          width: '100%',
+          flexDirection: 'row',
+          justifyContent: 'space-between',
+        },
+        [
+          box({ flexDirection: 'row' }, [
+            text({ fg: theme.accent }, ['7D ']),
+            text({ fg: usageColor || theme.text }, [bar]),
+            text({ fg: usageColor || theme.textMuted }, [` ${pct}%`]),
+          ]),
+          text({ fg: theme.textMuted }, [timeLeft]),
+        ],
+      ),
     );
   }
 
@@ -634,6 +649,15 @@ function renderCodexUsage(
       ]),
     ]),
   );
+
+  // Plan type row
+  if (entry.planType) {
+    rows.push(
+      box({ width: '100%', flexDirection: 'row' }, [
+        text({ fg: theme.textMuted }, [`   Plan: ${entry.planType}`]),
+      ]),
+    );
+  }
 }
 
 function renderSubscriptionPanel(
@@ -659,7 +683,7 @@ function renderSubscriptionPanel(
     const name = entry.accountName;
     const activeName = snapshot.activeSubscriptionByProvider?.[entry.provider];
     const isActive = activeName === name;
-    const providerLabel = entry.provider === 'neuralwatt' ? ' [nw]' : entry.provider === 'codex' ? ' [cx]' : ' [go]';
+    const providerLabel = tuiProviderLabel(entry.provider);
 
     if (!isFirstAccount) {
       rows.push(box({ width: '100%', height: 1 }));

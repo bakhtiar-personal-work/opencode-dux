@@ -70,7 +70,7 @@ function parsePackJson(output: string) {
 
 function walkFiles(dir: string): string[] {
   const entries = readdirSync(dir, { withFileTypes: true });
-  return entries.flatMap((entry: { name: any; isDirectory: () => any; }) => {
+  return entries.flatMap((entry: { name: any; isDirectory: () => any }) => {
     const fullPath = path.join(dir, entry.name);
     if (entry.isDirectory()) return walkFiles(fullPath);
     return [fullPath];

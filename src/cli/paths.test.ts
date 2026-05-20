@@ -2,9 +2,8 @@
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { homedir, tmpdir } from 'node:os';
+import { homedir, platform, tmpdir } from 'node:os';
 import { join, normalize } from 'node:path';
-import { platform } from 'node:os';
 import {
   ensureConfigDir,
   getConfigDir,
@@ -104,9 +103,7 @@ describe('paths', () => {
 
   test('getLiteConfig() respects OPENCODE_CONFIG_DIR', () => {
     process.env.OPENCODE_CONFIG_DIR = '/custom/directory';
-    expect(getLiteConfig()).toBe(
-      p('/custom/directory/opencode-dux.json'),
-    );
+    expect(getLiteConfig()).toBe(p('/custom/directory/opencode-dux.json'));
   });
 
   describe('getExistingConfigPath()', () => {

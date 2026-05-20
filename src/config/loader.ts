@@ -265,5 +265,3 @@ export function loadAgentPrompt(
 
   return result;
 }
-
-

@@ -179,7 +179,6 @@ export function createDelegateTools(
             throw new Error('Subagent depth exceeded');
           }
         }
-
       }
 
       if (!sessionId) {

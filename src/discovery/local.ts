@@ -1,6 +1,6 @@
 import type { PluginInput } from '@opencode-ai/plugin';
-import { log } from '../utils/logger';
 import { SDK_DISCOVERY_TIMEOUT_MS } from '../config/constants';
+import { log } from '../utils/logger';
 
 /**
  * A single MCP server discovered via the OpenCode SDK.
@@ -141,7 +141,10 @@ function withTimeout<T>(
   return Promise.race([
     promise,
     new Promise<T>((_, reject) =>
-      setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms),
+      setTimeout(
+        () => reject(new Error(`${label} timed out after ${ms}ms`)),
+        ms,
+      ),
     ),
   ]);
 }

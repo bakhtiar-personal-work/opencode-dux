@@ -1,8 +1,9 @@
 /**
  * Type definitions for multi-provider subscription usage tracking.
  *
- * Supports OpenCode Go (dashboard scraping) and Neuralwatt (REST API)
- * as discriminated unions on the `provider` field.
+ * Supports OpenCode Go (dashboard scraping), Neuralwatt (REST API),
+ * and Codex (device code auth) as discriminated unions on the
+ * `provider` field.
  */
 
 /** Provider discriminator. */
@@ -29,9 +30,18 @@ export interface CodexAccount {
   name: string;
   accessToken: string;
   refreshToken?: string;
+  /** Token expiry timestamp (epoch ms). Used for proactive refresh. */
+  expiresAt?: number;
+  /** ChatGPT account ID from JWT. */
+  accountId?: string;
+  /** JWT with account metadata (email, account_id). */
+  idToken?: string;
 }
 
-export type StoredAccount = OpenCodeGoAccount | NeuralwattAccount | CodexAccount;
+export type StoredAccount =
+  | OpenCodeGoAccount
+  | NeuralwattAccount
+  | CodexAccount;
 
 // ── Usage window (OpenCode Go) ──
 
@@ -130,14 +140,16 @@ export interface CodexUsageEntry {
   error?: string;
   /** 5-hour rolling window (primary_window from API) */
   primaryWindow: UsageWindow;
-  /** 7-day rolling window (secondary_window from API) */
-  secondaryWindow: UsageWindow;
+  /** 7-day rolling window (secondary_window from API). Null for free plan users. */
+  secondaryWindow: UsageWindow | null;
   /** Credit balance info */
   credits: {
     hasCredits: boolean;
     unlimited: boolean;
     balance: number;
   };
+  /** Plan type (e.g., "Plus", "Team", "Enterprise") */
+  planType?: string;
 }
 
 export type SubscriptionUsageEntry =

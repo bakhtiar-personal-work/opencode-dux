@@ -1,7 +1,7 @@
 import { describe, expect, mock, spyOn, test } from 'bun:test';
 import * as fs from 'node:fs';
-import { normalize } from 'node:path';
 import { platform } from 'node:os';
+import { normalize } from 'node:path';
 
 // Mock logger to avoid noise
 mock.module('../../utils/logger', () => ({
@@ -40,9 +40,7 @@ const INSTALL_DIR = norm(
 );
 
 function existsSync(path: unknown): boolean {
-  return (
-    path === WRAPPER_PKG_JSON || path === PKG_DIR
-  );
+  return path === WRAPPER_PKG_JSON || path === PKG_DIR;
 }
 
 function readFileSync(path: unknown): string | Buffer {
@@ -75,9 +73,7 @@ describe('auto-update-checker/cache', () => {
     });
 
     test('does not fall back to legacy cache when runtime path is active but wrapper root is invalid', async () => {
-      const existsSpy = spyOn(fs, 'existsSync').mockImplementation(
-        () => false,
-      );
+      const existsSpy = spyOn(fs, 'existsSync').mockImplementation(() => false);
       const { resolveInstallContext } = await import(
         `./cache?test=${importCounter++}`
       );
@@ -146,34 +142,43 @@ describe('auto-update-checker/cache', () => {
     });
 
     const testLegacyCache = onWindows ? test.skip : test;
-    testLegacyCache('keeps working when dependency is already on target version', async () => {
-      const legacyCache = norm('/.cache/opencode');
-      const existsSpy = spyOn(fs, 'existsSync').mockImplementation(
-        (p: unknown) =>
-          (typeof p === 'string' && p.endsWith(norm('/.cache/opencode/package.json'))) ||
-          (typeof p === 'string' && p.endsWith(norm('/.cache/opencode/node_modules/opencode-dux'))),
-      );
-      const readSpy = spyOn(fs, 'readFileSync').mockReturnValue(
-        JSON.stringify({
-          dependencies: { 'opencode-dux': '1.0.1' },
-        }),
-      );
-      const writeSpy = spyOn(fs, 'writeFileSync').mockImplementation(() => {});
-      const rmSyncSpy = spyOn(fs, 'rmSync').mockReturnValue(undefined);
-      const { preparePackageUpdate } = await import(
-        `./cache?test=${importCounter++}`
-      );
+    testLegacyCache(
+      'keeps working when dependency is already on target version',
+      async () => {
+        const legacyCache = norm('/.cache/opencode');
+        const existsSpy = spyOn(fs, 'existsSync').mockImplementation(
+          (p: unknown) =>
+            (typeof p === 'string' &&
+              p.endsWith(norm('/.cache/opencode/package.json'))) ||
+            (typeof p === 'string' &&
+              p.endsWith(norm('/.cache/opencode/node_modules/opencode-dux'))),
+        );
+        const readSpy = spyOn(fs, 'readFileSync').mockReturnValue(
+          JSON.stringify({
+            dependencies: { 'opencode-dux': '1.0.1' },
+          }),
+        );
+        const writeSpy = spyOn(fs, 'writeFileSync').mockImplementation(
+          () => {},
+        );
+        const rmSyncSpy = spyOn(fs, 'rmSync').mockReturnValue(undefined);
+        const { preparePackageUpdate } = await import(
+          `./cache?test=${importCounter++}`
+        );
 
-      const result = preparePackageUpdate('1.0.1', 'opencode-dux', null);
+        const result = preparePackageUpdate('1.0.1', 'opencode-dux', null);
 
-      expect(typeof result === 'string' && result.endsWith(legacyCache)).toBe(true);
-      expect(writeSpy).not.toHaveBeenCalled();
-      expect(rmSyncSpy).toHaveBeenCalled();
+        expect(typeof result === 'string' && result.endsWith(legacyCache)).toBe(
+          true,
+        );
+        expect(writeSpy).not.toHaveBeenCalled();
+        expect(rmSyncSpy).toHaveBeenCalled();
 
-      existsSpy.mockRestore();
-      readSpy.mockRestore();
-      writeSpy.mockRestore();
-      rmSyncSpy.mockRestore();
-    });
+        existsSpy.mockRestore();
+        readSpy.mockRestore();
+        writeSpy.mockRestore();
+        rmSyncSpy.mockRestore();
+      },
+    );
   });
 });

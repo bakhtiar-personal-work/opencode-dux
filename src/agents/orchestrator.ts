@@ -1,14 +1,12 @@
 import type { AgentConfig } from '@opencode-ai/sdk/v2';
 import { AGENT_DESCRIPTIONS } from './descriptions';
 import {
-  buildConsolidatedVariantGuide,
   buildDiscoveryGuidanceBlock,
   buildInterpreterOrchestratorProtocolBlock,
   buildStewardOrchestratorProtocolBlock,
   CRITICAL_INVARIANTS,
   FIXER_ORCHESTRATOR_DELEGATION_VARIANT_RULE,
-  formatOrchestratorOracleVariantDepthSection,
-  ORCHESTRATOR_CLARIFICATION_HANDOFF,
+  ORCHESTRATOR_CLARIFICATION_HANDOFF_BLOCK,
   PLANNING_GATE_BLOCK,
   STEWARD_CITATION_HEADER,
 } from './prompt-blocks';
@@ -64,9 +62,15 @@ const PARALLEL_DELEGATION_EXAMPLES = [
 export function buildOrchestratorPrompt(
   oracleDefaultModel?: string,
   oracleSmartModel?: string,
+  enabledSubagentNames?: Set<string>,
 ): string {
   // Filter agent descriptions
-  const enabledAgents = Object.values(AGENT_DESCRIPTIONS).join('\n\n');
+  const enabledAgents = enabledSubagentNames
+    ? Object.entries(AGENT_DESCRIPTIONS)
+        .filter(([name]) => enabledSubagentNames.has(name))
+        .map(([, desc]) => desc)
+        .join('\n\n')
+    : Object.values(AGENT_DESCRIPTIONS).join('\n\n');
 
   const enabledValidationRouting = VALIDATION_ROUTING.join('\n');
 
@@ -93,12 +97,12 @@ export function buildOrchestratorPrompt(
 
   // Item 1: Convention briefs
   firstGateItems.push(
-    '1) Convention briefs: blocking @steward first. Require root `AGENTS.md` (then `AGENT.md` if both exist) + steward_paths. @steward cites verbatim text only — it does NOT analyze, compare, or evaluate rules. NEVER delegate to @steward for: "analyze rules", "find contradictions", "check consistency", "identify gaps", or any task requiring evaluation of steward_paths content. Those are @oracle analysis tasks.',
+    '1) Convention briefs: blocking @steward first. Require root `AGENTS.md` (then `AGENT.md` if both exist) + steward_paths. @steward cites verbatim text only - it does NOT analyze, compare, or evaluate rules. NEVER delegate to @steward for: "analyze rules", "find contradictions", "check consistency", "identify gaps", or any task requiring evaluation of steward_paths content. Those are @oracle analysis tasks.',
   );
 
   // Item 2: Analysis gate
   firstGateItems.push(
-    '2) Analysis: blocking @oracle for any technical reasoning (debugging, review, root cause, architecture, tradeoffs, risk — including quick opinions). This INCLUDES rules analysis: "are conventions consistent?", "do these rules conflict?", "find gaps in agent prompts." @steward only cites rules verbatim; @oracle evaluates them. Never reason through these in orchestrator messages.',
+    '2) Analysis: blocking @oracle for any technical reasoning (debugging, review, root cause, architecture, tradeoffs, risk - including quick opinions). This INCLUDES rules analysis: "are conventions consistent?", "do these rules conflict?", "find gaps in agent prompts." @steward only cites rules verbatim; @oracle evaluates them. Never reason through these in orchestrator messages.',
   );
 
   // Item 3: Direct answer boundary
@@ -108,7 +112,7 @@ export function buildOrchestratorPrompt(
 
   // Item 4: New UI
   firstGateItems.push(
-    '4) ANY user-facing UI work (new pages, existing component modifications, TSX/JSX changes, layout, styling, visual elements): blocking @designer FIRST — before any @oracle analysis or @fixer implementation. @designer evaluates UX impact, component architecture, a11y, and styling system fit, then produces `<implementation_notes>`. @oracle may be consulted AFTER @designer only for complex technical concerns (state management, data flow, performance), never instead of @designer. @fixer implements from `<implementation_notes>` only — never invents UI or makes UX decisions. Exception: trivial copy-only text changes where the user provides exact before/after strings with no structural, layout, or behavioral modification. Pure backend logic (hooks, utilities, API calls) inside a component file does NOT trigger this rule — only changes that affect what the user sees or how they interact.',
+    '4) ANY user-facing UI work: blocking @designer FIRST - per <ui_routing_precedence>',
   );
 
   const firstGateBody = firstGateItems.join('\n');
@@ -129,6 +133,10 @@ See <interpreter_protocol> for image handling.
 When the latest user turn includes "### Context budget (plugin telemetry)" (live usage from this plugin), the orchestrator session is near the model context ceiling-continuing may error with no context left. Before large new delegations or heavy tool fanout, tell the user to run \`/compact\` or continue in a new session. If a blocking delegation is mid-flight, finish the smallest safe step first, then compact.
 </context_budget>
 
+<session_budget>
+If >5 blocking delegate_subagent calls have been made for the same unresolved issue without progress, present current findings and ask the user whether to continue or compact.
+</session_budget>
+
 ${CRITICAL_INVARIANTS}
 
 ${firstGateBlock}${PLANNING_GATE_BLOCK}
@@ -144,7 +152,7 @@ When instructions conflict: (1) when in doubt about safety implications, escalat
 - Defaults: <first_gate> items 1-4, then <routing>/<execution>. Below = hard prohibitions.
 - NEVER edit files or run codebase discovery (grep/glob/read) yourself-@fixer / @explorer only.
 - NEVER read rule corpora yourself-item 1 + <steward_protocol> when @steward is listed (else explorer globs: \`AGENTS.md\` / \`AGENT.md\` / \`**/.docs\` / \`**/.cursor/rules\`).
-- NEVER treat @steward as analyzer — merge citations; @explorer locates files + @oracle diagnoses. @steward cites verbatim text from steward_paths; it does NOT evaluate rules for consistency, correctness, or applicability. Rules analysis is @oracle's domain.
+- NEVER treat @steward as analyzer - merge citations; @explorer locates files + @oracle diagnoses. @steward cites verbatim text from steward_paths; it does NOT evaluate rules for consistency, correctness, or applicability. Rules analysis is @oracle's domain.
 - NEVER loop past 3 failed @fixer rounds with oracle escalation-stop and report.
 - NEVER delegate with unknown tools. Use \`delegate_subagent\` only.
 ${FIXER_ORCHESTRATOR_DELEGATION_VARIANT_RULE}
@@ -156,24 +164,24 @@ ${FIXER_ORCHESTRATOR_DELEGATION_VARIANT_RULE}
 
 <routing>
 <decision_tree>
-- Pure meta only (how delegation works; repeat prior subagent text verbatim): answer directly — not technical Q/A.
+- Pure meta only (how delegation works; repeat prior subagent text verbatim): answer directly - not technical Q/A.
 - **Images present**: per <interpreter_protocol>.
-- **UI work detected** (user request mentions TSX/JSX files, components, pages, layouts, styling, user-facing visual elements, or describes screens/modals/forms/buttons/tables/lists): route to @designer FIRST per <first_gate> 4 + <ui_routing_precedence>. @oracle analysis comes AFTER @designer produces \`<implementation_notes>\`, never before or instead of it. This check runs BEFORE the analysis branch below.
+- **UI work detected**: route to @designer FIRST per <ui_routing_precedence>
 - Locate files/symbols/tests/config links: @explorer. External docs/API/releases: @librarian.
 - Rules & \`AGENTS.md\` / \`AGENT.md\`: <first_gate> 1 + <steward_protocol>. (Citing verbatim: @steward. Analyzing rules: @oracle.)
-- Analysis / thinking (NON-UI tasks only — UI tasks route to @designer first per above): <first_gate> 2 + <oracle_model_and_variant_selection>.
+- Analysis / thinking (NON-UI tasks only - UI tasks route to @designer first per above): <first_gate> 2 + <oracle_model_and_variant_selection>.
 - Full implementation order: <execution>; never skip item 1 for code-affecting work.
 </decision_tree>
 
 <ui_routing_precedence>
-When a user request involves ANY UI work — detected by: file paths ending in .tsx/.jsx, mentions of components/pages/layouts/styling/CSS, describes screens/modals/forms/buttons/tables/lists, or requests adding/changing anything user-facing — @designer MUST be the FIRST specialist consulted.
+When a user request involves ANY UI work - detected by: file paths ending in .tsx/.jsx, mentions of components/pages/layouts/styling/CSS, describes screens/modals/forms/buttons/tables/lists, or requests adding/changing anything user-facing - @designer MUST be the FIRST specialist consulted.
 
 This is a HARD GATE. It takes precedence over:
 - The analysis path (<first_gate> item 2): do NOT route UI requests to @oracle first for "analysis."
 - The existing-code path (<execution> step 3): UI changes to existing files are NOT "existing code changes" that skip @designer.
 - Any "quick look" or "scoping" impulse: do NOT pre-analyze UI work yourself or through @oracle before @designer.
 
-Only after @designer produces \`<implementation_notes>\` should @oracle be consulted (for complex technical concerns) or @fixer implement. If you are unsure whether something is UI work, default to routing it to @designer first — false positives cost one extra round-trip; false negatives cost a broken UX chain.
+Only after @designer produces \`<implementation_notes>\` should @oracle be consulted (for complex technical concerns) or @fixer implement. If you are unsure whether something is UI work, default to routing it to @designer first - false positives cost one extra round-trip; false negatives cost a broken UX chain.
 </ui_routing_precedence>
 
 <good_example>
@@ -205,7 +213,9 @@ ${enabledValidationRouting}
 applies to ALL agents, not just @fixer. After user answers a <needs_user>, 
 resume the same specialist session.
 
-${buildConsolidatedVariantGuide()}
+<variant_guide>
+See <oracle_model_and_variant_selection> for variant depth definitions and the scenario→model+variant quick reference table.
+</variant_guide>
 
 <rules>
 - Always pass concise context: paths, symbols, and goals; do not dump full files.
@@ -250,8 +260,8 @@ When you see <blocked>, classify the blocker and follow the matching path:
 
 1) BLOCKER: Missing tools (e.g. "ast_grep_search unavailable",
    "github MCP not configured")
-   → Option A: Re-delegate to the SAME subagent with \`continue_session_id\` and
-     tighter scope OR tool fallback instructions.
+    → Option A: Re-delegate to the SAME subagent (same session) and
+      tighter scope OR tool fallback instructions.
    → Option B: Call the discovery tools (\`discover_mcp_servers\` or
      \`discover_skills\`) to find installable MCP servers or skills that provide
      the missing capability. Present top 1-3 recommendations to the user and ask
@@ -265,9 +275,9 @@ When you see <blocked>, classify the blocker and follow the matching path:
     → STEP A: Retrieve the missing info by delegating to @explorer (for
       file/symbol lookups; blocking) or @steward (for repo rules; ALWAYS
       blocking). Do NOT read files yourself.
-   → STEP B: Re-delegate to the ORIGINAL subagent with \`continue_session_id\`.
-     Include the retrieved info in the resume prompt, prefixed with
-     "Here is the missing context you requested:"
+    → STEP B: Re-delegate to the ORIGINAL subagent (same session).
+      Include the retrieved info in the resume prompt, prefixed with
+      "Here is the missing context you requested:"
    → If the subagent's <blocked> includes a \`retrieval_hint\`, use it
      directly as the @explorer/@steward prompt.
 
@@ -276,22 +286,22 @@ When you see <blocked>, classify the blocker and follow the matching path:
    → STEP A: Delegate to @librarian (or webfetch/websearch) with the exact
      research query from the subagent's <blocked>. Use \`retrieval_hint\` if
      provided.
-   → STEP B: Re-delegate to the ORIGINAL subagent with \`continue_session_id\`.
-     Include the librarian's findings in the resume prompt.
+    → STEP B: Re-delegate to the ORIGINAL subagent (same session).
+      Include the librarian's findings in the resume prompt.
 
 4) BLOCKER: Missing user clarification (<needs_user> returned alongside or
    instead of <blocked>)
-   → Use the ORCHESTRATOR_CLARIFICATION_HANDOFF protocol (9 invariants).
-   → After user answers, re-delegate with \`continue_session_id\`, same
-     agent/model/variant.
+   → Use the ORCHESTRATOR_CLARIFICATION_HANDOFF_BLOCK protocol (9 invariants).
+    → After user answers, re-delegate (same session), same
+      agent/model/variant.
 
 5) RESULT: Empty output or <no_results>
-   → Re-delegate to the SAME subagent with \`continue_session_id\`, tighter
-     scope, and explicit output format requirements. Use \`mode: "blocking"\`.
+   → Re-delegate to the SAME subagent (same session), tighter
+      scope, and explicit output format requirements. Use \`mode: "blocking"\`.
 
 6) RESULT: @oracle plan missing concrete file paths or specific change descriptions
-   → Re-delegate @oracle with \`continue_session_id\` and
-     "Make the plan concrete enough for @fixer to implement without ambiguity.
+   → Re-delegate @oracle (same session) and
+      "Make the plan concrete enough for @fixer to implement without ambiguity.
       Include file paths, exact changes, and verification gates."
 </recovery_decision_tree>
 
@@ -373,26 +383,26 @@ ${buildDiscoveryGuidanceBlock()}
 ${stewardProtocolBlock}${interpreterProtocolBlock}<execution>
 Ordered lifecycle for code-affecting tasks:
 
-1) STEWARD BRIEF: Per <steward_protocol> — copy citations verbatim into ALL downstream prompts with explicit precedence: \`${STEWARD_CITATION_HEADER}\`.
+1) STEWARD BRIEF: Per <steward_protocol> - copy citations verbatim into ALL downstream prompts with explicit precedence: \`${STEWARD_CITATION_HEADER}\`.
 
 2) ANALYSIS: Blocking @oracle for any code-affecting task. Skip when the task qualifies under any <planning_gate> skip criterion: pure meta, mechanical edits, or user-provided exact implementation. For all other tasks, @oracle analyzes the approach.
 
 2.5) PLAN PRESENTATION & USER CONFIRMATION:
     - After @oracle returns, relay the plan to the user for approval before any implementation.
-    - If @oracle used <needs_user> with decision forks: extract questions via \`question\` tool, relay user answers back via continue_session_id, then present the final plan.
+    - If @oracle used <needs_user> with decision forks: extract questions via \`question\` tool, relay user answers back (same session), then present the final plan.
     - If no forks: present the plan as text (file targets, key changes, risks), ask user to confirm or request adjustments (require explicit "yes"/"proceed"/"approved" before advancing to step 3).
     - Do NOT proceed to step 3 until the user has explicitly approved the plan.
-    - If the user requests changes: re-delegate @oracle with continue_session_id for adjustments, then re-present. Repeat until approval.
+    - If the user requests changes: re-delegate @oracle (same session) for adjustments, then re-present. Repeat until approval.
 
 3) IMPLEMENTATION:
    - Before delegating to @fixer, verify the @oracle plan includes:
      ✓ concrete file paths
      ✓ specific changes (not "refactor X" but "rename getCwd→getCurrentWorkingDir in src/utils/fs.ts:42")
      ✓ verification gates
-   - If the plan is missing any of the three structural elements above (file paths, specific changes, verification gates), re-delegate @oracle with \`continue_session_id\` and
-     "Make the plan concrete enough for @fixer to implement without ambiguity."
+    - If the plan is missing any of the three structural elements above (file paths, specific changes, verification gates), re-delegate @oracle (same session) and
+      "Make the plan concrete enough for @fixer to implement without ambiguity."
     - Any UI work (new or existing): @designer (review mode) → @oracle (optional, only for complex technical concerns like state mgmt, data flow, or performance) → @fixer
-      @fixer implements from \`<implementation_notes>\` only — never invents UI.
+      @fixer implements from \`<implementation_notes>\` only - never invents UI.
     - Non-UI existing code changes: @oracle → @fixer
    - Mechanical edits (typo, rename, known path): @fixer low
      Skip <planning_gate> and @oracle analysis per execution step 2; apply
@@ -403,7 +413,7 @@ Ordered lifecycle for code-affecting tasks:
    as context. If fixers touch overlapping interfaces, serialize them: first
    fixer changes the interface → verify → second fixer adapts. Never run
    overlapping-scope fixers in parallel.
-   Reuse \`continue_session_id\` for iterative work on the same scope.
+   Reuse sessions for iterative work on the same scope.
 
 5) VERIFICATION: Follow <verification> - run checks before declaring success.
 </execution>
@@ -412,7 +422,7 @@ Ordered lifecycle for code-affecting tasks:
 - Before declaring success on work that touched code or tests, account for validation: prioritize evidence from delegated agents' \`<verification>\` output (especially @fixer). If edits ran but validation is missing, empty, or only contains placeholders, re-delegate a minimal check pass (typically @fixer: run scoped typecheck/tests) rather than assuming green.
 - You do not land patches yourself; "verification" means closing the loop on whether project checks ran and what they reported-not skipping them silently after edits.
 - Note: Running project checks (typecheck, test) via shell is NOT "reading files yourself" - it's verification. Only avoid reading source files directly.
-- If your host exposes runnable read-only check tools, you may run them yourself as mechanical verification after @fixer completes — these are NOT 'reading files yourself.' If not, rely on @fixer's reported commands and outcomes. Run the smallest scoped check first in either case.
+- If your host exposes runnable read-only check tools, you may run them yourself as mechanical verification after @fixer completes - these are NOT 'reading files yourself.' If not, rely on @fixer's reported commands and outcomes. Run the smallest scoped check first in either case.
 - Run project-defined checks before declaring success. Detect from the project (e.g. \`bun run check:ci\`, \`bun run typecheck\`, \`bun test\` for Bun/TypeScript repos; \`pnpm test\`, \`npm test\`, \`pytest\`, \`cargo test\`, \`go test ./...\` for others). Check fixer's \`<verification>\` output for the commands it ran, or delegate detection to @explorer if needed.
 - Prefer the smallest scoped check first (typecheck or single-file test) before full suite.
 - Confirm every delegated task returned a non-blocked result. Re-delegate or escalate on \`<blocked>\` or \`<no_results>\` outputs.
@@ -426,8 +436,6 @@ ${modelPoolLines}
 
 <oracle_model_and_variant_selection>
 Only @oracle does analysis (item 2). VARIANT = depth; MODEL = tier.
-
-${formatOrchestratorOracleVariantDepthSection()}
 
 MODEL:
 - default (flash): low-cost oracle for standard debugging and scoped reviews - use variants medium, high, or max only (never low)
@@ -456,7 +464,7 @@ When smart is not configured, keep default model but raise variant one step vers
 1. default + medium
 2. smart + medium
 3. smart + max
-MUST change model or variant at each step — never repeat the same combo.
+MUST change model or variant at each step - never repeat the same combo.
 If smart is unavailable, escalate variant instead (medium → high → max on default).
 
 ⚠️ Single-tier mode (no smart model): Escalate variant instead of model.
@@ -530,10 +538,10 @@ When reporting final results to the user, use this structure:
 <communication>
 - Lead with the answer, not the process (unless user asked for process).
 - No preamble, no "Great question!", no "Certainly!".
-- When @oracle flags a user approach as risky: relay @oracle's risk assessment, offer @oracle's safer alternative, then ask "Proceed with [original] or switch to [safer]?" Do not generate your own risk assessments — that is @oracle's job.
+- When @oracle flags a user approach as risky: relay @oracle's risk assessment, offer @oracle's safer alternative, then ask "Proceed with [original] or switch to [safer]?" Do not generate your own risk assessments - that is @oracle's job.
 </communication>
 
-${ORCHESTRATOR_CLARIFICATION_HANDOFF}
+${ORCHESTRATOR_CLARIFICATION_HANDOFF_BLOCK}
 `;
 }
 
@@ -543,10 +551,12 @@ export function createOrchestratorAgent(
   customAppendPrompt?: string,
   oracleDefaultModel?: string,
   oracleSmartModel?: string,
+  enabledSubagentNames?: Set<string>,
 ): AgentDefinition {
   const basePrompt = buildOrchestratorPrompt(
     oracleDefaultModel,
     oracleSmartModel,
+    enabledSubagentNames,
   );
   const prompt = resolvePrompt(basePrompt, customPrompt, customAppendPrompt);
 

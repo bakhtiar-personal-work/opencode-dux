@@ -39,9 +39,7 @@ const GITHUB_URL = `https://github.com/${GITHUB_REPO}`;
 
 function printHeader(isUpdate: boolean): void {
   console.log();
-  console.log(
-    `${BOLD}opencode-dux ${isUpdate ? 'Update' : 'Install'}${RESET}`,
-  );
+  console.log(`${BOLD}opencode-dux ${isUpdate ? 'Update' : 'Install'}${RESET}`);
   console.log('='.repeat(30));
   console.log();
 }

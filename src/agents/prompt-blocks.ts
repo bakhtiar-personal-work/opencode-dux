@@ -37,7 +37,7 @@ export const SUBAGENT_NEEDS_USER_FORMAT = QUESTION_INFO_SCHEMA;
  * Describes how to handle the question/q&a workflow when subagents
  * return <needs_user>.
  */
-export const ORCHESTRATOR_CLARIFICATION_HANDOFF = `<orchestrator_clarification>
+export const ORCHESTRATOR_CLARIFICATION_HANDOFF_BLOCK = `<orchestrator_clarification>
 Nine invariants for question/q&a workflow:
 
 1) Subagent <needs_user> → extract the JSON array from their
@@ -85,7 +85,7 @@ Nine invariants for question/q&a workflow:
    retrieve missing info first, then re-delegate to the same session.
 </orchestrator_clarification>
 
-${QUESTION_INFO_SCHEMA}`;
+QuestionInfo JSON format: see SUBAGENT_NEEDS_USER_FORMAT for schema.`;
 
 /**
  * Shared `<needs_user>` output format for all specialist agents.
@@ -205,7 +205,7 @@ mechanical edits), follow this cycle:
    technical approach (no implementation).
    Oracle output must include a concrete plan section the user can review.
 2) PRESENT: Always present the @oracle plan to the user for confirmation.
-   This step is MANDATORY — never skip it for any non-trivial change.
+   This step is MANDATORY - never skip it for any non-trivial change.
    - If @oracle used <needs_user> with questions: extract JSON, call \`question\` tool, relay answers back via continue_session_id, then present the final plan.
    - Otherwise: relay the plan's key decisions, file paths, and risks as text.
    - Ask the user to confirm or request adjustments before proceeding.
@@ -232,7 +232,7 @@ When creating a plan for pre-implementation planning (the orchestrator
 delegates with "for pre-implementation planning"):
 - Return the plan as normal structured output with <plan>...</plan> section.
   The orchestrator will present this plan to the user for confirmation.
-- Do NOT use <needs_user> just to deliver the plan — plan presentation is
+- Do NOT use <needs_user> just to deliver the plan - plan presentation is
   the orchestrator's job, not the oracle's.
 - Use <needs_user> only for genuine architectural forks where your analysis
   cannot select a single best approach (per <user_choice_policy>).
@@ -280,7 +280,7 @@ function stewardGlobBulletList(): string {
 /** Inner body for the steward agent `<steward_paths>` section. */
 export function formatStewardAgentStewardPathsBody(): string {
   return [
-    'Check which paths exist (use glob/list tools). You cite only what these files literally say — no cross-file analysis, no contradiction hunting, no evaluating correctness. Priority order for reading:',
+    'Check which paths exist (use glob/list tools). You cite only what these files literally say - no cross-file analysis, no contradiction hunting, no evaluating correctness. Priority order for reading:',
     stewardGlobBulletList(),
     STEWARD_DOCS_EXCLUSION,
     STEWARD_VSCODE_OUT_OF_SCOPE,
@@ -292,7 +292,7 @@ export function buildStewardOrchestratorProtocolBlock(): string {
 - Same triggers as <first_gate> item 1: one blocking \`delegate_subagent(agent: "steward", ...)\` before @oracle / @fixer / @designer when work touches code, tests, reviews, or repo workflow; pure "where is X" may use @explorer first, but @steward before any @fixer (or mixed implementation).
 - **ALWAYS blocking. NEVER fire_forget.** Steward citations are mandatory input for ALL downstream delegations (@oracle, @fixer, @designer). Parallelizing steward with any other agent violates the sequential dependency chain: steward → oracle → fixer. Even in recovery flows (see <subagent_recovery>), steward delegations must be blocking.
 In practice, this means the orchestrator MUST issue @steward as the sole tool call in its turn and wait for the result before issuing any other delegate_subagent calls in a subsequent turn.
- - Steward prompt: State the convention-domain (e.g., "test conventions", "code style rules", "commit conventions") — NOT the codebase task (e.g., "fix retry logic"). Require \`AGENTS.md\` then \`AGENT.md\` at root when present, then other steward_paths — no vague "check rules" delegations.
+ - Steward prompt: State the convention-domain (e.g., "test conventions", "code style rules", "commit conventions") - NOT the codebase task (e.g., "fix retry logic"). Require \`AGENTS.md\` then \`AGENT.md\` at root when present, then other steward_paths - no vague "check rules" delegations.
 - Steward checks which steward_paths exist (glob/list; existing paths only). Priority order:
 // Note: Steward paths list appears in both steward and orchestrator prompts by design.
 // Each agent needs its own context - this is not code duplication.
@@ -301,7 +301,7 @@ ${STEWARD_DOCS_EXCLUSION}
 ${STEWARD_VSCODE_OUT_OF_SCOPE}
 - Convention-domain keywords + hints in prompt; cited bullets only. Copy steward citations verbatim into every downstream delegation (@oracle, @fixer, @designer) with the header \`${STEWARD_CITATION_HEADER}\`.
 - PRECEDENCE: Repo rules cited by @steward (AGENTS.md, AGENT.md, .cursor/rules, etc.) ALWAYS override built-in agent prompt rules when they conflict. If a repo rule says "skip tests for docs" and a built-in rule says "always run tests," the repo rule wins. If they don't conflict, follow both.
-- Handoff only: cites steward_paths — not traces, product reads, @explorer search, or @oracle analysis. @steward cites verbatim text from steward_paths files with path attribution. @steward NEVER analyzes rules for correctness, consistency, contradictions, gaps, or applicability to specific code changes. Those tasks are @oracle's responsibility.
+- Handoff only: cites steward_paths - not traces, product reads, @explorer search, or @oracle analysis. @steward cites verbatim text from steward_paths files with path attribution. @steward NEVER analyzes rules for correctness, consistency, contradictions, gaps, or applicability to specific code changes. Those tasks are @oracle's responsibility.
 - Attribution: Rules need \`path\` + quote; do not claim steward *proved* code root cause unless the doc says so verbatim-@explorer / @oracle own diagnosis otherwise.
 </steward_protocol>
 
@@ -349,11 +349,11 @@ export const STEWARD_VARIANT_SCOPE_LINES = [
   'medium: root anchor files plus remaining steward_paths in priority order ' +
     '(up to ~6 whole-file reads)',
   'high: read and cite all steward_paths including .cursor/rules, ' +
-    '.opencode, .docs, and any secondary convention shards — cite verbatim only, do not analyze',
+    '.opencode, .docs, and any secondary convention shards - cite verbatim only, do not analyze',
 ] as const;
 
 export const STEWARD_VARIANT_MAX_NOTE =
-  'not supported — steward is citation-only; deep analysis belongs to @oracle';
+  'not supported - steward is citation-only; deep analysis belongs to @oracle';
 
 // --- Designer ---
 
@@ -511,130 +511,39 @@ ${buildVariantGlossaryBlock()}`;
  */
 export function buildDiscoveryGuidanceBlock(): string {
   return `<discovery_guidance>
-When a subagent returns <blocked> because it lacks the capabilities to complete
-a task, you have two recovery options:
-1. Work around the missing capability (use a different tool or approach)
-2. Discover and recommend installable MCP servers or skills that provide the
-   needed capability via the discovery tools
-
-IMPORTANT SCOPE: Discovery tools are ONLY for AGENT capabilities and
-knowledge — NOT for project dependencies.
-- MCP servers = agent capabilities (tools the AI can call to do things)
-- Skills = agent knowledge (prompt instructions that teach workflows)
-- Project dependencies = what your code imports or references at
-  runtime (language libraries, framework packages, runtime deps) — NOT
-  for discovery tools
+When a subagent returns <blocked> because it lacks capabilities, you have
+two options: work around it, or use discovery tools to find installable
+MCP servers or skills. These tools are only for AGENT capabilities, not
+project dependencies.
 
 <tool_selection>
-- Use \`discover_mcp_servers\` when you need tool/capability resources
-  (external service automation, data source access, API integrations,
-  file system operations, etc.)
-- Use \`discover_skills_online\` when you need knowledge/prompt resources
-  (specialized workflows, domain expertise, task-specific guidance, etc.)
+- Use \`discover_mcp_servers\` for tool/capability resources (API
+  integrations, data source access, file system ops, etc.)
+- Use \`discover_skills_online\` for knowledge/prompt resources
+  (specialized workflows, domain expertise, task-specific guidance)
 </tool_selection>
-
-Call \`discover_mcp_servers\` when:
-- A subagent reports missing capabilities via <blocked> (e.g. "browser
-  automation unavailable", "database MCP not configured")
-- The user explicitly asks for an MCP server or tool recommendation
-- You need to find external tool resources for a specific domain
-
-Call \`discover_skills_online\` when:
-- The user explicitly asks for a skill recommendation
-- You need task-specific knowledge, prompts, or workflows
-- A subagent needs specialized guidance for a particular domain
 
 <correct_vs_incorrect>
 ✅ DO call discovery tools for:
-  - External service automation MCP (API integrations, app automation)
-  - Data source connector MCP (databases, storage, data platforms)
-  - Platform API MCP (GitHub, GitLab, cloud services)
-  - Design tool MCP (design asset access, visual workflows)
-  - Web search / documentation MCP
-  - Domain knowledge skill (best practices, specialized workflows)
+  - External service/API automation MCP
+  - Data source / platform API MCP (databases, GitHub, GitLab)
+  - Domain knowledge skills (best practices, specialized workflows)
 
 ❌ DON'T call discovery tools for:
-  - Language libraries (charting, UI frameworks, utilities — project
-    dependencies)
-  - Framework packages (runtimes, SDKs, build tools — project
-    dependencies)
-  - Runtime dependencies (database drivers, HTTP clients, package
-    managers — project dependencies)
-  - Any package used in \`import\` or \`require\` statements
-
-Project dependencies are installed by @fixer during implementation
-using the project's package manager (npm, pip, nuget, cargo, etc.).
-Discovery tools find AGENT capabilities, not PROJECT dependencies.
+  - Language libraries or framework packages (project deps)
+  - Anything used in \`import\` or \`require\` statements
 </correct_vs_incorrect>
 
-Both tools return a JSON array of recommendations with relevance scores,
-install commands, and suggested agents. Present the top 1-3 recommendations
-to the user and ask if they would like to install any.
-
-<auto_filtering>
-Both tools automatically filter out already-installed MCPs/skills
-from recommendations. If the user already has a matching MCP or skill
-installed, it will only appear in the output when its relevance_score
-is > 0.8 (significantly better for the current task), and it will be
-marked with 'already_installed: true' so you know the user already has it.
-Otherwise, already-installed items are silently excluded to avoid
-recommending something the user already has.
-
-When calling either tool, pass the 'existing_mcp_names' or
-'existing_skill_names' parameter with the list of installed names
-obtained via getLocalDiscovery() to enable this filtering.
-</auto_filtering>
-
-<scope_clarification>
-- MCP servers/Skills = AGENT tooling (what AI can do/know)
-- Project dependencies = what your code imports (language libraries,
-  framework packages, runtime dependencies)
-
-@fixer installs project dependencies during implementation verification.
-Discovery tools find AGENT capabilities, not PROJECT dependencies.
-
-Project dependencies (e.g., language libraries, framework packages,
-runtime deps) are installed by @fixer during implementation using the
-project's package manager. Discovery tools are for finding MCP servers
-(agent capabilities) and Skills (agent knowledge) — NOT project
-dependencies.
-</scope_clarification>
-
-<heuristics_table>
-| Task signal detected in <blocked>               | Tool to use          | Likely recommendation(s)                         |
-|--------------------------------------------------|----------------------|---------------------------------------------------|
-| External service automation, API integration     | discover_mcp_servers | Automation/connector MCPs                        |
-| Data source access, storage queries              | discover_mcp_servers | Data source connector MCPs                       |
-| Repository operations, PR/issue management       | discover_mcp_servers | Platform API MCPs                                |
-| File system operations, file read/write          | discover_mcp_servers | Filesystem MCP                                   |
-| Web search, internet research, API docs          | discover_mcp_servers | Web search / documentation MCPs                  |
-| Code search, grep-like operations                | discover_mcp_servers | Code search MCPs                                 |
-| Communication (messaging platforms)              | discover_mcp_servers | Messaging platform MCPs                          |
-| Project management (issue tracking, boards)      | discover_mcp_servers | Project management MCPs                          |
-| Design tools, visual asset management            | discover_mcp_servers | Design tool MCPs                                 |
-| Error monitoring, crash reporting                | discover_mcp_servers | Observability MCPs                               |
-| Payments, billing, subscriptions                 | discover_mcp_servers | Payment platform MCPs                            |
-| Documentation, knowledge base, wiki              | discover_mcp_servers | Knowledge base MCPs                              |
-| Domain-specific knowledge, best practices        | discover_skills_online | Specialized workflow/domain knowledge skills    |
-| Specialized workflows for a particular task      | discover_skills_online | Task-specific workflow skills                   |
-| Package/import resolution, dependency install    | ⚠️ NOT for discovery | @fixer via project package manager              |
-</heuristics_table>
+<heuristics_summary>
+- External service/API/data access → discover_mcp_servers
+- Domain knowledge/workflows → discover_skills_online
+- Project dependencies (import/require) → NOT for discovery tools; use @fixer + package manager
+</heuristics_summary>
 
 <example>
-Subagent returns: \`<blocked>\`External API access needed - I need to
-interact with a third-party service but no connector is available.
-<suggested_agent>explorer</suggested_agent>
-\`</blocked>\`
-
-Orchestrator action:
-1. Call \`discover_mcp_servers(task_description: "External API integration
-   for third-party service access", task_keywords: ["api", "integration",
-   "connector", "service"], agent_name: "explorer")\`
-2. Get recommendations including a service connector MCP
-3. Present to user: "To enable external API access, you can install a
-   service connector MCP server. Would you like me to search for
-   available options?"
+Subagent: <blocked>External API access needed - no connector available.
+1. Call \`discover_mcp_servers(task_description: "External API integration", ...)\`
+2. Present top recommendation to user for installation.
 </example>
-
-  `;
+</discovery_guidance>`;
 }

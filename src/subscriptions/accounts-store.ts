@@ -5,8 +5,8 @@
  * NOT in the plugin config, so auth tokens are never committed to repos or
  * exposed in the published schema.
  *
- * Supports multiple providers (OpenCode Go, Neuralwatt) via discriminated
- * unions on the `provider` field.
+ * Supports multiple providers (OpenCode Go, Neuralwatt, Codex) via
+ * discriminated unions on the `provider` field.
  *
  */
 
@@ -15,14 +15,40 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import type {
   CodexAccount,
-  NeuralwattAccount,
-  OpenCodeGoAccount,
   StoredAccount,
   SubscriptionProvider,
 } from './types';
 
 // Re-export for consumers
 export type { StoredAccount };
+
+const ACCOUNT_NAME_REGEX = /^[a-zA-Z0-9]{1,12}$/;
+
+/**
+ * Validate an account name.
+ * Rules: 1–12 chars, alphanumeric only (no spaces, no special chars).
+ */
+export function validateAccountName(
+  name: string,
+): { valid: true } | { valid: false; error: string } {
+  if (!name || typeof name !== 'string') {
+    return { valid: false, error: 'Account name is required.' };
+  }
+  if (name.length > 12) {
+    return {
+      valid: false,
+      error: `Account name must be 12 characters or fewer (got ${name.length}).`,
+    };
+  }
+  if (!ACCOUNT_NAME_REGEX.test(name)) {
+    return {
+      valid: false,
+      error:
+        'Account name must be alphanumeric only (letters and numbers, no spaces or special characters).',
+    };
+  }
+  return { valid: true };
+}
 
 interface AccountsFile {
   version: 2;
@@ -118,6 +144,10 @@ export function getAccountsByProvider(
  * overwrites it (update).
  */
 export function saveAccount(account: StoredAccount): void {
+  const validation = validateAccountName(account.name);
+  if (!validation.valid) {
+    throw new Error(validation.error);
+  }
   const file = readAccountsFile();
   const existing = file.accounts.findIndex((a) => a.name === account.name);
   if (existing >= 0) {
@@ -141,14 +171,22 @@ export function removeAccount(name: string): boolean {
 }
 
 /**
- * Update the auth cookie for an existing OpenCode Go account.
- * Returns true if updated, false if account not found or not an opencode-go account.
+ * Update tokens for an existing Codex account.
+ * Returns true if updated, false if account not found or not a codex account.
  */
-export function updateAccountCookie(name: string, authCookie: string): boolean {
+export function updateCodexTokens(
+  name: string,
+  accessToken: string,
+  refreshToken: string,
+  expiresAt: number,
+): boolean {
   const file = readAccountsFile();
   const account = file.accounts.find((a) => a.name === name);
-  if (!account || account.provider !== 'opencode-go') return false;
-  account.authCookie = authCookie;
+  if (!account || account.provider !== 'codex') return false;
+  const codex = account as CodexAccount;
+  codex.accessToken = accessToken;
+  codex.refreshToken = refreshToken;
+  codex.expiresAt = expiresAt;
   writeAccountsFile(file);
   return true;
 }
@@ -169,26 +207,4 @@ export function maskCookie(cookie: string): string {
 export function getAccount(name: string): StoredAccount | undefined {
   const file = readAccountsFile();
   return file.accounts.find((a) => a.name === name);
-}
-
-/**
- * Set the provider and API key for an existing account.
- * Returns true if updated, false if account not found.
- */
-export function setAccountKey(
-  name: string,
-  provider: string,
-  apiKey: string,
-): boolean {
-  const file = readAccountsFile();
-  const account = file.accounts.find((a) => a.name === name);
-  if (!account) return false;
-  account.provider = provider as SubscriptionProvider;
-  if (account.provider === 'codex') {
-    (account as CodexAccount).accessToken = apiKey;
-  } else {
-    (account as OpenCodeGoAccount | NeuralwattAccount).apiKey = apiKey;
-  }
-  writeAccountsFile(file);
-  return true;
 }

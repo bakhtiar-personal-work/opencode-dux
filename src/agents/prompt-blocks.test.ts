@@ -7,7 +7,7 @@ import {
   formatOrchestratorOracleVariantDepthSection,
   INTERPRETER_VARIANT_SCOPE_LINES,
   LIBRARIAN_VARIANT_SCOPE_LINES,
-  ORCHESTRATOR_CLARIFICATION_HANDOFF,
+  ORCHESTRATOR_CLARIFICATION_HANDOFF_BLOCK,
   PLANNING_GATE_BLOCK,
   STEWARD_PATH_GLOBS,
   STEWARD_VARIANT_SCOPE_LINES,
@@ -42,21 +42,27 @@ describe('PLANNING_GATE_BLOCK', () => {
   });
 });
 
-describe('ORCHESTRATOR_CLARIFICATION_HANDOFF', () => {
+describe('ORCHESTRATOR_CLARIFICATION_HANDOFF_BLOCK', () => {
   test('defines nine invariants for question workflow', () => {
-    expect(ORCHESTRATOR_CLARIFICATION_HANDOFF).toContain(
+    expect(ORCHESTRATOR_CLARIFICATION_HANDOFF_BLOCK).toContain(
       '<orchestrator_clarification>',
     );
-    expect(ORCHESTRATOR_CLARIFICATION_HANDOFF).toContain('Nine invariants');
-    expect(ORCHESTRATOR_CLARIFICATION_HANDOFF).toContain('1) Subagent');
-    expect(ORCHESTRATOR_CLARIFICATION_HANDOFF).toContain('2) After user');
-    expect(ORCHESTRATOR_CLARIFICATION_HANDOFF).toContain('3) Never');
-    expect(ORCHESTRATOR_CLARIFICATION_HANDOFF).toContain('4) Multiple');
-    expect(ORCHESTRATOR_CLARIFICATION_HANDOFF).toContain('5) User follow-up');
-    expect(ORCHESTRATOR_CLARIFICATION_HANDOFF).toContain(
+    expect(ORCHESTRATOR_CLARIFICATION_HANDOFF_BLOCK).toContain(
+      'Nine invariants',
+    );
+    expect(ORCHESTRATOR_CLARIFICATION_HANDOFF_BLOCK).toContain('1) Subagent');
+    expect(ORCHESTRATOR_CLARIFICATION_HANDOFF_BLOCK).toContain('2) After user');
+    expect(ORCHESTRATOR_CLARIFICATION_HANDOFF_BLOCK).toContain('3) Never');
+    expect(ORCHESTRATOR_CLARIFICATION_HANDOFF_BLOCK).toContain('4) Multiple');
+    expect(ORCHESTRATOR_CLARIFICATION_HANDOFF_BLOCK).toContain(
+      '5) User follow-up',
+    );
+    expect(ORCHESTRATOR_CLARIFICATION_HANDOFF_BLOCK).toContain(
       '6) Subagent-to-user relay',
     );
-    expect(ORCHESTRATOR_CLARIFICATION_HANDOFF).toContain('7) Token discipline');
+    expect(ORCHESTRATOR_CLARIFICATION_HANDOFF_BLOCK).toContain(
+      '7) Token discipline',
+    );
   });
 });
 

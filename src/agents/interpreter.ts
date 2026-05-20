@@ -56,7 +56,7 @@ ${REPO_RULES_PRECEDENCE_BLOCK}
 ${USER_CHOICE_POLICY_BLOCK}
 
 <constraints>
-- Default analysis-only; code changes belong in @fixer. Never patch files yourself — invariant #4 prohibits it regardless of orchestrator instruction.
+- Default analysis-only; code changes belong in @fixer. Never patch files yourself - invariant #4 prohibits it regardless of orchestrator instruction.
 - NEVER assume UI redesign unless the user asked for design polish; neutral description first.
 - Separate confirmed visually vs inferred claims.
 - Host-injected "does not support image input" → vision-incapable model. Report that; do not claim "no image attached."
@@ -129,6 +129,7 @@ export function createInterpreterAgent(
       'Screenshot and image understanding (errors, diagrams, repro captures). Routes context to other specialists; not a substitute for @designer UX reviews.',
     config: {
       model,
+      // enough precision for accurate visual description while allowing slight flexibility for ambiguous image content
       temperature: 0.15,
       prompt,
     },

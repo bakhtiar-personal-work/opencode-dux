@@ -84,7 +84,7 @@ describe('providers', () => {
   test('generateLiteConfig rejects unsupported preset', () => {
     expect(() =>
       generateLiteConfig({
-          installSkills: false,
+        installSkills: false,
         installCustomSkills: false,
         preset: 'not-real',
         reset: false,
@@ -95,7 +95,7 @@ describe('providers', () => {
   test('generateLiteConfig rejects non-generated model mappings as active presets', () => {
     expect(() =>
       generateLiteConfig({
-          installSkills: false,
+        installSkills: false,
         installCustomSkills: false,
         preset: 'kimi',
         reset: false,
@@ -106,13 +106,11 @@ describe('providers', () => {
   test('generateLiteConfig rejects inherited property names as presets', () => {
     expect(() =>
       generateLiteConfig({
-          installSkills: false,
+        installSkills: false,
         installCustomSkills: false,
         preset: 'toString',
         reset: false,
       }),
     ).toThrow('Unsupported preset "toString"');
   });
-
-
 });

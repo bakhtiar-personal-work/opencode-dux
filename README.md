@@ -61,7 +61,7 @@ Merged from two locations (project overrides user):
 
 | Field                                | Type       | Default | Description                                   |
 | ------------------------------------ | ---------- | ------- | --------------------------------------------- |
-| `preset`                             | `string`   | —       | Active preset name                            |
+| `preset`                             | `string`   | -       | Active preset name                            |
 | `presets`                            | `object`   | `{}`    | Named model configurations per agent          |
 | `agents`                             | `object`   | `{}`    | Per-agent overrides on top of active preset   |
 | `fallback.enabled`                   | `boolean`  | `true`  | Enable runtime model fallback on API errors   |
@@ -119,13 +119,13 @@ Merged from two locations (project overrides user):
 
 Manage API accounts directly from the OpenCode prompt via `/subscriptions`:
 
-- `/subscriptions list` — View all accounts and their usage
-- `/subscriptions add-opencode-go <name> <workspace-id>` — Add OpenCode Go account
-- `/subscriptions add-neuralwatt <name> <api-key>` — Add Neuralwatt account
-- `/subscriptions add-codex <name> <access-token>` — Add Codex (OpenAI) account
-- `/subscriptions switch <provider> <name>` — Activate an account for a provider
-- `/subscriptions remove <name>` — Delete an account
-- `/subscriptions refresh` — Force refresh usage data
+- `/subscriptions list` - View all accounts and their usage
+- `/subscriptions add-opencode-go <name> <workspace-id>` - Add OpenCode Go account
+- `/subscriptions add-neuralwatt <name> <api-key>` - Add Neuralwatt account
+- `/subscriptions add-codex-device <name>` - Add Codex (OpenAI) account via device auth
+- `/subscriptions switch <provider> <name>` - Activate an account for a provider
+- `/subscriptions remove <name>` - Delete an account
+- `/subscriptions refresh` - Force refresh usage data
 
 ### Supported providers
 
@@ -133,17 +133,31 @@ Manage API accounts directly from the OpenCode prompt via `/subscriptions`:
 | --------------- | ----------------------------------------------------- | -------------------------- |
 | **OpenCode Go** | Dashboard scraping (rolling, weekly, monthly windows) | Workspace ID + auth cookie |
 | **Neuralwatt**  | REST API (credits, kWh, token usage)                  | API key                    |
-| **Codex**       | REST API (5H/7D rate limits, credits)                 | OAuth access token         |
+| **Codex**       | REST API (5H/7D rate limits, credits)                 | Device code auth (OAuth)   |
 
 Usage data appears in the TUI sidebar under **API Usage**.
+
+### Codex device auth
+
+Codex uses your ChatGPT account (not an API key). The device auth flow lets you
+log in from any terminal - no browser on the same machine needed.
+
+1. Run `/subscriptions add-codex-device <name>`
+2. Open the displayed URL in any browser and sign in with your ChatGPT account
+3. Enter the one-time code shown in your terminal
+4. Done - usage tracking starts immediately
+
+Access tokens refresh automatically via the stored refresh token. If the
+refresh token expires (e.g., after a password change), re-run
+`/subscriptions add-codex-device`.
 
 ## Prompt overrides
 
 Place Markdown files in `~/.config/opencode/opencode-dux/`:
 
-- `<agent>.md` — Replace default prompt
-- `<agent>_append.md` — Append to default prompt
-- `<preset>/<agent>.md` — Preset-scoped prompts
+- `<agent>.md` - Replace default prompt
+- `<agent>_append.md` - Append to default prompt
+- `<preset>/<agent>.md` - Preset-scoped prompts
 
 ## Built-in MCPs
 
@@ -157,8 +171,8 @@ Disable any: `{ "disabledMcps": ["grep_app"] }`
 
 ## Built-in Skills
 
-- **simplify** — Code simplification and clarity improvements
-- **codemap** — Codebase mapping and structure analysis
+- **simplify** - Code simplification and clarity improvements
+- **codemap** - Codebase mapping and structure analysis
 
 ## Skill Discovery
 

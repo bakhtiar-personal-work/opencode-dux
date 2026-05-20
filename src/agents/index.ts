@@ -12,7 +12,7 @@ import { createExplorerAgent } from './explorer';
 import { createFixerAgent } from './fixer';
 import { createInterpreterAgent } from './interpreter';
 import { createLibrarianAgent } from './librarian';
-import { createOracleAgent } from './oracle';
+import { buildOraclePrompt, createOracleAgent } from './oracle';
 import { type AgentDefinition, createOrchestratorAgent } from './orchestrator';
 import { applyDefaultPermissions, applyOverrides } from './overrides';
 import { createStewardAgent } from './steward';
@@ -84,11 +84,28 @@ const SUBAGENT_FACTORIES = {
 export async function createAgents(
   config?: PluginConfig,
 ): Promise<AgentDefinition[]> {
+  // 0. Resolve oracle smart model for conditional prompt injection
+  const oracleOverride = getAgentOverride(config, 'oracle');
+  const oracleOptions = oracleOverride?.options as
+    | Record<string, unknown>
+    | undefined;
+  const hasSmartModel =
+    typeof oracleOptions?.smart === 'string' &&
+    (oracleOptions.smart as string).length > 0;
+
   // 1. Gather all sub-agent definitions with custom prompts
   const protoSubAgents = (
     Object.entries(SUBAGENT_FACTORIES) as [SubagentName, AgentFactory][]
   ).map(([name, factory]) => {
     const customPrompts = loadAgentPrompt(name, config?.preset);
+    if (name === 'oracle') {
+      return createOracleAgent(
+        DEFAULT_MODELS[name] as string,
+        customPrompts.prompt,
+        customPrompts.appendPrompt,
+        hasSmartModel,
+      );
+    }
     return factory(
       DEFAULT_MODELS[name] as string,
       customPrompts.prompt,
@@ -111,6 +128,17 @@ export async function createAgents(
 
   const allSubAgents = [...builtInSubAgents];
 
+  // 2a. Compute which subagents have model assignments (for filtering descriptions in orchestrator prompt)
+  const enabledSubagentNames = new Set<string>();
+  for (const agent of builtInSubAgents) {
+    if (
+      agent.config.model ||
+      (agent._modelArray && agent._modelArray.length > 0)
+    ) {
+      enabledSubagentNames.add(agent.name);
+    }
+  }
+
   // 3. Create Orchestrator (with its own overrides and custom prompts)
   // Model is resolved from DEFAULT_MODELS.orchestrator (or user override).
   // TUI /model selector overrides at runtime regardless.
@@ -121,14 +149,11 @@ export async function createAgents(
 
   // 3a. Resolve oracle model names for prompt injection
   // (avoids hardcoding model IDs in the prompt text)
-  const oracleOverride = getAgentOverride(config, 'oracle');
+  // oracleOverride and oracleOptions are already resolved in step 0 above
   const oracleDefaultModel =
     typeof oracleOverride?.model === 'string'
       ? oracleOverride.model
       : DEFAULT_MODELS.oracle;
-  const oracleOptions = oracleOverride?.options as
-    | Record<string, unknown>
-    | undefined;
   const oracleSmartModel =
     typeof oracleOptions?.smart === 'string' ? oracleOptions.smart : '';
   const oracleSmartModelOrFallback =
@@ -140,6 +165,7 @@ export async function createAgents(
     orchestratorPrompts.appendPrompt,
     oracleDefaultModel as string | undefined,
     oracleSmartModelOrFallback,
+    enabledSubagentNames.size > 0 ? enabledSubagentNames : undefined,
   );
   if (orchestratorOverride) {
     applyOverrides(orchestrator, orchestratorOverride);

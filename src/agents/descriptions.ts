@@ -21,8 +21,8 @@ export const AGENT_DESCRIPTIONS: Record<string, string> = {
 - Do not use when: pure local discovery (@explorer) or docs-only (@librarian)
 </agent>`,
   designer: `<agent name="@designer">
-- Role: UI/UX specialist for ALL user-facing UI — new pages, existing component changes, layout updates, styling, visual polish, a11y
-- Delegate when: ANY change to TSX/JSX files, components, pages, layouts, styling, or user-facing visual elements — BEFORE @oracle or @fixer
+- Role: UI/UX specialist for ALL user-facing UI - new pages, existing component changes, layout updates, styling, visual polish, a11y
+- Delegate when: ANY change to TSX/JSX files, components, pages, layouts, styling, or user-facing visual elements - BEFORE @oracle or @fixer
 - Do not use when: backend-only, non-visual work, or pure logic changes (hooks/utils) that don't affect rendering
 </agent>`,
   fixer: `<agent name="@fixer">
@@ -31,7 +31,7 @@ export const AGENT_DESCRIPTIONS: Record<string, string> = {
 - Do not use when: strategy/conventions/UI design still unresolved-delegate upward first
 </agent>`,
   steward: `<agent name="@steward">
-- Role: rules citation from steward_paths — verbatim excerpts only; does NOT analyze, evaluate, or compare rules
+- Role: rules citation from steward_paths - verbatim excerpts only; does NOT analyze, evaluate, or compare rules
 - Delegate when: repo conventions needed before oracle/fixer (see <first_gate> 1)
 - Do not use when: pure symbol search (@explorer); rules analysis (@oracle).
 </agent>`,

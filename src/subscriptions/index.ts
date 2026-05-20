@@ -15,12 +15,17 @@ export {
   maskCookie,
   removeAccount,
   saveAccount,
-  setAccountKey,
-  updateAccountCookie,
+  validateAccountName,
 } from './accounts-store';
 export { scrapeCodexQuota } from './codex-scraper';
 export { scrapeNeuralwattQuota } from './neuralwatt-scraper';
 export { scrapeQuota, scrapeUsagePage } from './opencode-go-scraper';
+export {
+  formatProviderLabel,
+  PROVIDERS,
+  resolveProvider,
+  tuiProviderLabel,
+} from './provider';
 export type {
   CodexUsageEntry,
   NeuralwattUsageEntry,

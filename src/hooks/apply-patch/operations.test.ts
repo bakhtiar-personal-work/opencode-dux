@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { chmod, mkdir, stat, symlink } from 'node:fs/promises';
-import path from 'node:path';
 import { platform } from 'node:os';
+import path from 'node:path';
 
 function maybeMode(mode: number): number | undefined {
   return platform() === 'win32' ? undefined : mode;
@@ -1444,13 +1444,15 @@ garbage
   });
 
   const testSymlink = platform() === 'win32' ? test.skip : test;
-  testSymlink('rewritePatchText blocks a patch when the path escapes through a symlink with a missing ancestor', async () => {
-    const root = await createTempDir();
-    const outside = await createTempDir();
-    await writeFixture(root, 'before.txt', 'alpha\nbeta\n');
-    await symlink(outside, path.join(root, 'linked-outside'));
+  testSymlink(
+    'rewritePatchText blocks a patch when the path escapes through a symlink with a missing ancestor',
+    async () => {
+      const root = await createTempDir();
+      const outside = await createTempDir();
+      await writeFixture(root, 'before.txt', 'alpha\nbeta\n');
+      await symlink(outside, path.join(root, 'linked-outside'));
 
-    const patchText = `*** Begin Patch
+      const patchText = `*** Begin Patch
 *** Update File: before.txt
 *** Move to: linked-outside/missing/child.txt
 @@
@@ -1459,12 +1461,13 @@ garbage
 +BETA
 *** End Patch`;
 
-    await expect(
-      rewritePatchText(root, patchText, DEFAULT_OPTIONS, root),
-    ).rejects.toThrow(
-      'apply_patch blocked: patch contains path outside workspace root:',
-    );
-  });
+      await expect(
+        rewritePatchText(root, patchText, DEFAULT_OPTIONS, root),
+      ).rejects.toThrow(
+        'apply_patch blocked: patch contains path outside workspace root:',
+      );
+    },
+  );
 
   test('rewritePatchText blocks the whole patch if any add/delete escapes root even when an update is rewritable', async () => {
     const root = await createTempDir();
@@ -1512,24 +1515,27 @@ garbage
     );
   });
 
-  testSymlink('preparePatchChanges rejects a path that escapes through a symlink with a missing ancestor', async () => {
-    const root = await createTempDir();
-    const outside = await createTempDir();
-    await mkdir(path.join(outside, 'real-target'), { recursive: true });
-    await symlink(outside, path.join(root, 'linked-outside'));
+  testSymlink(
+    'preparePatchChanges rejects a path that escapes through a symlink with a missing ancestor',
+    async () => {
+      const root = await createTempDir();
+      const outside = await createTempDir();
+      await mkdir(path.join(outside, 'real-target'), { recursive: true });
+      await symlink(outside, path.join(root, 'linked-outside'));
 
-    await expect(
-      preparePatchChanges(
-        root,
-        `*** Begin Patch
+      await expect(
+        preparePatchChanges(
+          root,
+          `*** Begin Patch
 *** Add File: linked-outside/missing/child.txt
 +fresh
 *** End Patch`,
-        DEFAULT_OPTIONS,
-        root,
-      ),
-    ).rejects.toThrow(
-      'apply_patch blocked: patch contains path outside workspace root:',
-    );
-  });
+          DEFAULT_OPTIONS,
+          root,
+        ),
+      ).rejects.toThrow(
+        'apply_patch blocked: patch contains path outside workspace root:',
+      );
+    },
+  );
 });

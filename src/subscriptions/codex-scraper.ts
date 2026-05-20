@@ -20,7 +20,9 @@ const EMPTY_WINDOW: UsageWindow = {
 const EMPTY_CREDITS = { hasCredits: false, unlimited: false, balance: 0 };
 
 function windowFromApi(
-  w: { used_percent: number; reset_at: number; limit_window_seconds: number } | undefined,
+  w:
+    | { used_percent: number; reset_at: number; limit_window_seconds: number }
+    | undefined,
 ): UsageWindow {
   if (!w) return { ...EMPTY_WINDOW };
   const usagePercent = Math.max(0, Math.min(100, w.used_percent));
@@ -57,16 +59,25 @@ export async function scrapeCodexQuota(
         fetchedAt: Date.now(),
         error: `Codex API returned ${res.status} ${res.statusText}`,
         primaryWindow: { ...EMPTY_WINDOW },
-        secondaryWindow: { ...EMPTY_WINDOW },
+        secondaryWindow: null,
         credits: { ...EMPTY_CREDITS },
+        planType: undefined,
       };
     }
 
-    const data = await res.json() as {
+    const data = (await res.json()) as {
       plan_type?: string;
       rate_limit?: {
-        primary_window?: { used_percent: number; reset_at: number; limit_window_seconds: number };
-        secondary_window?: { used_percent: number; reset_at: number; limit_window_seconds: number };
+        primary_window?: {
+          used_percent: number;
+          reset_at: number;
+          limit_window_seconds: number;
+        };
+        secondary_window?: {
+          used_percent: number;
+          reset_at: number;
+          limit_window_seconds: number;
+        };
       };
       credits?: { has_credits: boolean; unlimited: boolean; balance: number };
     };
@@ -76,12 +87,15 @@ export async function scrapeCodexQuota(
       accountName,
       fetchedAt: Date.now(),
       primaryWindow: windowFromApi(data.rate_limit?.primary_window),
-      secondaryWindow: windowFromApi(data.rate_limit?.secondary_window),
+      secondaryWindow: data.rate_limit?.secondary_window
+        ? windowFromApi(data.rate_limit.secondary_window)
+        : null,
       credits: {
         hasCredits: data.credits?.has_credits ?? false,
         unlimited: data.credits?.unlimited ?? false,
         balance: data.credits?.balance ?? 0,
       },
+      planType: data.plan_type ?? undefined,
     };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
@@ -91,8 +105,9 @@ export async function scrapeCodexQuota(
       fetchedAt: Date.now(),
       error: `Codex fetch failed: ${message}`,
       primaryWindow: { ...EMPTY_WINDOW },
-      secondaryWindow: { ...EMPTY_WINDOW },
+      secondaryWindow: null,
       credits: { ...EMPTY_CREDITS },
+      planType: undefined,
     };
   }
 }
