@@ -7,6 +7,7 @@ import { createElement, insert, setProp } from '@opentui/solid';
 import { createSignal } from 'solid-js';
 import { AGENT_SIDEBAR_DESCRIPTIONS } from './agents/descriptions';
 import type {
+  CodexUsageEntry,
   NeuralwattUsage,
   NeuralwattUsageEntry,
 } from './subscriptions/types';
@@ -577,6 +578,64 @@ function renderNeuralwattUsage(
   }
 }
 
+function renderCodexUsage(
+  entry: CodexUsageEntry,
+  rows: Child[],
+  theme: { text: unknown; textMuted: unknown; accent: unknown },
+): void {
+  // 5H row
+  if (entry.primaryWindow) {
+    const w = entry.primaryWindow;
+    const usageColor = getUsageColor(w.percentRemaining);
+    const bar = renderUsageBar(w.percentRemaining);
+    const pct = w.percentRemaining.toFixed(0).padStart(3);
+    const timeLeft = formatUsageTime(w.resetTimeIso);
+
+    rows.push(
+      box({ width: '100%', flexDirection: 'row', justifyContent: 'space-between' }, [
+        box({ flexDirection: 'row' }, [
+          text({ fg: theme.accent }, ['5H ']),
+          text({ fg: usageColor || theme.text }, [bar]),
+          text({ fg: usageColor || theme.textMuted }, [` ${pct}%`]),
+        ]),
+        text({ fg: theme.textMuted }, [timeLeft]),
+      ]),
+    );
+  }
+
+  // 7D row
+  if (entry.secondaryWindow) {
+    const w = entry.secondaryWindow;
+    const usageColor = getUsageColor(w.percentRemaining);
+    const bar = renderUsageBar(w.percentRemaining);
+    const pct = w.percentRemaining.toFixed(0).padStart(3);
+    const timeLeft = formatUsageTime(w.resetTimeIso);
+
+    rows.push(
+      box({ width: '100%', flexDirection: 'row', justifyContent: 'space-between' }, [
+        box({ flexDirection: 'row' }, [
+          text({ fg: theme.accent }, ['7D ']),
+          text({ fg: usageColor || theme.text }, [bar]),
+          text({ fg: usageColor || theme.textMuted }, [` ${pct}%`]),
+        ]),
+        text({ fg: theme.textMuted }, [timeLeft]),
+      ]),
+    );
+  }
+
+  // Credits row
+  const balance = entry.credits.balance;
+  rows.push(
+    box({ width: '100%', flexDirection: 'row' }, [
+      text({ fg: theme.text }, [
+        entry.credits.unlimited
+          ? '💰 Unlimited credits'
+          : `💰 $${balance.toFixed(2)} credits`,
+      ]),
+    ]),
+  );
+}
+
 function renderSubscriptionPanel(
   snapshot: TuiSnapshot,
   theme: {
@@ -600,7 +659,7 @@ function renderSubscriptionPanel(
     const name = entry.accountName;
     const activeName = snapshot.activeSubscriptionByProvider?.[entry.provider];
     const isActive = activeName === name;
-    const providerLabel = entry.provider === 'neuralwatt' ? ' [nw]' : ' [go]';
+    const providerLabel = entry.provider === 'neuralwatt' ? ' [nw]' : entry.provider === 'codex' ? ' [cx]' : ' [go]';
 
     if (!isFirstAccount) {
       rows.push(box({ width: '100%', height: 1 }));
@@ -641,6 +700,8 @@ function renderSubscriptionPanel(
       renderOpenCodeGoBars(entry, rows, theme);
     } else if (entry.provider === 'neuralwatt') {
       renderNeuralwattUsage(entry, rows, theme);
+    } else if (entry.provider === 'codex') {
+      renderCodexUsage(entry as CodexUsageEntry, rows, theme);
     } else {
       rows.push(
         text({ fg: '#F39C12' }, [

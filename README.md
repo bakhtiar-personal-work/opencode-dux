@@ -120,9 +120,10 @@ Merged from two locations (project overrides user):
 Manage API accounts directly from the OpenCode prompt via `/subscriptions`:
 
 - `/subscriptions list` — View all accounts and their usage
-- `/subscriptions add opencode-go <name> <workspace-id>` — Add OpenCode Go account
-- `/subscriptions add neuralwatt <name> <api-key>` — Add Neuralwatt account
-- `/subscriptions switch <name>` — Activate an account
+- `/subscriptions add-opencode-go <name> <workspace-id>` — Add OpenCode Go account
+- `/subscriptions add-neuralwatt <name> <api-key>` — Add Neuralwatt account
+- `/subscriptions add-codex <name> <access-token>` — Add Codex (OpenAI) account
+- `/subscriptions switch <provider> <name>` — Activate an account for a provider
 - `/subscriptions remove <name>` — Delete an account
 - `/subscriptions refresh` — Force refresh usage data
 
@@ -132,6 +133,7 @@ Manage API accounts directly from the OpenCode prompt via `/subscriptions`:
 | --------------- | ----------------------------------------------------- | -------------------------- |
 | **OpenCode Go** | Dashboard scraping (rolling, weekly, monthly windows) | Workspace ID + auth cookie |
 | **Neuralwatt**  | REST API (credits, kWh, token usage)                  | API key                    |
+| **Codex**       | REST API (5H/7D rate limits, credits)                 | OAuth access token         |
 
 Usage data appears in the TUI sidebar under **API Usage**.
 

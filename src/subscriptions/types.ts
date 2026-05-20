@@ -6,7 +6,7 @@
  */
 
 /** Provider discriminator. */
-export type SubscriptionProvider = 'opencode-go' | 'neuralwatt';
+export type SubscriptionProvider = 'opencode-go' | 'neuralwatt' | 'codex';
 
 // ── Account definitions (discriminated union) ──
 
@@ -24,7 +24,14 @@ export interface NeuralwattAccount {
   apiKey: string;
 }
 
-export type StoredAccount = OpenCodeGoAccount | NeuralwattAccount;
+export interface CodexAccount {
+  provider: 'codex';
+  name: string;
+  accessToken: string;
+  refreshToken?: string;
+}
+
+export type StoredAccount = OpenCodeGoAccount | NeuralwattAccount | CodexAccount;
 
 // ── Usage window (OpenCode Go) ──
 
@@ -114,11 +121,29 @@ export interface NeuralwattUsageEntry {
   error?: string;
 }
 
-// ── Unified usage entry ──
+// ── Codex usage entry ──
+
+export interface CodexUsageEntry {
+  provider: 'codex';
+  accountName: string;
+  fetchedAt: number;
+  error?: string;
+  /** 5-hour rolling window (primary_window from API) */
+  primaryWindow: UsageWindow;
+  /** 7-day rolling window (secondary_window from API) */
+  secondaryWindow: UsageWindow;
+  /** Credit balance info */
+  credits: {
+    hasCredits: boolean;
+    unlimited: boolean;
+    balance: number;
+  };
+}
 
 export type SubscriptionUsageEntry =
   | OpenCodeGoUsageEntry
-  | NeuralwattUsageEntry;
+  | NeuralwattUsageEntry
+  | CodexUsageEntry;
 
 // ── Detailed usage (OpenCode Go /usage page) ──
 

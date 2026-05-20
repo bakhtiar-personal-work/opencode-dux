@@ -13,7 +13,13 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import type { StoredAccount, SubscriptionProvider } from './types';
+import type {
+  CodexAccount,
+  NeuralwattAccount,
+  OpenCodeGoAccount,
+  StoredAccount,
+  SubscriptionProvider,
+} from './types';
 
 // Re-export for consumers
 export type { StoredAccount };
@@ -178,7 +184,11 @@ export function setAccountKey(
   const account = file.accounts.find((a) => a.name === name);
   if (!account) return false;
   account.provider = provider as SubscriptionProvider;
-  account.apiKey = apiKey;
+  if (account.provider === 'codex') {
+    (account as CodexAccount).accessToken = apiKey;
+  } else {
+    (account as OpenCodeGoAccount | NeuralwattAccount).apiKey = apiKey;
+  }
   writeAccountsFile(file);
   return true;
 }

@@ -18,9 +18,11 @@ export {
   setAccountKey,
   updateAccountCookie,
 } from './accounts-store';
+export { scrapeCodexQuota } from './codex-scraper';
 export { scrapeNeuralwattQuota } from './neuralwatt-scraper';
 export { scrapeQuota, scrapeUsagePage } from './opencode-go-scraper';
 export type {
+  CodexUsageEntry,
   NeuralwattUsageEntry,
   OpenCodeGoUsageEntry,
   SubscriptionUsageEntry,

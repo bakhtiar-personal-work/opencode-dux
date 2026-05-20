@@ -29,6 +29,7 @@ import {
   setAccountKey,
   updateAccountCookie,
 } from './accounts-store';
+import { scrapeCodexQuota } from './codex-scraper';
 import { scrapeNeuralwattQuota } from './neuralwatt-scraper';
 import { scrapeQuota } from './opencode-go-scraper';
 import type { SubscriptionProvider, SubscriptionUsageEntry } from './types';
@@ -36,12 +37,12 @@ import type { SubscriptionProvider, SubscriptionUsageEntry } from './types';
 const SUBSCRIPTIONS_COMMAND = 'subscriptions';
 const DEFAULT_REFRESH_INTERVAL_MS = 60_000;
 const DEFAULT_PERIODIC_INTERVAL_MS = 600_000; // 10 minutes
-const PROVIDERS: SubscriptionProvider[] = ['opencode-go', 'neuralwatt'];
+const PROVIDERS: SubscriptionProvider[] = ['opencode-go', 'neuralwatt', 'codex'];
 
 function parseProvider(
   raw: string | undefined,
 ): SubscriptionProvider | undefined {
-  if (raw === 'opencode-go' || raw === 'neuralwatt') return raw;
+  if (raw === 'opencode-go' || raw === 'neuralwatt' || raw === 'codex') return raw;
   return undefined;
 }
 
@@ -146,6 +147,35 @@ export class UsageService {
             );
             entry.accountName = account.name;
             return entry as SubscriptionUsageEntry;
+          } else if (account.provider === 'codex') {
+            if (!account.accessToken?.trim()) {
+              return {
+                provider: 'codex',
+                accountName: account.name,
+                fetchedAt: Date.now(),
+                error:
+                  'Missing Codex access token. Re-add with /subscriptions add-codex.',
+                primaryWindow: {
+                  usagePercent: 0,
+                  percentRemaining: 100,
+                  resetInSec: 0,
+                  resetTimeIso: '',
+                },
+                secondaryWindow: {
+                  usagePercent: 0,
+                  percentRemaining: 100,
+                  resetInSec: 0,
+                  resetTimeIso: '',
+                },
+                credits: { hasCredits: false, unlimited: false, balance: 0 },
+              } as SubscriptionUsageEntry;
+            }
+            const entry = await scrapeCodexQuota(
+              account.accessToken,
+              controller.signal,
+            );
+            entry.accountName = account.name;
+            return entry as SubscriptionUsageEntry;
           } else {
             // neuralwatt
             if (!account.apiKey?.trim()) {
@@ -235,10 +265,11 @@ export class UsageService {
       const key = auth[provider]?.key;
       const match =
         typeof key === 'string' && key.length > 0
-          ? accounts.find(
-              (account) =>
-                account.provider === provider && account.apiKey === key,
-            )
+          ? accounts.find((account): boolean => {
+              if (account.provider !== provider) return false;
+              if (account.provider === 'codex') return account.accessToken === key;
+              return account.apiKey === key;
+            })
           : undefined;
       if (match) {
         activeByProvider[provider] = match.name;
@@ -367,6 +398,26 @@ export class UsageService {
         break;
       }
 
+      case 'add-codex': {
+        const [_, name, ...tokenParts] = parts;
+        const accessToken = tokenParts.join(' ');
+        if (!name || !accessToken) {
+          output.parts.push(
+            createInternalAgentTextPart(
+              'Usage: /subscriptions add-codex <name> <access-token>\n' +
+                'Example: /subscriptions add-codex my-codex eyJhbGci...',
+            ),
+          );
+          return;
+        }
+        saveAccount({ provider: 'codex', name, accessToken });
+        this.refresh(true).catch(() => {});
+        output.parts.push(
+          createInternalAgentTextPart(`✅ Added Codex account "${name}".`),
+        );
+        break;
+      }
+
       case 'remove':
       case 'rm': {
         const [_, name] = parts;
@@ -439,7 +490,7 @@ export class UsageService {
         if (accounts.length === 0) {
           output.parts.push(
             createInternalAgentTextPart(
-              'No accounts configured. Use /subscriptions add-opencode-go or /subscriptions add-neuralwatt to add one.',
+              'No accounts configured. Use /subscriptions add-opencode-go, /subscriptions add-neuralwatt, or /subscriptions add-codex to add one.',
             ),
           );
           return;
@@ -449,11 +500,17 @@ export class UsageService {
           const isActive = activeByProvider[acct.provider] === acct.name;
           const star = isActive ? '★ ' : '  ';
           const providerLabel =
-            acct.provider === 'opencode-go' ? 'OpenCode Go' : 'Neuralwatt';
+            acct.provider === 'opencode-go'
+              ? 'OpenCode Go'
+              : acct.provider === 'codex'
+                ? 'Codex'
+                : 'Neuralwatt';
           lines.push(`${star}${acct.name} (${providerLabel})`);
           if (acct.provider === 'opencode-go') {
             lines.push(`    workspace: ${acct.workspaceId}`);
             lines.push(`    cookie: ${maskCookie(acct.authCookie)}`);
+          } else if (acct.provider === 'codex') {
+            lines.push(`    access-token: ${maskCookie(acct.accessToken)}`);
           } else {
             lines.push(`    api-key: ${maskCookie(acct.apiKey)}`);
           }
@@ -473,6 +530,7 @@ export class UsageService {
           '  /subscriptions add-opencode-go <name> <workspace-id> <auth-cookie>',
         );
         lines.push('  /subscriptions add-neuralwatt <name> <api-key>');
+        lines.push('  /subscriptions add-codex <name> <access-token>');
         lines.push('  /subscriptions remove <name>');
         lines.push('  /subscriptions edit <name> <new-auth-cookie>');
         lines.push('  /subscriptions set-key <name> <api-key>');
@@ -520,7 +578,7 @@ export class UsageService {
           output.parts.push(
             createInternalAgentTextPart(
               'Usage: /subscriptions switch <provider> <name>\n' +
-                'Providers: opencode-go, neuralwatt\n' +
+                'Providers: opencode-go, neuralwatt, codex\n' +
                 'Example: /subscriptions switch opencode-go personal',
             ),
           );
@@ -538,13 +596,24 @@ export class UsageService {
           );
           return;
         }
-        if (!account.apiKey) {
-          output.parts.push(
-            createInternalAgentTextPart(
-              `Account "${name}" has no API key set. Use /subscriptions set-key ${name} <api-key> first.`,
-            ),
-          );
-          return;
+        if (account.provider === 'codex') {
+          if (!account.accessToken) {
+            output.parts.push(
+              createInternalAgentTextPart(
+                `Account "${name}" has no access token set. Use /subscriptions add-codex to re-add.`,
+              ),
+            );
+            return;
+          }
+        } else {
+          if (!account.apiKey) {
+            output.parts.push(
+              createInternalAgentTextPart(
+                `Account "${name}" has no API key set. Use /subscriptions set-key ${name} <api-key> first.`,
+              ),
+            );
+            return;
+          }
         }
         const activeByProvider = this.syncActiveAccounts();
         // No-op if already active for this provider
@@ -558,9 +627,13 @@ export class UsageService {
         }
         try {
           // Write the API key to OpenCode auth.json via SDK's auth.set()
+          const key: string =
+            account.provider === 'codex'
+              ? account.accessToken
+              : (account.apiKey ?? '');
           await this.client.auth.set({
             path: { id: account.provider },
-            body: { type: 'api', key: account.apiKey },
+            body: { type: 'api', key },
           });
         } catch {
           output.parts.push(
@@ -605,6 +678,7 @@ export class UsageService {
               'Commands:\n' +
               '  /subscriptions add-opencode-go <name> <workspace-id> <auth-cookie>   Add an OpenCode Go account\n' +
               '  /subscriptions add-neuralwatt <name> <api-key>                        Add a Neuralwatt account\n' +
+              '  /subscriptions add-codex <name> <access-token>                        Add a Codex account\n' +
               '  /subscriptions remove <name>                                          Remove an account\n' +
               '  /subscriptions edit <name> <new-auth-cookie>                         Update auth cookie (OpenCode Go)\n' +
               '  /subscriptions set-key <name> <api-key>                               Set API key for switching\n' +
@@ -634,7 +708,7 @@ export class UsageService {
         SUBSCRIPTIONS_COMMAND
       ] = {
         template:
-          'Manage subscription accounts (add-opencode-go, add-neuralwatt, remove, list, edit, set-key, switch, refresh)',
+          'Manage subscription accounts (add-opencode-go, add-neuralwatt, add-codex, remove, list, edit, set-key, switch, refresh)',
         description:
           'Add, remove, list, edit, set-key, switch, or refresh subscription accounts for usage tracking in the sidebar',
       };
