@@ -50,7 +50,6 @@
     "build:cli": "bun build src/cli/index.ts --outdir dist/cli --target node --format esm --external @ast-grep/napi --external @opencode-ai/plugin --external @opencode-ai/sdk --external jsdom --external zod",
     "clean": "bun -e \"import{rmSync}from'node:fs';rmSync('dist',{recursive:true,force:true});console.log('Cleaned dist/')\"",
     "build": "bun run clean && bun run build:plugin && bun run build:cli && tsc --emitDeclarationOnly && bun run generate-schema",
-    "prepare": "bun run build",
     "contributors:add": "all-contributors add",
     "contributors:check": "all-contributors check",
     "contributors:generate": "all-contributors generate",
@@ -99,5 +98,5 @@
   "trustedDependencies": [
     "@ast-grep/cli"
   ],
-  "private": true
+  "private": false
 }
