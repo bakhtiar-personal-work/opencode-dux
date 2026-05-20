@@ -139,6 +139,23 @@ function getPluginEntry(): string {
 }
 
 /**
+ * Read opencode-dux plugin entry from opencode.json's plugin array.
+ * Returns the exact string value the user specified, or null if not found.
+ * This ensures tui.json stays in sync with opencode.json's authoritative entry.
+ */
+function getPluginEntryFromOpenCodeConfig(): string | null {
+  const configPath = getExistingConfigPath();
+  const { config } = parseConfig(configPath);
+  if (!config) return null;
+
+  const plugins = getPlugins(config);
+  const duxEntry = plugins.find(isMatchingPluginEntry);
+  if (!duxEntry) return null;
+
+  return getPluginSpec(duxEntry) ?? null;
+}
+
+/**
  * Strip JSON comments (single-line // and multi-line) and trailing commas for JSONC support.
  */
 export function stripJsonComments(json: string): string {
@@ -279,7 +296,16 @@ export async function addPluginToOpenCodeTuiConfig(): Promise<ConfigMergeResult>
     }
     const config = parsedConfig ?? {};
     const plugins = getPlugins(config);
-    const pluginEntry = getPluginEntry();
+
+    // Use the exact value from opencode.json to stay in sync; fall back to CLI detection.
+    const pluginEntry = getPluginEntryFromOpenCodeConfig() ?? getPluginEntry();
+
+    // Check whether the correct entry already exists to avoid unnecessary writes
+    const duxEntries = plugins.filter(isMatchingPluginEntry);
+    if (duxEntries.length === 1 && duxEntries[0] === pluginEntry) {
+      return { success: true, configPath };
+    }
+
     const filteredPlugins = plugins.filter(
       (plugin) => !isMatchingPluginEntry(plugin),
     );
