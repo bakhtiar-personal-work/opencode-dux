@@ -8,7 +8,7 @@ Agent orchestration, management, and operations plugin for OpenCode. Routes task
 
 ```json
 {
-  "plugin": ["github:bakhtiar-personal-work/opencode-dux"]
+  "plugin": ["opencode-dux"]
 }
 ```
 
@@ -36,7 +36,7 @@ Agent orchestration, management, and operations plugin for OpenCode. Routes task
 Or run the automated installer:
 
 ```bash
-bunx github:bakhtiar-personal-work/opencode-dux install
+bunx opencode-dux install
 ```
 
 ## Agents
