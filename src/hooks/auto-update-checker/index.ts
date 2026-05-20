@@ -102,11 +102,6 @@ async function runBackgroundUpdateCheck(
     `[auto-update-checker] Update available (${channel}): ${currentVersion} → ${latestVersion}`,
   );
 
-  console.log(
-    `\n  \u26A0\uFE0F Update available: v${currentVersion} \u2192 v${latestVersion}`,
-  );
-  console.log('     Restart OpenCode to update\n');
-
   if (pluginInfo.isPinned) {
     log(
       `[auto-update-checker] Version is pinned; skipping auto-update. Update available: v${currentVersion} → v${latestVersion}`,
@@ -199,5 +194,7 @@ async function runBunInstallSafe(installDir: string): Promise<boolean> {
     return false;
   }
 }
+
+export { getLatestVersion } from './checker';
 
 export type { AutoUpdateCheckerOptions } from './types';

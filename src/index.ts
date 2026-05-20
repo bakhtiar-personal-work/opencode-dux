@@ -35,6 +35,7 @@ import {
   createTodoContinuationHook,
   ForegroundFallbackManager,
 } from './hooks';
+import { getLatestVersion } from './hooks/auto-update-checker';
 import { processImageAttachments } from './hooks/image-hook';
 import { createBuiltinMcps } from './mcp';
 import { discoverSkills } from './skills/registry';
@@ -78,7 +79,12 @@ import {
 import { initLogger, log } from './utils/logger';
 import { SubagentDepthTracker } from './utils/subagent-depth';
 import { collapseSystemInPlace } from './utils/system-collapse';
-import { readVersionCache, VERSION_CACHE_STALE_MS } from './version-store';
+import {
+  logVersionDisplay,
+  readVersionCache,
+  VERSION_CACHE_STALE_MS,
+  writeVersionCache,
+} from './version-store';
 
 /**
  * Best-effort log to opencode's app logger.
@@ -689,40 +695,15 @@ const OhMyOpenCodeLite: Plugin = async (ctx) => {
 
       // ── Version status display ──────────────────────────────────────
       const currentVersion = readPluginVersion();
-      const savedVersion = readTuiSnapshot().pluginVersion;
 
       if (currentVersion) {
-        if (savedVersion && savedVersion !== currentVersion) {
-          // "Just updated" — previous version in red → current in green (Updated)
-          console.log(
-            `  \u{1F4E6} version: \x1b[31mv${savedVersion}\x1b[0m → \x1b[32mv${currentVersion} (Updated)\x1b[0m`,
-          );
-        } else {
-          // Check cached latest version from previous NPM check
-          const { latestVersion, lastChecked } = readVersionCache();
-          const cacheFresh =
-            latestVersion !== null &&
-            lastChecked !== null &&
-            Date.now() - lastChecked < VERSION_CACHE_STALE_MS;
-
-          if (cacheFresh && latestVersion !== currentVersion) {
-            // "Update available" — current in red → latest in yellow
-            console.log(
-              `  \u{1F4E6} version: \x1b[31mv${currentVersion}\x1b[0m → \x1b[33mv${latestVersion}\x1b[0m`,
-            );
-            console.log('     Restart OpenCode to update');
-          } else {
-            // "No update" — green version
-            console.log(
-              `  \u{1F4E6} version: \x1b[32mv${currentVersion}\x1b[0m`,
-            );
-          }
-        }
-
-        // Persist currentVersion to tui-state for "just updated" detection on next startup
+        // Persist currentVersion for "just updated" detection on next startup
         updateSnapshot((s) => {
           s.pluginVersion = currentVersion;
         });
+
+        // Deferred version display: async + delayed so user can read it
+        scheduleVersionDisplay(currentVersion).catch(() => {});
       }
     }
   } catch (err) {
@@ -774,6 +755,38 @@ const OhMyOpenCodeLite: Plugin = async (ctx) => {
       appLog(ctx, 'warn', msg).catch(() => {});
     }
   });
+
+  // ── Deferred version display ────────────────────────────────
+  async function scheduleVersionDisplay(currentVersion: string): Promise<void> {
+    // 1. Brief cooldown after init logs settle
+    await new Promise((r) => setTimeout(r, 2000));
+
+    // 2. Get saved version and cache
+    const snapshot = readTuiSnapshot();
+    const savedVersion = snapshot.pluginVersion ?? null;
+    const currentLatest = readVersionCache();
+
+    let latestVersion = currentLatest.latestVersion;
+    let lastChecked = currentLatest.lastChecked;
+
+    // 3. If cache is stale, eagerly fetch from npm
+    const cacheFresh =
+      latestVersion !== null &&
+      lastChecked !== null &&
+      Date.now() - lastChecked < VERSION_CACHE_STALE_MS;
+
+    if (!cacheFresh) {
+      const fetched = await getLatestVersion('latest');
+      if (fetched) {
+        latestVersion = fetched;
+        lastChecked = Date.now();
+        writeVersionCache({ latestVersion, lastChecked });
+      }
+    }
+
+    // 4. Display version
+    logVersionDisplay(currentVersion, savedVersion, latestVersion, lastChecked);
+  }
 
   return {
     name: 'opencode-dux',
