@@ -52,43 +52,43 @@ Config file: `~/.config/opencode/opencode-dux.jsonc`
 
 Merged from two locations (project overrides user):
 
-| Location | Path |
-| -------- | ---- |
-| **User** | `~/.config/opencode/opencode-dux.jsonc` |
+| Location    | Path                                     |
+| ----------- | ---------------------------------------- |
+| **User**    | `~/.config/opencode/opencode-dux.jsonc`  |
 | **Project** | `<project>/.opencode/opencode-dux.jsonc` |
 
 ### Config options
 
-| Field | Type | Default | Description |
-| ----- | ---- | ------- | ----------- |
-| `preset` | `string` | — | Active preset name |
-| `presets` | `object` | `{}` | Named model configurations per agent |
-| `agents` | `object` | `{}` | Per-agent overrides on top of active preset |
-| `fallback.enabled` | `boolean` | `true` | Enable runtime model fallback on API errors |
-| `fallback.chains` | `object` | `{}` | Ordered fallback model arrays per agent |
-| `sessionManager.maxSessionsPerAgent` | `number` | `2` | Max concurrent sessions per agent type (1–10) |
-| `sessionManager.readContextMinLines` | `number` | `10` | Min lines threshold for read context tool |
-| `sessionManager.readContextMaxFiles` | `number` | `8` | Max files per read context batch |
-| `todoContinuation.maxContinuations` | `number` | `5` | Max consecutive auto-continuations (1–50) |
-| `todoContinuation.autoEnable` | `boolean` | `false` | Auto-enable when enough todos exist |
-| `contextPressure.enabled` | `boolean` | `true` | Warn when context usage is high |
-| `contextPressure.warnThresholdPct` | `number` | `75` | Trigger at this context usage % (1–99) |
-| `websearch.provider` | `string` | `"exa"` | `"exa"` or `"tavily"` |
-| `setDefaultAgent` | `boolean` | `true` | Sets default_agent to `orchestrator` |
-| `autoUpdate` | `boolean` | `true` | Auto-update when loaded via npm name |
-| `disabledMcps` | `string[]` | `[]` | Disable built-in MCPs by name |
+| Field                                | Type       | Default | Description                                   |
+| ------------------------------------ | ---------- | ------- | --------------------------------------------- |
+| `preset`                             | `string`   | —       | Active preset name                            |
+| `presets`                            | `object`   | `{}`    | Named model configurations per agent          |
+| `agents`                             | `object`   | `{}`    | Per-agent overrides on top of active preset   |
+| `fallback.enabled`                   | `boolean`  | `true`  | Enable runtime model fallback on API errors   |
+| `fallback.chains`                    | `object`   | `{}`    | Ordered fallback model arrays per agent       |
+| `sessionManager.maxSessionsPerAgent` | `number`   | `2`     | Max concurrent sessions per agent type (1–10) |
+| `sessionManager.readContextMinLines` | `number`   | `10`    | Min lines threshold for read context tool     |
+| `sessionManager.readContextMaxFiles` | `number`   | `8`     | Max files per read context batch              |
+| `todoContinuation.maxContinuations`  | `number`   | `5`     | Max consecutive auto-continuations (1–50)     |
+| `todoContinuation.autoEnable`        | `boolean`  | `false` | Auto-enable when enough todos exist           |
+| `contextPressure.enabled`            | `boolean`  | `true`  | Warn when context usage is high               |
+| `contextPressure.warnThresholdPct`   | `number`   | `75`    | Trigger at this context usage % (1–99)        |
+| `websearch.provider`                 | `string`   | `"exa"` | `"exa"` or `"tavily"`                         |
+| `setDefaultAgent`                    | `boolean`  | `true`  | Sets default_agent to `orchestrator`          |
+| `autoUpdate`                         | `boolean`  | `true`  | Auto-update when loaded via npm name          |
+| `disabledMcps`                       | `string[]` | `[]`    | Disable built-in MCPs by name                 |
 
 ### Per-agent options
 
-| Field | Type | Description |
-| ----- | ---- | ----------- |
-| `model` | `string` or `array` | Model ID (`provider/model`) or array for fallback |
-| `temperature` | `number` (0–2) | Model temperature |
-| `variant` | `string` | Variant hint (e.g. `"pro"`, `"flash"`) |
-| `options` | `object` | Provider-specific model options |
-| `displayName` | `string` | Custom agent display name |
-| `skills` | `object` or `string[]` | Skill access configuration |
-| `mcps` | `object` or `string[]` | MCP access configuration |
+| Field         | Type                   | Description                                       |
+| ------------- | ---------------------- | ------------------------------------------------- |
+| `model`       | `string` or `array`    | Model ID (`provider/model`) or array for fallback |
+| `temperature` | `number` (0–2)         | Model temperature                                 |
+| `variant`     | `string`               | Variant hint (e.g. `"pro"`, `"flash"`)            |
+| `options`     | `object`               | Provider-specific model options                   |
+| `displayName` | `string`               | Custom agent display name                         |
+| `skills`      | `object` or `string[]` | Skill access configuration                        |
+| `mcps`        | `object` or `string[]` | MCP access configuration                          |
 
 ### Model as array
 
@@ -128,10 +128,10 @@ Manage API accounts directly from the OpenCode prompt via `/subscriptions`:
 
 ### Supported providers
 
-| Provider | Usage tracking | Auth method |
-| -------- | -------------- | ----------- |
+| Provider        | Usage tracking                                        | Auth method                |
+| --------------- | ----------------------------------------------------- | -------------------------- |
 | **OpenCode Go** | Dashboard scraping (rolling, weekly, monthly windows) | Workspace ID + auth cookie |
-| **Neuralwatt** | REST API (credits, kWh, token usage) | API key |
+| **Neuralwatt**  | REST API (credits, kWh, token usage)                  | API key                    |
 
 Usage data appears in the TUI sidebar under **API Usage**.
 
@@ -145,11 +145,11 @@ Place Markdown files in `~/.config/opencode/opencode-dux/`:
 
 ## Built-in MCPs
 
-| MCP | Description |
-| --- | ----------- |
-| `websearch` | Web search (Exa or Tavily) |
-| `context7` | Library documentation lookup |
-| `grep_app` | GitHub code search |
+| MCP         | Description                  |
+| ----------- | ---------------------------- |
+| `websearch` | Web search (Exa or Tavily)   |
+| `context7`  | Library documentation lookup |
+| `grep_app`  | GitHub code search           |
 
 Disable any: `{ "disabledMcps": ["grep_app"] }`
 
@@ -170,14 +170,6 @@ bun run typecheck      # Type checking
 bun test               # Run tests
 bun run check:ci       # Lint + format (CI mode)
 bun run generate-schema  # Regenerate JSON schema from Zod
-```
-
-## Release
-
-```bash
-bun run release:patch  # 1.0.6 → 1.0.7
-bun run release:minor  # 1.0.6 → 1.1.0
-bun run release:major  # 1.0.6 → 2.0.0
 ```
 
 ## License
