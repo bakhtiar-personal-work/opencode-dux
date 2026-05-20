@@ -63,6 +63,7 @@ export interface TuiSessionBundle {
 
 export interface TuiSnapshot {
   version: 6;
+  pluginVersion?: string;
   updatedAt: number;
   sessions: Record<string, TuiSessionBundle>;
   subscriptionUsage: Record<string, SubscriptionUsageEntry>;

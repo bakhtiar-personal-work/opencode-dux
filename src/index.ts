@@ -1,5 +1,6 @@
-import { existsSync, readdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { Plugin } from '@opencode-ai/plugin';
 import { createAgents, getAgentConfigs } from './agents';
 import { buildOrchestratorPrompt } from './agents/orchestrator';
@@ -106,6 +107,19 @@ const HEALTH_CHECK = {
   minTools: 5,
   minMcps: 1,
 } as const;
+
+function readPluginVersion(): string | null {
+  try {
+    const modDir = dirname(fileURLToPath(import.meta.url));
+    const rootDir = dirname(modDir);
+    const pkgPath = join(rootDir, 'package.json');
+    if (existsSync(pkgPath)) {
+      const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
+      return typeof pkg.version === 'string' ? pkg.version : null;
+    }
+  } catch {}
+  return null;
+}
 
 function asNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
@@ -659,6 +673,37 @@ const OhMyOpenCodeLite: Plugin = async (ctx) => {
     if (isFirstInit) {
       console.log(`\u{2705} opencode-dux initialized (${Object.keys(agents).length} agents, ${toolCount} tools, ${Object.keys(builtinMcps).length} MCPs)`);
       didLogVerboseInit = true;
+
+      // Check if plugin was updated since last run
+      try {
+        const snap = readTuiSnapshot();
+        const savedVersion = snap.pluginVersion;
+        const currentVersion = readPluginVersion();
+        if (savedVersion && currentVersion && savedVersion !== currentVersion) {
+          appLog(
+            ctx,
+            'info',
+            `Updated from v${savedVersion} to v${currentVersion}`,
+          ).catch(() => {});
+          ctx.client.tui
+            .showToast({
+              body: {
+                title: 'OpenCode Dux',
+                message: `Updated to v${currentVersion}`,
+                variant: 'info',
+                duration: 5000,
+              },
+            })
+            .catch(() => {});
+        }
+        if (currentVersion) {
+          updateSnapshot((s) => {
+            s.pluginVersion = currentVersion;
+          });
+        }
+      } catch {
+        // best-effort
+      }
     }
   } catch (err) {
     // Plugin init failed: log visibly before re-throwing so the user

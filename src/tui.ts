@@ -1,3 +1,6 @@
+import { readFileSync, existsSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { TuiPluginModule } from '@opencode-ai/plugin/tui';
 import type { JSX } from '@opentui/solid';
 import { createElement, insert, setProp } from '@opentui/solid';
@@ -18,6 +21,21 @@ import {
   type SessionNode,
   type TuiSnapshot,
 } from './tui-state';
+
+function getPluginVersion(): string {
+  try {
+    const modDir = dirname(fileURLToPath(import.meta.url));
+    const rootDir = dirname(modDir);
+    const pkgPath = join(rootDir, 'package.json');
+    if (existsSync(pkgPath)) {
+      const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
+      return pkg.version || '0.0.0';
+    }
+  } catch {}
+  return '0.0.0';
+}
+
+const PLUGIN_VERSION = getPluginVersion();
 
 const PLUGIN_NAME = 'opencode-dux';
 const BORDER = { type: 'single' };
@@ -1424,6 +1442,18 @@ function renderSidebar(
       paddingRight: 0,
     },
     [
+      box(
+        {
+          width: '100%',
+          flexDirection: 'row',
+          justifyContent: 'space-between',
+        },
+        [
+          text({ fg: theme.accent }, ['opencode-dux']),
+          text({ fg: theme.accent }, [`v${PLUGIN_VERSION}`]),
+        ],
+      ),
+      box({ width: '100%', height: 1 }),
       box(
         {
           width: '100%',
