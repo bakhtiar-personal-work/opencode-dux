@@ -677,12 +677,12 @@ export class UsageService {
             'Subscription Account Management\n\n' +
               'Commands:\n' +
               '  /subscriptions add-opencode-go <name> <workspace-id> <auth-cookie>   Add an OpenCode Go account\n' +
-              '  /subscriptions add-neuralwatt <name> <api-key>                        Add a Neuralwatt account\n' +
-              '  /subscriptions add-codex <name> <access-token>                        Add a Codex account\n' +
-              '  /subscriptions remove <name>                                          Remove an account\n' +
+              '  /subscriptions add-neuralwatt <name> <api-key>                       Add a Neuralwatt account\n' +
+              '  /subscriptions add-codex <name> <access-token>                       Add a Codex account\n' +
+              '  /subscriptions remove <name>                                         Remove an account\n' +
               '  /subscriptions edit <name> <new-auth-cookie>                         Update auth cookie (OpenCode Go)\n' +
-              '  /subscriptions set-key <name> <api-key>                               Set API key for switching\n' +
-              '  /subscriptions switch <provider> <name>                               Switch active account for provider\n' +
+              '  /subscriptions set-key <name> <api-key>                              Set API key for switching\n' +
+              '  /subscriptions switch <provider> <name>                              Switch active account for provider\n' +
               '  /subscriptions list                                                  List all accounts\n' +
               '  /subscriptions refresh                                               Force refresh all',
           ),
