@@ -123,7 +123,7 @@ function readPluginVersion(): string | null {
       const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
       return typeof pkg.version === 'string' ? pkg.version : null;
     }
-  } catch {}
+  } catch { }
   return null;
 }
 
@@ -209,12 +209,12 @@ async function ensureModelContextLimits(client: {
       const providers =
         (result.data?.all as
           | Array<{
-              id?: string;
-              models?: Record<
-                string,
-                { id?: string; limit?: { context?: number } }
-              >;
-            }>
+            id?: string;
+            models?: Record<
+              string,
+              { id?: string; limit?: { context?: number } }
+            >;
+          }>
           | undefined) ?? [];
       for (const provider of providers) {
         if (!provider.models) continue;
@@ -271,7 +271,7 @@ async function computeSessionUsageForReconcile(
     let contextPct = 0;
 
     // Ensure context limit cache is populated before recording usage
-    await ensureModelContextLimits(ctx.client).catch(() => {});
+    await ensureModelContextLimits(ctx.client).catch(() => { });
 
     const lastTokenMsg = [...assistantMsgs]
       .reverse()
@@ -448,7 +448,7 @@ const OhMyOpenCodeLite: Plugin = async (ctx) => {
               duration: 5000,
             },
           })
-          .catch(() => {});
+          .catch(() => { });
       }
     }
 
@@ -461,7 +461,7 @@ const OhMyOpenCodeLite: Plugin = async (ctx) => {
     // Fire-and-forget so failures (e.g., tui.json not writable) don't block init.
     if (isFirstInit) {
       const entry = resolvePluginEntryFromOpenCodeConfig();
-      addPluginToOpenCodeTuiConfig(entry).catch(() => {});
+      addPluginToOpenCodeTuiConfig(entry).catch(() => { });
     }
 
     rewriteDisplayNameMentions = createDisplayNameMentionRewriter(config);
@@ -526,7 +526,7 @@ const OhMyOpenCodeLite: Plugin = async (ctx) => {
 
     // Warm the local discovery cache asynchronously (non-blocking init).
     // Subsequent hooks/tools will read from cache on first use.
-    getLocalDiscovery(ctx).catch(() => {});
+    getLocalDiscovery(ctx).catch(() => { });
 
     webfetch = createWebfetchTool(ctx);
 
@@ -637,7 +637,7 @@ const OhMyOpenCodeLite: Plugin = async (ctx) => {
         }
         recordSessionUsagesBatch(usageBatch);
 
-        usageService?.refresh(false).catch(() => {});
+        usageService?.refresh(false).catch(() => { });
       } catch {
         // best-effort - silent
       }
@@ -663,7 +663,7 @@ const OhMyOpenCodeLite: Plugin = async (ctx) => {
       ctx.client,
       runtimeChains,
       config.fallback?.enabled !== false &&
-        Object.keys(runtimeChains).length > 0,
+      Object.keys(runtimeChains).length > 0,
     );
 
     // Initialize todo-continuation hook (opt-in auto-continue for
@@ -781,7 +781,7 @@ const OhMyOpenCodeLite: Plugin = async (ctx) => {
     if (err) {
       const msg = `jsdom probe failed; webfetch tool will not work: ${err}`;
       log(`[plugin] WARN: ${msg}`);
-      appLog(ctx, 'warn', msg).catch(() => {});
+      appLog(ctx, 'warn', msg).catch(() => { });
     }
   });
 
@@ -854,14 +854,14 @@ const OhMyOpenCodeLite: Plugin = async (ctx) => {
 
       if (cacheFresh && latestVersion !== currentVersion) {
         console.log(
-          `  📦 Update available: v${currentVersion} → v${latestVersion}. Please restart OpenCode to complete the update.`,
+          `  📦 Update available, please restart OpenCode to complete the update after opencode launch.`,
         );
         log(`[auto-update-checker] Update available: v${currentVersion} → v${latestVersion}`);
       }
 
-      // Wait for logs to settle (5s when update available, 2s otherwise)
+      // Wait for logs to settle (3s when update available, 1.5s otherwise)
       const hasUpdate = cacheFresh && latestVersion !== currentVersion;
-      const delayMs = hasUpdate ? 5000 : 2000;
+      const delayMs = hasUpdate ? 3000 : 1500;
       await new Promise((r) => setTimeout(r, delayMs));
 
       // Delete the package cache after a further delay so init is fully
@@ -875,7 +875,7 @@ const OhMyOpenCodeLite: Plugin = async (ctx) => {
           } catch (err) {
             log('[auto-update-checker] Post-init cache clear failed:', err);
           }
-        }, 2000);
+        }, 1000);
       }
 
       return true;
@@ -1255,15 +1255,15 @@ const OhMyOpenCodeLite: Plugin = async (ctx) => {
       if (event.type === 'message.part.updated') {
         const part = event.properties?.part as
           | {
-              type?: string;
-              sessionID?: string;
-              tokens?: {
-                input?: number;
-                output?: number;
-                reasoning?: number;
-                cache?: { read?: number; write?: number };
-              };
-            }
+            type?: string;
+            sessionID?: string;
+            tokens?: {
+              input?: number;
+              output?: number;
+              reasoning?: number;
+              cache?: { read?: number; write?: number };
+            };
+          }
           | undefined;
 
         if (part?.type === 'step-finish' && part?.sessionID && part?.tokens) {
@@ -1375,7 +1375,7 @@ const OhMyOpenCodeLite: Plugin = async (ctx) => {
             let contextPct = 0;
 
             // Ensure context limit cache is populated before recording usage
-            await ensureModelContextLimits(ctx.client).catch(() => {});
+            await ensureModelContextLimits(ctx.client).catch(() => { });
 
             const lastTokenMsg = [...assistantMsgs]
               .reverse()
@@ -1513,7 +1513,7 @@ const OhMyOpenCodeLite: Plugin = async (ctx) => {
               ) {
                 ctx.client.session
                   .abort({ path: { id: childId } })
-                  .catch(() => {});
+                  .catch(() => { });
               }
             }
             recordSessionNode({
@@ -1577,7 +1577,7 @@ const OhMyOpenCodeLite: Plugin = async (ctx) => {
           directory?: string;
         },
         output as {
-          args?: { patchText?: unknown; [key: string]: unknown };
+          args?: { patchText?: unknown;[key: string]: unknown };
         },
       );
 
