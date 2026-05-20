@@ -2,6 +2,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { log } from './utils/logger';
 
 export interface VersionCache {
   latestVersion: string | null;
@@ -57,6 +58,7 @@ export function logVersionDisplay(
     console.log(
       `  \u{1F4E6} Current version: \x1b[31mv${savedVersion}\x1b[0m \u2192 \x1b[32mv${currentVersion} (Updated)\x1b[0m`,
     );
+    log(`[version] Current version: v${savedVersion} \u2192 v${currentVersion} (Updated)`);
   } else {
     const cacheFresh =
       latestVersion !== null &&
@@ -68,12 +70,15 @@ export function logVersionDisplay(
         `  \u{1F4E6} Current version: \x1b[31mv${currentVersion}\x1b[0m \u2192 \x1b[33mv${latestVersion}\x1b[0m`,
       );
       console.log('     Restart OpenCode to update');
+      log(`[version] Current version: v${currentVersion} \u2192 v${latestVersion}`);
+      log('[version] Restart OpenCode to update');
     } else {
       const latestIndicator =
         cacheFresh && latestVersion === currentVersion ? ' (latest)' : '';
       console.log(
         `  \u{1F4E6} Current version: \x1b[32mv${currentVersion}${latestIndicator}\x1b[0m`,
       );
+      log(`[version] Current version: v${currentVersion}${latestIndicator}`);
     }
   }
 }

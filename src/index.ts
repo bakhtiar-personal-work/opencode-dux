@@ -404,8 +404,10 @@ const OhMyOpenCodeLite: Plugin = async (ctx) => {
   try {
     const isFirstInit = !didLogVerboseInit;
 
-    if (isFirstInit)
+    if (isFirstInit) {
       console.log('\u{2699}\u{FE0F} Initializing opencode-dux...');
+      log('[init] Initializing opencode-dux...');
+    }
 
     config = loadPluginConfig(ctx.directory);
 
@@ -449,7 +451,10 @@ const OhMyOpenCodeLite: Plugin = async (ctx) => {
       }
     }
 
-    if (isFirstInit) console.log('  \u{1F4C1} plugin config: loaded');
+    if (isFirstInit) {
+      console.log('  \u{1F4C1} plugin config: loaded');
+      log('[init] plugin config: loaded');
+    }
 
     // Auto-register opencode-dux in OpenCode's tui.json so it appears in the TUI plugin list.
     // Fire-and-forget so failures (e.g., tui.json not writable) don't block init.
@@ -462,8 +467,10 @@ const OhMyOpenCodeLite: Plugin = async (ctx) => {
     agentDefs = await createAgents(config);
     agents = await getAgentConfigs(config);
 
-    if (isFirstInit)
+    if (isFirstInit) {
       console.log(`  \u{1F916} agents: ${Object.keys(agents).join(', ')}`);
+      log(`[init] agents: ${Object.keys(agents).join(', ')}`);
+    }
 
     // Build a map of agent name → priority model array for runtime
     // fallback. Populated when the user configures model as an array in
@@ -511,8 +518,10 @@ const OhMyOpenCodeLite: Plugin = async (ctx) => {
 
     builtinMcps = createBuiltinMcps(undefined, config.websearch);
 
-    if (isFirstInit)
+    if (isFirstInit) {
       console.log(`  \u{1F50C} MCPs: ${Object.keys(builtinMcps).join(', ')}`);
+      log(`[init] MCPs: ${Object.keys(builtinMcps).join(', ')}`);
+    }
 
     // Warm the local discovery cache asynchronously (non-blocking init).
     // Subsequent hooks/tools will read from cache on first use.
@@ -536,10 +545,14 @@ const OhMyOpenCodeLite: Plugin = async (ctx) => {
       log('[plugin] failed to create discover_skills_online tool', String(err));
       discoverSkillTool = undefined;
     }
-    if (isFirstInit)
+    if (isFirstInit) {
       console.log(
         `  \u{1F527} tools: webfetch, ast_grep_search, ast_grep_replace${toolsOnline.length ? `, ${toolsOnline.join(', ')}` : ''}`,
       );
+      log(
+        `[init] tools: webfetch, ast_grep_search, ast_grep_replace${toolsOnline.length ? `, ${toolsOnline.join(', ')}` : ''}`,
+      );
+    }
 
     // Initialize auto-update checker hook
     autoUpdateChecker = createAutoUpdateCheckerHook(ctx, {
@@ -675,10 +688,14 @@ const OhMyOpenCodeLite: Plugin = async (ctx) => {
     usageService = createUsageService(ctx.client);
     usageService.syncActiveAccounts();
 
-    if (isFirstInit)
+    if (isFirstInit) {
       console.log(
         '  \u{1F517} hooks: auto-update, phase-reminder, skills-filter, apply-patch, json-recovery, fallback, todo-continuation, session-manager, pressure-reminder',
       );
+      log(
+        '[init] hooks: auto-update, phase-reminder, skills-filter, apply-patch, json-recovery, fallback, todo-continuation, session-manager, pressure-reminder',
+      );
+    }
 
     toolCount =
       Object.keys(delegateTools).length +
@@ -691,6 +708,9 @@ const OhMyOpenCodeLite: Plugin = async (ctx) => {
     if (isFirstInit) {
       console.log(
         `\u{2705} opencode-dux initialized (${Object.keys(agents).length} agents, ${toolCount} tools, ${Object.keys(builtinMcps).length} MCPs)`,
+      );
+      log(
+        `[init] initialized (${Object.keys(agents).length} agents, ${toolCount} tools, ${Object.keys(builtinMcps).length} MCPs)`,
       );
       didLogVerboseInit = true;
 
@@ -707,10 +727,10 @@ const OhMyOpenCodeLite: Plugin = async (ctx) => {
         try {
           await scheduleVersionDisplay(currentVersion);
         } catch (err) {
-          console.log(
-            '  📦 Version check failed:',
-            err instanceof Error ? err.message : String(err),
-          );
+          const versionErrMsg =
+            err instanceof Error ? err.message : String(err);
+          console.log('  📦 Version check failed:', versionErrMsg);
+          log('[version] Version check failed: ' + versionErrMsg);
         }
       }
     }
@@ -775,10 +795,12 @@ const OhMyOpenCodeLite: Plugin = async (ctx) => {
 
       // 2. Always fetch latest version from npm on every startup
       console.log('  📦 Checking for updates...');
+      log('[version] Checking for updates...');
       const latestVersion = await getLatestVersion('latest');
       console.log(
         `  📦 Fetched latest version: ${latestVersion ?? 'failed'}`,
       );
+      log(`[version] Fetched latest version: ${latestVersion ?? 'failed'}`);
       let lastChecked: number | null = null;
 
       // Persist to cache for background check reference
@@ -791,10 +813,10 @@ const OhMyOpenCodeLite: Plugin = async (ctx) => {
       logVersionDisplay(currentVersion, savedVersion, latestVersion, lastChecked);
       return true;
     } catch (err) {
-      console.log(
-        '  📦 Version check failed:',
-        err instanceof Error ? err.message : String(err),
-      );
+      const verErrMsg =
+        err instanceof Error ? err.message : String(err);
+      console.log('  📦 Version check failed:', verErrMsg);
+      log('[version] Version check failed: ' + verErrMsg);
       return false;
     }
   }
@@ -1102,6 +1124,7 @@ const OhMyOpenCodeLite: Plugin = async (ctx) => {
               console.log(
                 `\u{1F4E6} Bundled skills available: ${skills.join(', ')}`,
               );
+              log(`[startup] Bundled skills available: ${skills.join(', ')}`);
             }
           } catch {
             // Silently ignore scan failures
@@ -1113,6 +1136,9 @@ const OhMyOpenCodeLite: Plugin = async (ctx) => {
           console.log(
             `\u{1F4A1} Auto-discovered ${installedSkills.length} skill(s): ${installedSkills.map((s) => s.name).join(', ')}`,
           );
+          log(
+            `[startup] Auto-discovered ${installedSkills.length} skill(s): ${installedSkills.map((s) => s.name).join(', ')}`,
+          );
         }
 
         const mcpKeys = Object.keys(
@@ -1120,6 +1146,7 @@ const OhMyOpenCodeLite: Plugin = async (ctx) => {
         );
         if (mcpKeys.length > 0) {
           console.log(`\u{1F50C} MCP servers: ${mcpKeys.join(', ')}`);
+          log(`[startup] MCP servers: ${mcpKeys.join(', ')}`);
         }
       }
     },
