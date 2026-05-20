@@ -101,8 +101,8 @@ async function runBackgroundUpdateCheck(
   if (pluginInfo.isPinned) {
     showToast(
       ctx,
-      `OMO-Slim ${latestVersion}`,
-      `v${latestVersion} available.\nVersion is pinned. Update your plugin config to apply.`,
+      `Opencode Dux ${latestVersion}`,
+      `Update from v${currentVersion} to v${latestVersion} available.\nVersion is pinned. Update your plugin config to apply.`,
       'info',
       8000,
     );
@@ -113,8 +113,8 @@ async function runBackgroundUpdateCheck(
   if (!autoUpdate) {
     showToast(
       ctx,
-      `OMO-Slim ${latestVersion}`,
-      `v${latestVersion} available. Auto-update is disabled.`,
+      `Opencode Dux ${latestVersion}`,
+      `Update from v${currentVersion} to v${latestVersion} available. Auto-update is disabled.`,
       'info',
       8000,
     );
@@ -126,8 +126,8 @@ async function runBackgroundUpdateCheck(
   if (!installDir) {
     showToast(
       ctx,
-      `OMO-Slim ${latestVersion}`,
-      `v${latestVersion} available. Auto-update could not prepare the active install.`,
+      `Opencode Dux ${latestVersion}`,
+      `Update from v${currentVersion} to v${latestVersion} available. Auto-update could not prepare the active install.`,
       'info',
       8000,
     );
@@ -140,8 +140,8 @@ async function runBackgroundUpdateCheck(
   if (installSuccess) {
     showToast(
       ctx,
-      'OMO-Slim Updated!',
-      `v${currentVersion} → v${latestVersion}\nRestart OpenCode to apply.`,
+      'Opencode Dux Updated!',
+      `Updated from v${currentVersion} to v${latestVersion}\nRestart OpenCode to apply.`,
       'success',
       8000,
     );
@@ -151,8 +151,8 @@ async function runBackgroundUpdateCheck(
   } else {
     showToast(
       ctx,
-      `OMO-Slim ${latestVersion}`,
-      `v${latestVersion} available, but auto-update failed to install it. Check logs or retry manually.`,
+      `Opencode Dux ${latestVersion}`,
+      `Update from v${currentVersion} to v${latestVersion} available, but auto-update failed to install it. Check logs or retry manually.`,
       'error',
       8000,
     );

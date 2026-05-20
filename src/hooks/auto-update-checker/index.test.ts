@@ -170,8 +170,8 @@ describe('auto-update-checker/index', () => {
     );
     expect(showToast).toHaveBeenCalledWith({
       body: {
-        title: 'OMO-Slim Updated!',
-        message: 'v0.9.1 → v0.9.11\nRestart OpenCode to apply.',
+        title: 'Opencode Dux Updated!',
+        message: 'Updated from v0.9.1 to v0.9.11\nRestart OpenCode to apply.',
         variant: 'success',
         duration: 8000,
       },
@@ -199,8 +199,8 @@ describe('auto-update-checker/index', () => {
 
     expect(showToast).toHaveBeenCalledWith({
       body: {
-        title: 'OMO-Slim 0.9.11',
-        message: 'v0.9.11 available. Auto-update is disabled.',
+        title: 'Opencode Dux 0.9.11',
+        message: 'Update from v0.9.1 to v0.9.11 available. Auto-update is disabled.',
         variant: 'info',
         duration: 8000,
       },
@@ -230,9 +230,8 @@ describe('auto-update-checker/index', () => {
     expect(crossSpawnMock).not.toHaveBeenCalled();
     expect(showToast).toHaveBeenCalledWith({
       body: {
-        title: 'OMO-Slim 0.9.11',
-        message:
-          'v0.9.11 available. Auto-update could not prepare the active install.',
+        title: 'Opencode Dux 0.9.11',
+        message: 'Update from v0.9.1 to v0.9.11 available. Auto-update could not prepare the active install.',
         variant: 'info',
         duration: 8000,
       },
@@ -271,9 +270,8 @@ describe('auto-update-checker/index', () => {
     );
     expect(showToast).toHaveBeenCalledWith({
       body: {
-        title: 'OMO-Slim 0.9.11',
-        message:
-          'v0.9.11 available, but auto-update failed to install it. Check logs or retry manually.',
+        title: 'Opencode Dux 0.9.11',
+        message: 'Update from v0.9.1 to v0.9.11 available, but auto-update failed to install it. Check logs or retry manually.',
         variant: 'error',
         duration: 8000,
       },
