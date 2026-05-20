@@ -355,6 +355,7 @@ let didLogStartupSummary = false;
 const OhMyOpenCodeLite: Plugin = async (ctx) => {
   const sessionId = new Date().toISOString().replace(/[-:]/g, '').slice(0, 15);
   initLogger(sessionId);
+  log('[plugin] factory invoked');
 
   // Declare variables that must survive the try/catch for the return
   // closure. These are set inside the try block.
