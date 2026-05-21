@@ -93,13 +93,13 @@ describe('auto-update-checker/cache', () => {
         `./cache?test=${importCounter++}`
       );
 
-      const result = preparePackageUpdate('1.0.1');
+      const result = await preparePackageUpdate('1.0.1');
       expect(result).toBeNull();
 
       existsSpy.mockRestore();
     });
 
-    test('updates packages wrapper dependency and removes installed package', async () => {
+    test('updates packages wrapper dependency version and returns install dir', async () => {
       const existsSpy = spyOn(fs, 'existsSync').mockImplementation(
         (path: unknown) => path === WRAPPER_PKG_JSON || path === PKG_DIR,
       );
@@ -114,31 +114,26 @@ describe('auto-update-checker/cache', () => {
           writtenData.push(data as string);
         },
       );
-      const rmSyncSpy = spyOn(fs, 'rmSync').mockReturnValue(undefined);
       const { preparePackageUpdate } = await import(
         `./cache?test=${importCounter++}`
       );
 
-      const result = preparePackageUpdate(
+      const result = await preparePackageUpdate(
         '0.9.11',
         'opencode-dux',
         RUNTIME_PKG_JSON,
       );
 
       expect(result).toBe(INSTALL_DIR);
-      expect(rmSyncSpy).toHaveBeenCalledWith(PKG_DIR, {
-        recursive: true,
-        force: true,
-      });
-      expect(writtenData.length).toBeGreaterThan(0);
-      expect(JSON.parse(writtenData[0])).toEqual({
+      // Index 0 is the lock file, index 1 is the package.json update
+      expect(writtenData.length).toBeGreaterThanOrEqual(2);
+      expect(JSON.parse(writtenData[1])).toEqual({
         dependencies: { 'opencode-dux': '0.9.11' },
       });
 
       existsSpy.mockRestore();
       readSpy.mockRestore();
       writeSpy.mockRestore();
-      rmSyncSpy.mockRestore();
     });
 
     const testLegacyCache = onWindows ? test.skip : test;
@@ -161,23 +156,24 @@ describe('auto-update-checker/cache', () => {
         const writeSpy = spyOn(fs, 'writeFileSync').mockImplementation(
           () => {},
         );
-        const rmSyncSpy = spyOn(fs, 'rmSync').mockReturnValue(undefined);
         const { preparePackageUpdate } = await import(
           `./cache?test=${importCounter++}`
         );
 
-        const result = preparePackageUpdate('1.0.1', 'opencode-dux', null);
+        const result = await preparePackageUpdate(
+          '1.0.1',
+          'opencode-dux',
+          null,
+        );
 
         expect(typeof result === 'string' && result.endsWith(legacyCache)).toBe(
           true,
         );
         expect(writeSpy).not.toHaveBeenCalled();
-        expect(rmSyncSpy).toHaveBeenCalled();
 
         existsSpy.mockRestore();
         readSpy.mockRestore();
         writeSpy.mockRestore();
-        rmSyncSpy.mockRestore();
       },
     );
   });

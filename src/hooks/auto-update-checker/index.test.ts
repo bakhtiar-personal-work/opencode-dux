@@ -171,7 +171,7 @@ describe('auto-update-checker/index', () => {
       'opencode-dux',
     );
     expect(crossSpawnMock).toHaveBeenCalledWith(
-      ['bun', 'install'],
+      ['npm', 'install'],
       expect.objectContaining({ cwd: '/tmp/opencode' }),
     );
     expect(logMock).toHaveBeenCalledWith(
@@ -260,11 +260,11 @@ describe('auto-update-checker/index', () => {
     await waitForCalls(logMock, 2);
 
     expect(crossSpawnMock).toHaveBeenCalledWith(
-      ['bun', 'install'],
+      ['npm', 'install'],
       expect.objectContaining({ cwd: '/tmp/opencode' }),
     );
     expect(logMock).toHaveBeenCalledWith(
-      '[auto-update-checker] bun install failed; update not installed',
+      '[auto-update-checker] npm install failed; update not installed',
     );
   });
 });

@@ -2,7 +2,11 @@ import type { PluginInput } from '@opencode-ai/plugin';
 import { crossSpawn } from '../../utils/compat';
 import { log } from '../../utils/logger';
 import { writeVersionCache } from '../../version-store';
-import { preparePackageUpdate, resolveInstallContext } from './cache';
+import {
+  clearPackageCache,
+  preparePackageUpdate,
+  resolveInstallContext,
+} from './cache';
 import {
   extractChannel,
   findPluginEntry,
@@ -116,7 +120,7 @@ async function runBackgroundUpdateCheck(
     return;
   }
 
-  const installDir = preparePackageUpdate(latestVersion, PACKAGE_NAME);
+  const installDir = await preparePackageUpdate(latestVersion, PACKAGE_NAME);
   if (!installDir) {
     log('[auto-update-checker] Failed to prepare install root for auto-update');
     ctx.client.app
@@ -128,10 +132,22 @@ async function runBackgroundUpdateCheck(
         },
       })
       .catch(() => {});
+
+    // Show error Toast
+    ctx.client.tui
+      .showToast({
+        body: {
+          title: 'Plugin Update Failed',
+          message: `Failed to prepare update for opencode-dux v${latestVersion}. You can retry later or update manually.`,
+          variant: 'error',
+          duration: 10000,
+        },
+      })
+      .catch(() => {});
     return;
   }
 
-  const installSuccess = await runBunInstallSafe(installDir);
+  const installSuccess = await runNpmInstallSafe(installDir);
 
   if (installSuccess) {
     console.log(
@@ -141,14 +157,44 @@ async function runBackgroundUpdateCheck(
     log(
       `[auto-update-checker] Update installed: ${currentVersion} → ${latestVersion}`,
     );
+
+    // Show Toast notification
+    ctx.client.tui
+      .showToast({
+        body: {
+          title: 'Plugin Updated',
+          message: `opencode-dux updated to v${latestVersion}. Restart OpenCode to apply.`,
+          variant: 'success',
+          duration: 10000,
+        },
+      })
+      .catch(() => {});
+
+    // Clear package cache after successful update
+    const deleted = await clearPackageCache();
+    log(
+      `[auto-update-checker] Post-update cache clear: ${deleted} directories deleted`,
+    );
   } else {
-    log('[auto-update-checker] bun install failed; update not installed');
+    log('[auto-update-checker] npm install failed; update not installed');
     ctx.client.app
       .log({
         body: {
           service: 'opencode-dux',
           level: 'error',
-          message: `Auto-update install failed for v${latestVersion}: bun install returned non-zero exit code`,
+          message: `Auto-update install failed for v${latestVersion}: npm install returned non-zero exit code`,
+        },
+      })
+      .catch(() => {});
+
+    // Show error Toast
+    ctx.client.tui
+      .showToast({
+        body: {
+          title: 'Plugin Update Failed',
+          message: `Failed to update opencode-dux to v${latestVersion}. npm install failed. You can retry later or update manually.`,
+          variant: 'error',
+          duration: 10000,
         },
       })
       .catch(() => {});
@@ -160,14 +206,14 @@ export function getAutoUpdateInstallDir(): string {
 }
 
 /**
- * Spawns a background process to run 'bun install'.
+ * Spawns a background process to run 'npm install'.
  * Includes a 60-second timeout to prevent stalling OpenCode.
  * @param installDir The directory whose package manager context should be refreshed.
  * @returns True if the installation succeeded within the timeout.
  */
-async function runBunInstallSafe(installDir: string): Promise<boolean> {
+async function runNpmInstallSafe(installDir: string): Promise<boolean> {
   try {
-    const proc = crossSpawn(['bun', 'install'], {
+    const proc = crossSpawn(['npm', 'install'], {
       cwd: installDir,
       stdout: 'pipe',
       stderr: 'pipe',
@@ -190,7 +236,7 @@ async function runBunInstallSafe(installDir: string): Promise<boolean> {
 
     return proc.exitCode === 0;
   } catch (err) {
-    log('[auto-update-checker] bun install error:', err);
+    log('[auto-update-checker] npm install error:', err);
     return false;
   }
 }

@@ -38,7 +38,7 @@ import {
   createTodoContinuationHook,
   ForegroundFallbackManager,
 } from './hooks';
-import { clearPackageCache, getLatestVersion } from './hooks/auto-update-checker';
+import { getLatestVersion } from './hooks/auto-update-checker';
 import { processImageAttachments } from './hooks/image-hook';
 import { createBuiltinMcps } from './mcp';
 import { discoverSkills } from './skills/registry';
@@ -123,7 +123,7 @@ function readPluginVersion(): string | null {
       const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
       return typeof pkg.version === 'string' ? pkg.version : null;
     }
-  } catch { }
+  } catch {}
   return null;
 }
 
@@ -209,12 +209,12 @@ async function ensureModelContextLimits(client: {
       const providers =
         (result.data?.all as
           | Array<{
-            id?: string;
-            models?: Record<
-              string,
-              { id?: string; limit?: { context?: number } }
-            >;
-          }>
+              id?: string;
+              models?: Record<
+                string,
+                { id?: string; limit?: { context?: number } }
+              >;
+            }>
           | undefined) ?? [];
       for (const provider of providers) {
         if (!provider.models) continue;
@@ -271,7 +271,7 @@ async function computeSessionUsageForReconcile(
     let contextPct = 0;
 
     // Ensure context limit cache is populated before recording usage
-    await ensureModelContextLimits(ctx.client).catch(() => { });
+    await ensureModelContextLimits(ctx.client).catch(() => {});
 
     const lastTokenMsg = [...assistantMsgs]
       .reverse()
@@ -448,7 +448,7 @@ const OpenCodeDux: Plugin = async (ctx) => {
               duration: 5000,
             },
           })
-          .catch(() => { });
+          .catch(() => {});
       }
     }
 
@@ -461,7 +461,7 @@ const OpenCodeDux: Plugin = async (ctx) => {
     // Fire-and-forget so failures (e.g., tui.json not writable) don't block init.
     if (isFirstInit) {
       const entry = resolvePluginEntryFromOpenCodeConfig();
-      addPluginToOpenCodeTuiConfig(entry).catch(() => { });
+      addPluginToOpenCodeTuiConfig(entry).catch(() => {});
     }
 
     rewriteDisplayNameMentions = createDisplayNameMentionRewriter(config);
@@ -526,7 +526,7 @@ const OpenCodeDux: Plugin = async (ctx) => {
 
     // Warm the local discovery cache asynchronously (non-blocking init).
     // Subsequent hooks/tools will read from cache on first use.
-    getLocalDiscovery(ctx).catch(() => { });
+    getLocalDiscovery(ctx).catch(() => {});
 
     webfetch = createWebfetchTool(ctx);
 
@@ -637,7 +637,7 @@ const OpenCodeDux: Plugin = async (ctx) => {
         }
         recordSessionUsagesBatch(usageBatch);
 
-        usageService?.refresh(false).catch(() => { });
+        usageService?.refresh(false).catch(() => {});
       } catch {
         // best-effort - silent
       }
@@ -663,7 +663,7 @@ const OpenCodeDux: Plugin = async (ctx) => {
       ctx.client,
       runtimeChains,
       config.fallback?.enabled !== false &&
-      Object.keys(runtimeChains).length > 0,
+        Object.keys(runtimeChains).length > 0,
     );
 
     // Initialize todo-continuation hook (opt-in auto-continue for
@@ -724,15 +724,14 @@ const OpenCodeDux: Plugin = async (ctx) => {
           s.pluginVersion = currentVersion;
         });
 
-        // Version display: block init so the user sees the result before TUI opens
-        try {
-          await scheduleVersionDisplay(currentVersion);
-        } catch (err) {
+        // Version display: fire-and-forget so plugin registration is not blocked.
+        // Show it asynchronously — version display is UX, not critical path.
+        scheduleVersionDisplay(currentVersion).catch((err) => {
           const versionErrMsg =
             err instanceof Error ? err.message : String(err);
           console.log('  📦 Version check failed:', versionErrMsg);
           log('[version] Version check failed: ' + versionErrMsg);
-        }
+        });
       }
     }
   } catch (err) {
@@ -781,7 +780,7 @@ const OpenCodeDux: Plugin = async (ctx) => {
     if (err) {
       const msg = `jsdom probe failed; webfetch tool will not work: ${err}`;
       log(`[plugin] WARN: ${msg}`);
-      appLog(ctx, 'warn', msg).catch(() => { });
+      appLog(ctx, 'warn', msg).catch(() => {});
     }
   });
 
@@ -798,9 +797,7 @@ const OpenCodeDux: Plugin = async (ctx) => {
       console.log('  📦 Checking for updates...');
       log('[version] Checking for updates...');
       const latestVersion = await getLatestVersion('latest');
-      console.log(
-        `  📦 Fetched latest version: ${latestVersion ?? 'failed'}`,
-      );
+      console.log(`  📦 Fetched latest version: ${latestVersion ?? 'failed'}`);
       log(`[version] Fetched latest version: ${latestVersion ?? 'failed'}`);
       let lastChecked: number | null = null;
 
@@ -821,7 +818,9 @@ const OpenCodeDux: Plugin = async (ctx) => {
         console.log(
           `  \u{1F4E6} Current version: \x1b[31mv${savedVersion}\x1b[0m \u2192 \x1b[32mv${currentVersion} (Updated)\x1b[0m`,
         );
-        log(`[version] Current version: v${savedVersion} \u2192 v${currentVersion} (Updated)`);
+        log(
+          `[version] Current version: v${savedVersion} \u2192 v${currentVersion} (Updated)`,
+        );
       } else {
         const cacheFresh =
           latestVersion !== null &&
@@ -832,7 +831,9 @@ const OpenCodeDux: Plugin = async (ctx) => {
           console.log(
             `  \u{1F4E6} Current version: \x1b[31mv${currentVersion}\x1b[0m \u2192 \x1b[33mv${latestVersion}\x1b[0m`,
           );
-          log(`[version] Current version: v${currentVersion} \u2192 v${latestVersion}`);
+          log(
+            `[version] Current version: v${currentVersion} \u2192 v${latestVersion}`,
+          );
           log('[version] Please restart OpenCode to complete the update.');
         } else {
           const latestIndicator =
@@ -840,48 +841,31 @@ const OpenCodeDux: Plugin = async (ctx) => {
           console.log(
             `  \u{1F4E6} Current version: \x1b[32mv${currentVersion}${latestIndicator}\x1b[0m`,
           );
-          log(`[version] Current version: v${currentVersion}${latestIndicator}`);
+          log(
+            `[version] Current version: v${currentVersion}${latestIndicator}`,
+          );
         }
       }
 
-      // If a newer version is available, notify the user. After init
-      // completes (code is safely in memory), delete the package cache so
-      // OpenCode re-fetches from npm on next restart.
-      const cacheFresh =
-        latestVersion !== null &&
-        lastChecked !== null &&
-        Date.now() - lastChecked < VERSION_CACHE_STALE_MS;
-
-      if (cacheFresh && latestVersion !== currentVersion) {
+      // If a newer version is available, notify the user. Cache clearing is
+      // handled by the auto-update checker after a successful install.
+      if (
+        latestVersion &&
+        lastChecked &&
+        Date.now() - lastChecked < VERSION_CACHE_STALE_MS &&
+        latestVersion !== currentVersion
+      ) {
         console.log(
           `  📦 Update available, please restart OpenCode to complete the update after opencode launch.`,
         );
-        log(`[auto-update-checker] Update available: v${currentVersion} → v${latestVersion}`);
-      }
-
-      // Wait for logs to settle (3s when update available, 1.5s otherwise)
-      const hasUpdate = cacheFresh && latestVersion !== currentVersion;
-      const delayMs = hasUpdate ? 3000 : 1500;
-      await new Promise((r) => setTimeout(r, delayMs));
-
-      // Delete the package cache after a further delay so init is fully
-      // complete and code is safe in memory. OpenCode will re-fetch from
-      // npm on the next restart.
-      if (hasUpdate) {
-        setTimeout(() => {
-          try {
-            const deleted = clearPackageCache();
-            log(`[auto-update-checker] Post-init cache clear: ${deleted} directories deleted`);
-          } catch (err) {
-            log('[auto-update-checker] Post-init cache clear failed:', err);
-          }
-        }, 5000);
+        log(
+          `[auto-update-checker] Update available: v${currentVersion} → v${latestVersion}`,
+        );
       }
 
       return true;
     } catch (err) {
-      const verErrMsg =
-        err instanceof Error ? err.message : String(err);
+      const verErrMsg = err instanceof Error ? err.message : String(err);
       console.log('  📦 Version check failed:', verErrMsg);
       log('[version] Version check failed: ' + verErrMsg);
       return false;
@@ -1255,15 +1239,15 @@ const OpenCodeDux: Plugin = async (ctx) => {
       if (event.type === 'message.part.updated') {
         const part = event.properties?.part as
           | {
-            type?: string;
-            sessionID?: string;
-            tokens?: {
-              input?: number;
-              output?: number;
-              reasoning?: number;
-              cache?: { read?: number; write?: number };
-            };
-          }
+              type?: string;
+              sessionID?: string;
+              tokens?: {
+                input?: number;
+                output?: number;
+                reasoning?: number;
+                cache?: { read?: number; write?: number };
+              };
+            }
           | undefined;
 
         if (part?.type === 'step-finish' && part?.sessionID && part?.tokens) {
@@ -1375,7 +1359,7 @@ const OpenCodeDux: Plugin = async (ctx) => {
             let contextPct = 0;
 
             // Ensure context limit cache is populated before recording usage
-            await ensureModelContextLimits(ctx.client).catch(() => { });
+            await ensureModelContextLimits(ctx.client).catch(() => {});
 
             const lastTokenMsg = [...assistantMsgs]
               .reverse()
@@ -1513,7 +1497,7 @@ const OpenCodeDux: Plugin = async (ctx) => {
               ) {
                 ctx.client.session
                   .abort({ path: { id: childId } })
-                  .catch(() => { });
+                  .catch(() => {});
               }
             }
             recordSessionNode({
@@ -1577,7 +1561,7 @@ const OpenCodeDux: Plugin = async (ctx) => {
           directory?: string;
         },
         output as {
-          args?: { patchText?: unknown;[key: string]: unknown };
+          args?: { patchText?: unknown; [key: string]: unknown };
         },
       );
 

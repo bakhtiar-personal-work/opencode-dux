@@ -35,17 +35,15 @@ Or run the installer: `bunx opencode-dux install`
 
 ## Auto-Update
 
-**Important:** OpenCode's built-in plugin auto-update has known issues with cached packages. This plugin implements its own robust update detection system.
+The plugin automatically checks for updates when you start a new chat session.
 
 ### How it works
 
-1. **On startup**, the plugin checks npm for the latest version
-2. **If an update is available** (e.g., v1.3.6 → v1.3.7):
-   - OpenCode's package cache is automatically cleared
-   - The plugin continues working with the current version
-3. **Restart OpenCode** to complete the update
-   - OpenCode re-fetches the latest version from npm
-   - The new version is installed automatically
+- **If an update is available**: It downloads and installs in the background
+- **You'll see a notification**: A popup message confirms the update succeeded (or shows if it failed)
+- **Restart OpenCode**: The new version loads on next startup
+
+That's it - no manual steps needed!
 
 ### Installation requirement
 
@@ -55,7 +53,7 @@ Auto-update works with both `"opencode-dux"` and `"opencode-dux@latest"`. OpenCo
 { "plugin": ["opencode-dux"] }
 ```
 
-**Avoid version pinning** (e.g., `"opencode-dux@1.3.6"`) - this disables auto-update.
+**Note**: Keep `"opencode-dux"` without version numbers in your config. Adding a version (e.g., `"opencode-dux@1.3.6"`) disables auto-update.
 
 ## Agents
 
