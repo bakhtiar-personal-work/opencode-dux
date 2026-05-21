@@ -435,13 +435,13 @@ describe('createPresetManager', () => {
       });
     });
 
-    test('resolves array-form model to first entry', async () => {
+    test('switches to preset with string model', async () => {
       const ctx = createMockContext();
       const config: PluginConfig = {
         presets: {
           fallback: {
             orchestrator: {
-              model: ['anthropic/claude-3.5-haiku', 'openai/gpt-5.5'],
+              model: 'anthropic/claude-3.5-haiku',
             },
           },
         },
@@ -465,16 +465,14 @@ describe('createPresetManager', () => {
       });
     });
 
-    test('resolves array-form model with object entries', async () => {
+    test('switches to preset with object model entry', async () => {
       const ctx = createMockContext();
       const config: PluginConfig = {
         presets: {
           thinker: {
             oracle: {
-              model: [
-                { id: 'anthropic/claude-sonnet-4-6', variant: 'thinking' },
-                { id: 'openai/o3' },
-              ],
+              model: 'anthropic/claude-sonnet-4-6',
+              variant: 'thinking',
             },
           },
         },

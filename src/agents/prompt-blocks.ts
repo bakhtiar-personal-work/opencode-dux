@@ -207,13 +207,63 @@ mechanical edits), follow this cycle:
 2) PRESENT: Always present the @oracle plan to the user for confirmation.
    This step is MANDATORY - never skip it for any non-trivial change.
    - If @oracle used <needs_user> with questions: extract JSON, call \`question\` tool, relay answers back via continue_session_id, then present the final plan.
-   - Otherwise: relay the plan's key decisions, file paths, and risks as text.
+   - Otherwise: relay the plan's key decisions, file targets, key changes, and risks as text.
    - Ask the user to confirm or request adjustments before proceeding.
-   Wait for explicit user approval before step 4.
+   **WAIT FOR EXPLICIT USER APPROVAL** before step 4.
 3) ADJUST (if needed): User requests changes → re-delegate @oracle with
    \`continue_session_id\` (same session, incremental). Repeat until approval.
 4) IMPLEMENT: Only after explicit user approval → delegate to @fixer with
    the approved plan as context.
+
+**EXPLICIT APPROVAL REQUIRED** (step 4):
+Proceed to implementation ONLY when user says one of:
+- "yes"
+- "proceed"
+- "approved"
+- "looks good"
+- "go ahead"
+- "do it"
+
+**DO NOT PROCEED** if user:
+- Asks clarifying questions ("What about X?", "Can we use Y?")
+- Requests changes ("I prefer Z instead", "Change X to Y")
+- Expresses uncertainty ("Not sure about X", "Maybe we should...")
+- Provides hybrid responses ("Yes, but can you also...")
+
+**IF USER DOES NOT EXPLICITLY APPROVE**:
+1. **DO NOT** proceed to skill discovery
+2. **DO NOT** proceed to delegation
+3. **DO NOT** proceed to implementation
+4. **DO** re-delegate to @oracle with \`continue_session_id\`
+5. **DO** include user's feedback/questions in the re-delegation prompt
+6. **DO** present updated plan and wait again
+
+**CRITICAL INVARIANT**:
+The planning gate is a HARD STOP. You MUST have explicit user approval before:
+- Calling \`discover_skills\` tool
+- Delegating to any subagent (designer, fixer, explorer, etc.)
+- Running any implementation commands
+
+**WRONG** (violates planning gate):
+\`\`\`
+User: "Can we use React Query instead of Zustand?"
+Orchestrator: "Sure!" → proceeds to skill discovery → delegates to @designer ❌
+\`\`\`
+
+**CORRECT** (enforces planning gate):
+\`\`\`
+User: "Can we use React Query instead of Zustand?"
+Orchestrator: Re-delegates to @oracle (continue_session_id) with user feedback
+@oracle: Returns updated plan with React Query
+Orchestrator: Presents updated plan → waits for approval
+User: "yes"
+Orchestrator: NOW proceeds to skill discovery → delegates ✅
+\`\`\`
+
+**Session discipline**:
+- Use \`continue_session_id\` from @oracle's \`<delegate_session_continue>\` tag
+- Same agent (@oracle), same model, same variant for all iterations
+- Only create new session when scope fundamentally changes
 
 Skip this gate ONLY when:
 - Pure meta questions ("what agents exist?")
@@ -498,7 +548,7 @@ ${buildVariantGlossaryBlock()}`;
 
 /**
  * Build XML block with guidance on when and how to use the
- * `discover_mcp_servers` and `discover_skills_online` tools.
+ * `discover_mcp_servers` tool and the `discover_skills` tool.
  *
  * MCP servers are capability/tool resources that provide new functions.
  * Skills are knowledge/prompt resources that provide specialized workflows.
@@ -510,40 +560,68 @@ ${buildVariantGlossaryBlock()}`;
  * the user.
  */
 export function buildDiscoveryGuidanceBlock(): string {
-  return `<discovery_guidance>
-When a subagent returns <blocked> because it lacks capabilities, you have
-two options: work around it, or use discovery tools to find installable
-MCP servers or skills. These tools are only for AGENT capabilities, not
-project dependencies.
+  return `
+<discovery_guidance>
+You have access to discovery tools for finding external capabilities:
 
-<tool_selection>
-- Use \`discover_mcp_servers\` for tool/capability resources (API
-  integrations, data source access, file system ops, etc.)
-- Use \`discover_skills_online\` for knowledge/prompt resources
-  (specialized workflows, domain expertise, task-specific guidance)
-</tool_selection>
+**For MCP Servers** (external tools/data sources):
 
-<correct_vs_incorrect>
-✅ DO call discovery tools for:
-  - External service/API automation MCP
-  - Data source / platform API MCP (databases, GitHub, GitLab)
-  - Domain knowledge skills (best practices, specialized workflows)
+**AUTOMATIC MCP DISCOVERY** (BEFORE ANY DELEGATION):
+For EVERY non-trivial task, BEFORE delegating to a subagent:
+1. Consider: "Could an MCP server improve this task's outcome?"
+   - Database access (PostgreSQL, MongoDB, Redis, etc.)
+   - API integration (Stripe, GitHub, Slack, etc.)
+   - External data sources (weather, maps, financial data, etc.)
+   - Specialized tools (browser automation, file system access, etc.)
 
-❌ DON'T call discovery tools for:
-  - Language libraries or framework packages (project deps)
-  - Anything used in \`import\` or \`require\` statements
-</correct_vs_incorrect>
+2. If YES → Call \`discover_mcp_servers\` tool:
+   - Provide task_description: What the subagent needs to accomplish
+   - Provide task_keywords: 2-5 keywords describing needed capabilities
+   - Results include installation commands and relevance scores
 
-<heuristics_summary>
-- External service/API/data access → discover_mcp_servers
-- Domain knowledge/workflows → discover_skills_online
-- Project dependencies (import/require) → NOT for discovery tools; use @fixer + package manager
-</heuristics_summary>
+3. For each recommended MCP:
+   - Check if already configured in user's OpenCode config
+   - If configured: note "✅ Already available"
+   - If NOT configured: show install command \`npx mcp add <server>\`
 
-<example>
-Subagent: <blocked>External API access needed - no connector available.
-1. Call \`discover_mcp_servers(task_description: "External API integration", ...)\`
-2. Present top recommendation to user for installation.
-</example>
+4. Present findings before delegation:
+   - List available MCPs that can help
+   - Recommend missing MCPs with install commands
+   - Ask user if they want to install before proceeding
+
+**When NOT to discover MCPs** (rare):
+- Routine tasks (simple edits, basic searches)
+- When subagent already has all needed capabilities
+- When speed is critical and MCP overhead isn't justified
+
+**For Skills** (agent workflow enhancements):
+
+**AUTOMATIC SKILL DISCOVERY** (BEFORE ANY DELEGATION):
+For EVERY non-trivial task, BEFORE delegating to a subagent:
+1. Consider: "Could a skill improve this task's outcome?"
+   - Specialized domains (React, testing, accessibility, databases, APIs, etc.)
+   - Complex workflows (deployment, CI/CD, security audits, performance optimization)
+   - Quality improvements (code review, design review, best practices)
+   
+2. If YES → Call \`discover_skills\` tool:
+   - Provide task_description: What the subagent needs to accomplish
+   - Provide task_keywords: 2-5 keywords describing needed skill areas
+   - Results include install commands and relevance scores
+
+3. For each recommended skill:
+   - Check if already installed (tool marks with \`already_installed: true\`)
+   - If installed: ✅ Include in delegation prompt with "### Skill context: <name>"
+   - If NOT installed: Show install command \`npx skills add <source> -g\`
+   - Ask user if they want to install before proceeding
+
+4. Present findings before delegation:
+   - List available skills that can help
+   - Recommend missing skills with install commands
+   - Ask user if they want to install before proceeding
+
+**When to SKIP skill discovery** (rare):
+- Trivial tasks (fix typo, rename variable)
+- Time-critical operations where skill overhead isn't justified
+- When subagent has complete domain expertise (e.g., @explorer for file search)
 </discovery_guidance>`;
 }

@@ -16,7 +16,6 @@ describe('createLibrarianAgent', () => {
     const agent = createLibrarianAgent('test/librarian-model');
     const prompt = agent.config.prompt ?? '';
     expect(prompt).toContain('<role>');
-    expect(prompt).toContain('<tool_and_mcp_routing>');
     expect(prompt).toContain('<workflow>');
     expect(prompt).toContain('<conflict_resolution>');
     expect(prompt).toContain('Competing libraries');
@@ -55,7 +54,6 @@ describe('createLibrarianAgent', () => {
     const prompt = agent.config.prompt ?? '';
     const requiredSections = [
       '<role>',
-      '<tool_and_mcp_routing>',
       '<workflow>',
       '<conflict_resolution>',
       '<variant_policy>',

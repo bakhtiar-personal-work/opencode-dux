@@ -117,25 +117,5 @@ export function generateLiteConfig(
     presets[presetName] = buildPreset(presetName);
   }
 
-  // Pre-populate skills section so new installs don't hit the fallback path.
-  // Permissions are controlled via always-load + wildcard per agent.
-  config.agents = {
-    orchestrator: {
-      skills: { 'always-load': ['find-skills'], wildcard: true },
-    },
-    designer: {
-      skills: {
-        'always-load': ['agent-browser', 'web-design-guidelines'],
-        wildcard: false,
-      },
-    },
-    oracle: {
-      skills: { 'always-load': ['requesting-code-review'], wildcard: false },
-    },
-    librarian: {
-      skills: { 'always-load': ['find-skills'], wildcard: false },
-    },
-  };
-
   return config;
 }

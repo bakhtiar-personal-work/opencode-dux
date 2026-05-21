@@ -86,8 +86,6 @@ Merged from two locations (project overrides user):
 | `preset`                             | `string`   | -       | Active preset name                            |
 | `presets`                            | `object`   | `{}`    | Named model configurations per agent          |
 | `agents`                             | `object`   | `{}`    | Per-agent overrides on top of active preset   |
-| `fallback.enabled`                   | `boolean`  | `true`  | Enable runtime model fallback on API errors   |
-| `fallback.chains`                    | `object`   | `{}`    | Ordered fallback model arrays per agent       |
 | `sessionManager.maxSessionsPerAgent` | `number`   | `2`     | Max concurrent sessions per agent type (1–10) |
 | `sessionManager.readContextMinLines` | `number`   | `10`    | Min lines threshold for read context tool     |
 | `sessionManager.readContextMaxFiles` | `number`   | `8`     | Max files per read context batch              |
@@ -102,40 +100,24 @@ Merged from two locations (project overrides user):
 
 ### Per-agent options
 
-| Field         | Type                   | Description                                       |
-| ------------- | ---------------------- | ------------------------------------------------- |
-| `model`       | `string` or `array`    | Model ID (`provider/model`) or array for fallback |
-| `temperature` | `number` (0–2)         | Model temperature                                 |
-| `variant`     | `string`               | Variant hint (e.g. `"pro"`, `"flash"`)            |
-| `options`     | `object`               | Provider-specific model options                   |
-| `displayName` | `string`               | Custom agent display name                         |
-| `skills`      | `object` or `string[]` | Skill access configuration                        |
-| `mcps`        | `object` or `string[]` | MCP access configuration                          |
+| Field         | Type           | Description                            |
+| ------------- | -------------- | -------------------------------------- |
+| `model`       | `string`       | Model ID (`provider/model`)            |
+| `temperature` | `number` (0–2) | Model temperature                      |
+| `variant`     | `string`       | Variant hint (e.g. `"pro"`, `"flash"`) |
+| `options`     | `object`       | Provider-specific model options        |
+| `displayName` | `string`       | Custom agent display name              |
 
-### Model as array
+### Automatic Skill & MCP Discovery
 
-```jsonc
-{
-  "orchestrator": {
-    "model": [
-      "neuralwatt/moonshotai/Kimi-K2.6",
-      { "id": "opencode-go/deepseek-v4-flash", "variant": "high" },
-      "opencode-go/deepseek-v4-pro"
-    ]
-  }
-}
-```
+The orchestrator automatically discovers and injects skills and MCPs based on task context:
 
-### Skills/MCPs syntax
+- **Skills**: Before delegating work, the orchestrator checks if any installed skills could improve the task outcome. If found, skill context is injected into the delegation prompt.
+- **MCPs**: The orchestrator can discover and recommend MCP servers when subagents need new capabilities.
 
-```jsonc
-{
-  "oracle": {
-    "skills": { "always-load": ["simplify"], "wildcard": true },
-    "mcps": ["websearch", "context7"]
-  }
-}
-```
+No manual configuration needed — discovery happens automatically for non-trivial tasks.
+
+To install new skills: `npx skills add <owner/repo@skill> -g`
 
 ## Subscriptions / Account Commands
 
@@ -191,14 +173,16 @@ Place Markdown files in `~/.config/opencode/opencode-dux/`:
 
 Disable any: `{ "disabledMcps": ["grep_app"] }`
 
-## Built-in Skills
-
-- **simplify** - Code simplification and clarity improvements
-- **codemap** - Codebase mapping and structure analysis
-
 ## Skill Discovery
 
-Agents can recommend additional skills via `discover_skills_online`. When recommended: `npx skills add <repo>`
+The orchestrator automatically discovers skills via the `find-skills` workflow before delegating work. When a skill would improve a task:
+
+1. Orchestrator runs `npx skills find <keywords>` to discover relevant skills
+2. Checks which skills are installed locally (`~/.config/opencode/skills/`)
+3. Injects installed skill context into delegation prompts
+4. Recommends missing skills to the user with install commands
+
+Install skills: `npx skills add <owner/repo@skill> -g`
 
 ## Development
 

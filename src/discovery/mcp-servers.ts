@@ -4,7 +4,6 @@ import os from 'node:os';
 import * as path from 'node:path';
 import type { PluginInput, ToolDefinition } from '@opencode-ai/plugin';
 import { tool } from '@opencode-ai/plugin';
-import { SUBAGENT_NAMES } from '../config/constants';
 import { log } from '../utils/logger';
 import { getLocalDiscovery } from './local';
 
@@ -49,10 +48,7 @@ export interface McpRecommendation {
   relevance_score: number;
   /** URL to the project's homepage, repository, or package page. */
   source_url?: string;
-  /** Agent names that are most likely to benefit from this MCP server. */
-  recommended_agents: string[];
-  /** Categorisation tags (e.g. 'browser', 'github', 'filesystem'). */
-  tags: string[];
+
   /** Whether the user already has this MCP server installed. */
   already_installed?: boolean;
 }
@@ -337,56 +333,20 @@ function isMcpLike(pkg: NpmSearchObject): boolean {
 
 // ── Relevance scoring ───────────────────────────────────────────────────────
 
-/** Known MCP/skill keywords mapped to descriptive tags. */
-const NAME_TAG_MAP: Record<string, string[]> = {
-  playwright: ['browser', 'ui', 'testing'],
-  github: ['github', 'git', 'version-control'],
-  filesystem: ['filesystem', 'file-ops'],
-  websearch: ['web', 'search', 'internet'],
-  context7: ['docs', 'search', 'reference'],
-  'grep-app': ['search', 'code', 'grep'],
-  ast_grep: ['search', 'code', 'ast'],
-  puppeteer: ['browser', 'ui', 'testing'],
-  postgres: ['database', 'sql'],
-  sqlite: ['database', 'sql', 'embedded'],
-  redis: ['cache', 'database'],
-  slack: ['communication', 'messaging'],
-  discord: ['communication', 'messaging'],
-  jira: ['project-management', 'issue-tracking'],
-  linear: ['project-management', 'issue-tracking'],
-  notion: ['docs', 'knowledge', 'wiki'],
-  figma: ['design', 'ui', 'prototyping'],
-  sentry: ['monitoring', 'error-tracking'],
-  stripe: ['payments', 'billing'],
-};
-
 /**
  * Derive tags from a package name, description, and npm keywords.
+ *
+ * Tag derivation has been removed; always returns an empty array.
+ * The orchestrator decides tags dynamically from names.
+ *
+ * @returns Empty array
  */
 function deriveTags(
-  name: string,
+  _name: string,
   _description: string,
-  npmKeywords?: string[],
+  _npmKeywords?: string[],
 ): string[] {
-  const lower = name.toLowerCase();
-  const tags: string[] = [];
-
-  for (const [key, mapped] of Object.entries(NAME_TAG_MAP)) {
-    if (lower.includes(key)) {
-      tags.push(...mapped);
-    }
-  }
-
-  if (npmKeywords) {
-    for (const kw of npmKeywords) {
-      const lowerKw = kw.toLowerCase().replace(/\s+/g, '-');
-      if (!tags.includes(lowerKw)) {
-        tags.push(lowerKw);
-      }
-    }
-  }
-
-  return [...new Set(tags)];
+  return [];
 }
 
 /**
@@ -438,33 +398,17 @@ function scoreRelevance(
 
 /**
  * Determine which agents would benefit most from an item based on its tags.
+ *
+ * Agent recommendation has been removed; always returns an empty array.
+ * The orchestrator decides which agent to delegate to.
+ *
+ * @returns Empty array
  */
 function deriveRecommendedAgents(
-  type: 'mcp' | 'skill',
-  tags: string[],
+  _type: 'mcp' | 'skill',
+  _tags: string[],
 ): string[] {
-  const agents: string[] = [];
-
-  if (type === 'mcp') {
-    agents.push(...SUBAGENT_NAMES);
-  }
-
-  const tagSet = new Set(tags.map((t) => t.toLowerCase()));
-
-  if (tagSet.has('browser') || tagSet.has('ui') || tagSet.has('testing')) {
-    agents.push('explorer');
-  }
-  if (tagSet.has('search') || tagSet.has('docs') || tagSet.has('reference')) {
-    agents.push('librarian');
-  }
-  if (tagSet.has('database') || tagSet.has('sql')) {
-    agents.push('oracle');
-  }
-  if (tagSet.has('design') || tagSet.has('prototyping')) {
-    agents.push('designer');
-  }
-
-  return [...new Set(agents)];
+  return [];
 }
 
 /**
@@ -652,9 +596,7 @@ export async function discoverMcpServers(
         if (!isMcpLike(obj)) continue;
 
         const description = obj.package.description ?? '';
-        const npmKeywords = obj.package.keywords;
-        const tags = deriveTags(pkgName, description, npmKeywords);
-        const recommendedAgents = deriveRecommendedAgents('mcp', tags);
+        const tags = deriveTags(pkgName, description, obj.package.keywords);
         const relevanceScore = scoreRelevance(
           pkgName,
           description,
@@ -678,8 +620,6 @@ export async function discoverMcpServers(
           ),
           relevance_score: relevanceScore,
           source_url: deriveSourceUrl(obj),
-          recommended_agents: recommendedAgents,
-          tags,
         });
       }
     }

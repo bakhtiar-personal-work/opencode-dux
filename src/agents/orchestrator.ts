@@ -16,8 +16,6 @@ export interface AgentDefinition {
   displayName?: string;
   description?: string;
   config: AgentConfig;
-  /** Priority-ordered model entries for runtime fallback resolution. */
-  _modelArray?: Array<{ id: string; variant?: string }>;
 }
 
 /**
@@ -255,6 +253,15 @@ Pass it as \`continue_session_id\` when re-delegating to the SAME subagent.
 This avoids re-explaining the entire task from scratch.
 </recovery_principle>
 
+<skill_discovery_ownership>
+  Skill discovery is the **orchestrator's responsibility**, not the subagent's.
+- Subagents should NOT perform skill discovery. If a subagent determines a 
+  skill would help, it returns \`<blocked>\` and the orchestrator handles 
+  discovery via the \`discover_skills\` tool.
+- See <discovery_guidance> for when and how to proactively search for 
+  relevant skills before delegating.
+</skill_discovery_ownership>
+
 <recovery_decision_tree>
 When you see <blocked>, classify the blocker and follow the matching path:
 
@@ -262,11 +269,10 @@ When you see <blocked>, classify the blocker and follow the matching path:
    "github MCP not configured")
     → Option A: Re-delegate to the SAME subagent (same session) and
       tighter scope OR tool fallback instructions.
-   → Option B: Call the discovery tools (\`discover_mcp_servers\` or
-     \`discover_skills\`) to find installable MCP servers or skills that provide
-     the missing capability. Present top 1-3 recommendations to the user and ask
-     if they want to install. See <discovery_guidance> for when and how to call
-     these tools.
+    → Option B: Call \`discover_mcp_servers\` or \`discover_skills\`
+      to find installable MCP servers or skills that provide the missing
+      capability. Present top 1-3 recommendations to the user and ask if they
+      want to install. See <discovery_guidance> for when and how to use these.
    → If the subagent's <blocked> includes a \`suggested_fallback\`, pass it
      verbatim.
 
@@ -546,7 +552,7 @@ ${ORCHESTRATOR_CLARIFICATION_HANDOFF_BLOCK}
 }
 
 export function createOrchestratorAgent(
-  model?: string | Array<string | { id: string; variant?: string }>,
+  model?: string,
   customPrompt?: string,
   customAppendPrompt?: string,
   oracleDefaultModel?: string,
@@ -572,11 +578,7 @@ export function createOrchestratorAgent(
     },
   };
 
-  if (Array.isArray(model)) {
-    definition._modelArray = model.map((m) =>
-      typeof m === 'string' ? { id: m } : m,
-    );
-  } else if (typeof model === 'string' && model) {
+  if (typeof model === 'string' && model) {
     definition.config.model = model;
   }
 

@@ -32,7 +32,6 @@ bun run verify:host-smoke  # boot isolated OpenCode host with plugin tarball
 - `src/discovery/` - Online skill & MCP server discovery tools
 - `src/hooks/` - OpenCode lifecycle hooks (patch, update checker, phase reminder, etc.)
 - `src/mcp/` - Built-in MCP definitions (websearch, context7, grep_app)
-- `src/skills/` - Bundled skills (codemap, simplify), unpacked on install
 - `src/subscriptions/` - API key storage, account management, usage tracking
 - `src/tools/` - Extra tools (ast-grep, webfetch, preset manager)
 - `src/utils/` - Logging, session management, depth tracking, system collapse
@@ -41,7 +40,6 @@ bun run verify:host-smoke  # boot isolated OpenCode host with plugin tarball
 ## Key behaviors
 
 - The plugin factory function can **re-run** after `Instance.dispose()`. Module-level `didLogVerboseInit` / `didLogStartupSummary` flags prevent duplicate startup logs.
-- `src/skills/registry.ts` exports `discoverSkills` - caches results by plugin root.
 - `src/tools/ast-grep/downloader.ts` downloads binaries to `~/.cache/opencode-dux/` on first use.
 - `src/mcp/index.ts` - builtin MCPs are defined here; any can be disabled via config `disabledMcps`.
 - JSON Schema is **generated** - edits to `opencode-dux.schema.json` are overwritten by `bun run generate-schema`. Edit `src/config/schema.ts` instead.
@@ -59,4 +57,3 @@ bun run verify:host-smoke  # boot isolated OpenCode host with plugin tarball
 - `bun test` runs all `**/*.test.ts` under `src/`.
 - No jest/vitest - bun has its own test runner with `describe`, `it`, `expect`.
 - Mock strategy: most tests use hand-written mocks (not `vi.mock`); see `src/config/loader.test.ts` for pattern.
-- Codemap test (`src/skills/codemap/scripts/codemap.test.ts`) is the most expensive suite.

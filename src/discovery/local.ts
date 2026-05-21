@@ -1,3 +1,7 @@
+import type * as fs from 'node:fs';
+import * as fsp from 'node:fs/promises';
+import os from 'node:os';
+import * as path from 'node:path';
 import type { PluginInput } from '@opencode-ai/plugin';
 import { SDK_DISCOVERY_TIMEOUT_MS } from '../config/constants';
 import { log } from '../utils/logger';
@@ -37,8 +41,6 @@ export interface DiscoveredSkill {
   tags: string[];
   /** Agents that benefit most from this skill based on defaults. */
   recommendedAgents: string[];
-  /** Whether the skill ships with the plugin or was added by the user. */
-  source: 'bundled' | 'user';
 }
 
 /**
@@ -55,38 +57,16 @@ export interface LocalDiscoveryResult {
   scanDurationMs: number;
 }
 
-// ── Tag derivation ──────────────────────────────────────────────────────────
-
-/**
- * Known MCP/skill name patterns mapped to tags.
- * Used to derive tags from names dynamically at scan time.
- */
-const NAME_TAG_MAP: Record<string, string[]> = {
-  playwright: ['browser', 'ui', 'testing'],
-  github: ['github', 'git'],
-  filesystem: ['filesystem', 'files'],
-  websearch: ['web', 'search'],
-  context7: ['docs', 'search'],
-  grep_app: ['search', 'code'],
-  ast_grep: ['search', 'code'],
-};
-
 /**
  * Derive tags from a name string (MCP or skill name).
  *
- * Checks known patterns in a case-insensitive manner and returns the first
- * matching tag set. Falls back to an empty array when no pattern matches.
+ * Tag derivation has been removed; always returns an empty array.
+ * The orchestrator decides tags dynamically from names.
  *
- * @param name - The MCP or skill name to derive tags from
- * @returns Array of tag strings
+ * @param _name - The MCP or skill name to derive tags from
+ * @returns Empty array
  */
-function deriveTags(name: string): string[] {
-  const lower = name.toLowerCase();
-  for (const [key, tags] of Object.entries(NAME_TAG_MAP)) {
-    if (lower.includes(key)) {
-      return [...tags];
-    }
-  }
+function deriveTags(_name: string): string[] {
   return [];
 }
 
@@ -102,23 +82,6 @@ function deriveTags(name: string): string[] {
  */
 function deriveRecommendedAgents(_name: string): string[] {
   return [];
-}
-
-// ── Skill source determination ──────────────────────────────────────────────
-
-/**
- * Determine whether a skill is bundled or user-added based on its location.
- *
- * Skills located within the plugin's own `src/skills` directory are considered
- * bundled; all others are treated as user-added.
- *
- * @param location - The filesystem location of the skill
- * @returns `'bundled'` if the skill ships with the plugin, `'user'` otherwise
- */
-function determineSource(location: string): 'bundled' | 'user' {
-  // Normalise path separators before checking
-  const normalised = location.replace(/\\/g, '/');
-  return normalised.includes('src/skills') ? 'bundled' : 'user';
 }
 
 // ── Timeout helper ──────────────────────────────────────────────────────────
@@ -186,52 +149,139 @@ async function scanMcpStatuses(ctx: PluginInput): Promise<DiscoveredMcp[]> {
 }
 
 /**
- * Scan skills via `ctx.client.instance.skill()`.
+ * Parse simple YAML frontmatter from a SKILL.md file.
+ * Supports `name:` and `description:` fields (string values) and
+ * `tags:` and `recommendedAgents:` (inline array `[a, b]` or multiline `- item`).
+ */
+function parseSkillFrontmatter(content: string): {
+  name?: string;
+  description?: string;
+} {
+  const result: { name?: string; description?: string } = {};
+
+  const match = content.match(/^---\s*\n([\s\S]*?)\n---/);
+  if (!match) return result;
+
+  const block = match[1];
+  for (const raw of block.split('\n')) {
+    const trimmed = raw.trim();
+    if (!trimmed || trimmed.startsWith('- ')) continue;
+
+    const colonIndex = trimmed.indexOf(':');
+    if (colonIndex === -1) continue;
+
+    const key = trimmed.slice(0, colonIndex).trim().toLowerCase();
+    const value = trimmed.slice(colonIndex + 1).trim();
+
+    if (key === 'name' && value) {
+      result.name = value;
+    } else if (key === 'description' && value) {
+      result.description = value;
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Fallback: extract name and description from SKILL.md heading structure
+ * when frontmatter is absent.
+ */
+function parseSkillMdHeading(
+  content: string,
+  defaultName: string,
+): { name: string; description: string } {
+  const lines = content.split('\n');
+  let name = defaultName;
+  let description = '';
+  let foundHeading = false;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith('# ')) {
+      if (!foundHeading) {
+        name = trimmed.replace(/^#\s+/, '').trim();
+        foundHeading = true;
+      }
+    } else if (foundHeading && !description && trimmed) {
+      description = trimmed;
+      break;
+    }
+  }
+
+  return { name, description };
+}
+
+/**
+ * Scan skills from the user's skills directory (~/.config/opencode/skills/).
  *
- * Uses a type-asserted call because `instance.skill()` may not be reflected
- * in the published SDK type definitions yet. Returns an empty array when the
- * method is unavailable or the call fails.
+ * Reads each subdirectory looking for a SKILL.md file, parses its
+ * frontmatter (or heading) to extract the skill name and description,
+ * and returns a DiscoveredSkill array. Returns an empty array when the
+ * directory does not exist or an error occurs.
  *
- * @param ctx - OpenCode plugin input
  * @returns Array of discovered skills (empty on failure)
  */
-async function scanInstanceSkills(
-  ctx: PluginInput,
-): Promise<DiscoveredSkill[]> {
-  const skillFn = (
-    ctx.client.instance as unknown as {
-      skill?: (opts?: Record<string, unknown>) => Promise<{
-        data?: Array<{
-          name: string;
-          description?: string;
-          location: string;
-        }>;
-      }>;
-    }
-  ).skill;
+async function scanInstanceSkills(): Promise<DiscoveredSkill[]> {
+  const skillsDir = path.join(os.homedir(), '.config', 'opencode', 'skills');
 
-  if (typeof skillFn !== 'function') {
-    log(
-      '[discovery] ctx.client.instance.skill() is not available, returning empty skills',
-    );
+  let entries: string[];
+  try {
+    entries = await fsp.readdir(skillsDir);
+  } catch {
+    // Directory doesn't exist – no user-installed skills
     return [];
   }
 
-  const response = await withTimeout(
-    skillFn(),
-    SDK_DISCOVERY_TIMEOUT_MS,
-    'Instance skill scan',
-  );
-  const items = Array.isArray(response?.data) ? response.data : [];
+  const skills: DiscoveredSkill[] = [];
 
-  return items.map((s) => ({
-    name: s.name,
-    description: s.description,
-    location: s.location,
-    tags: deriveTags(s.name),
-    recommendedAgents: deriveRecommendedAgents(s.name),
-    source: determineSource(s.location),
-  }));
+  for (const entry of entries) {
+    const skillPath = path.join(skillsDir, entry);
+    let entryStat: fs.Stats;
+    try {
+      entryStat = await fsp.stat(skillPath);
+    } catch {
+      continue;
+    }
+
+    if (!entryStat.isDirectory()) continue;
+
+    const skillMdPath = path.join(skillPath, 'SKILL.md');
+    let mdStat: fs.Stats;
+    try {
+      mdStat = await fsp.stat(skillMdPath);
+    } catch {
+      continue;
+    }
+    if (!mdStat.isFile()) continue;
+
+    let content: string;
+    try {
+      content = await fsp.readFile(skillMdPath, 'utf-8');
+    } catch {
+      continue;
+    }
+
+    // Try YAML frontmatter first, fall back to heading-based parsing
+    const frontmatter = parseSkillFrontmatter(content);
+    const parsed =
+      frontmatter.name || frontmatter.description !== undefined
+        ? {
+            name: frontmatter.name ?? entry,
+            description: frontmatter.description ?? '',
+          }
+        : parseSkillMdHeading(content, entry);
+
+    skills.push({
+      name: parsed.name,
+      description: parsed.description,
+      location: skillMdPath,
+      tags: deriveTags(parsed.name),
+      recommendedAgents: deriveRecommendedAgents(parsed.name),
+    });
+  }
+
+  return skills;
 }
 
 // ── Cache ───────────────────────────────────────────────────────────────────
@@ -251,12 +301,13 @@ let cache: CacheEntry | null = null;
 // ── Exported API ────────────────────────────────────────────────────────────
 
 /**
- * Scan locally configured MCP servers and skills using the OpenCode SDK.
+ * Scan locally configured MCP servers and skills.
  *
- * Calls `ctx.client.mcp.status()` and `ctx.client.instance.skill()` for fast,
- * authoritative local discovery. Each SDK call is independently wrapped in a
- * try/catch so that a failure in one does not prevent the other from
- * succeeding. Empty arrays are returned for any failing SDK call.
+ * Calls `ctx.client.mcp.status()` for MCP discovery and scans the user's
+ * `~/.config/opencode/skills/` directory for SKILL.md files. Each operation
+ * is independently wrapped in a try/catch so that a failure in one does not
+ * prevent the other from succeeding. Empty arrays are returned for any
+ * failing operation.
  *
  * Results are **not** cached by this function – use
  * {@link getLocalDiscovery} for caching support.
@@ -281,7 +332,7 @@ export async function scanLocal(
 
   // Scan skills – failure is non-fatal, results default to empty
   try {
-    skills = await scanInstanceSkills(ctx);
+    skills = await scanInstanceSkills();
   } catch (err) {
     log('[discovery] skill scan failed', String(err));
   }

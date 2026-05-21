@@ -1,3 +1,4 @@
+import { execSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import * as fs from 'node:fs';
 import os from 'node:os';
@@ -7,12 +8,12 @@ import { tool } from '@opencode-ai/plugin';
 import { log } from '../utils/logger';
 import { getLocalDiscovery } from './local';
 
-// ── Skill interfaces ────────────────────────────────────────────────────────
+// ── Skill interfaces ──────────────────────────────────────────────────────────
 
 /**
- * Input parameters for discovering OpenCode skills online.
+ * Input parameters for discovering skills online.
  */
-export interface DiscoverSkillsInput {
+export interface SkillDiscoveryInput {
   /** Natural-language description of the task at hand. */
   task_description: string;
   /** Keywords that characterise the task (used for search queries). */
@@ -20,8 +21,8 @@ export interface DiscoverSkillsInput {
   /** The subagent that initiated the discovery request. */
   agent_name: string;
   /**
-   * Skills already known to be installed.
-   * Recommendations that match by name will be filtered out or marked.
+   * Skill names already known to be installed.
+   * Recommendations that match by name will be filtered out.
    */
   existing_skill_names?: string[];
   /** Maximum number of recommendations to return (default: 5). */
@@ -29,29 +30,26 @@ export interface DiscoverSkillsInput {
 }
 
 /**
- * A single recommendation for an installable OpenCode skill.
+ * A single recommendation for an installable skill.
  */
 export interface SkillRecommendation {
   type: 'skill';
-  /** Canonical name (e.g. 'ast-grep', 'codemap'). */
+  /** Canonical name (e.g. 'react-component-generator'). */
   name: string;
   /** Human-readable summary of what the skill provides. */
   description: string;
   /**
-   * A ready-to-use install command, e.g.
-   * `npx skills add https://github.com/vercel-labs/skills --skill ast-grep`.
+   * Install command for the user to run, e.g.
+   * `npx skills add owner/repo@skill-name -g`.
    */
   install_command: string;
   /** Why this recommendation is relevant to the task. */
   relevance_reason: string;
   /** Relevance score from 0 (irrelevant) to 1 (perfect match). */
   relevance_score: number;
-  /** GitHub repository URL for the skill. */
-  source_url: string;
-  /** Agent names that are most likely to benefit from this skill. */
-  recommended_agents: string[];
-  /** Categorisation tags (e.g. 'search', 'code', 'ast'). */
-  tags: string[];
+  /** URL to the project's homepage or repository. */
+  source_url?: string;
+
   /** Whether the user already has this skill installed. */
   already_installed?: boolean;
 }
@@ -59,7 +57,7 @@ export interface SkillRecommendation {
 /**
  * The complete output of a skill discovery request.
  */
-export interface DiscoverSkillsOutput {
+export interface SkillDiscoveryOutput {
   /** Ordered list of recommendations, highest relevance first. */
   recommendations: SkillRecommendation[];
   /** Whether the result was served from cache. */
@@ -68,23 +66,23 @@ export interface DiscoverSkillsOutput {
   queries_used: string[];
 }
 
-// ── Cache ────────────────────────────────────────────────────────────────────
+// ── Cache ─────────────────────────────────────────────────────────────────────
 
 /** Maximum number of cache entries before LRU eviction kicks in. */
 const CACHE_MAX_ENTRIES = 100;
 
-/** Cache TTL in milliseconds for skill results (7 days). */
-const SKILL_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1_000;
+/** Cache TTL in milliseconds for skill results (24 hours). */
+const SKILL_CACHE_TTL_MS = 24 * 60 * 60 * 1_000;
 
 /** Directory for the discovery cache file. */
 const CACHE_DIR = path.join(os.homedir(), '.config', 'opencode');
 
-/** Cache file path. */
+/** Cache file path (shared with MCP discovery). */
 const CACHE_FILE = path.join(CACHE_DIR, 'discovery-cache.json');
 
 /** Internal cache entry shape stored on disk. */
 interface CacheEntry {
-  /** Serialised output data (DiscoverSkillsOutput). */
+  /** Serialised output data (SkillDiscoveryOutput). */
   data: string;
   /** Unix timestamp (ms) when this entry was written. */
   timestamp: number;
@@ -155,15 +153,11 @@ function evictLru(cache: Map<string, CacheEntry>): void {
 /**
  * Build a cache key from a namespace prefix and the search-relevant input fields.
  *
- * Uses an MD5 hex digest of the concatenated keywords and agent name.
+ * Uses an MD5 hex digest of the concatenated keywords.
  * MD5 is sufficient for cache-key hashing (not security sensitive).
  */
-function buildCacheKey(
-  prefix: string,
-  taskKeywords: string[],
-  agentName: string,
-): string {
-  const raw = `${[...taskKeywords].sort().join(',')}|${agentName}`;
+function buildCacheKey(prefix: string, taskKeywords: string[]): string {
+  const raw = [...taskKeywords].sort().join(',');
   const hash = createHash('md5').update(raw, 'utf-8').digest('hex');
   return `${prefix}:${hash}`;
 }
@@ -215,199 +209,278 @@ function writeToCache<T>(
   saveCacheFile(cache);
 }
 
-// ── Skill search query construction ─────────────────────────────────────────
+// ── CLI execution ─────────────────────────────────────────────────────────────
 
 /**
- * Build an array of skill-focused search query strings from the task keywords.
+ * Run `npx skills find` for the given keywords and return the raw stdout.
  *
- * Includes a query targeting the vercel-labs/skills repository and
- * general opencode skill queries.
- */
-function buildSkillSearchQueries(
-  keywords: string[],
-  agentName: string,
-): string[] {
-  const queries: string[] = [];
-
-  // Target the known skills repository
-  queries.push('org:vercel-labs SKILL.md');
-
-  // General opencode skill queries
-  for (const kw of keywords) {
-    queries.push(`opencode skill ${kw}`);
-  }
-
-  // Scoped to the requesting agent
-  queries.push(`opencode ${agentName} skill`);
-
-  return queries;
-}
-
-// ── GitHub search ───────────────────────────────────────────────────────────
-
-/** Result item from the GitHub code search API. */
-interface GitHubCodeSearchItem {
-  name: string;
-  path: string;
-  html_url?: string;
-  repository: {
-    full_name: string;
-    html_url: string;
-    description?: string;
-    default_branch?: string;
-  };
-}
-
-/**
- * Search the GitHub code search API for skill-related results.
+ * Tries JSON output mode first (`--json`), then falls back to plain text.
+ * Returns an empty string when neither mode succeeds.
  *
- * Returns an empty array on failure (network, auth, rate-limit).
+ * @param keywords - Search keywords
+ * @param timeoutMs - Timeout in milliseconds for the exec call
+ * @returns Raw stdout from the CLI, or empty string on failure
  */
-async function searchGitHubCode(
-  query: string,
-  signal?: AbortSignal,
-): Promise<GitHubCodeSearchItem[]> {
-  const token = process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN;
-  const headers: Record<string, string> = {
-    Accept: 'application/vnd.github.v3+json',
-    'User-Agent': 'opencode-dux/1.0',
-  };
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
-  }
+function runSkillsFindCli(keywords: string[], timeoutMs = 30_000): string {
+  const query = keywords.join(' ');
+  const errors: string[] = [];
 
-  const url = `https://api.github.com/search/code?q=${encodeURIComponent(query)}&per_page=5&sort=indexed`;
-  try {
-    const res = await fetch(url, { signal, headers });
-    if (!res.ok) {
-      log(
-        `[discovery/skills] GitHub search failed (${res.status}) for query: ${query}`,
-      );
-      return [];
-    }
-    const body = (await res.json()) as {
-      items?: GitHubCodeSearchItem[];
-    };
-    return body.items ?? [];
-  } catch (err) {
-    log('[discovery/skills] GitHub search error', String(err));
-    return [];
-  }
-}
-
-/**
- * Get the default-branch content of a file from a public GitHub repo.
- * Used to fetch SKILL.md files to extract skill metadata.
- */
-interface GitHubContentItem {
-  name: string;
-  type: 'file' | 'dir';
-  path: string;
-  download_url?: string;
-}
-
-async function listGitHubRepoContents(
-  owner: string,
-  repo: string,
-  path: string,
-  signal?: AbortSignal,
-): Promise<GitHubContentItem[]> {
-  const url = `https://api.github.com/repos/${owner}/${repo}/contents/${encodeURIComponent(path)}`;
-  try {
-    const res = await fetch(url, {
-      signal,
-      headers: {
-        Accept: 'application/vnd.github.v3+json',
-        'User-Agent': 'opencode-dux/1.0',
-      },
-    });
-    if (!res.ok) return [];
-    const body = (await res.json()) as GitHubContentItem[] | GitHubContentItem;
-    return Array.isArray(body) ? body : [body];
-  } catch {
-    return [];
-  }
-}
-
-async function fetchRawFile(
-  url: string,
-  signal?: AbortSignal,
-): Promise<string> {
-  try {
-    const res = await fetch(url, { signal });
-    if (!res.ok) return '';
-    return await res.text();
-  } catch {
-    return '';
-  }
-}
-
-// ── Relevance scoring ───────────────────────────────────────────────────────
-
-/** Known MCP/skill keywords mapped to descriptive tags. */
-const NAME_TAG_MAP: Record<string, string[]> = {
-  playwright: ['browser', 'ui', 'testing'],
-  github: ['github', 'git', 'version-control'],
-  filesystem: ['filesystem', 'file-ops'],
-  websearch: ['web', 'search', 'internet'],
-  context7: ['docs', 'search', 'reference'],
-  'grep-app': ['search', 'code', 'grep'],
-  ast_grep: ['search', 'code', 'ast'],
-  puppeteer: ['browser', 'ui', 'testing'],
-  postgres: ['database', 'sql'],
-  sqlite: ['database', 'sql', 'embedded'],
-  redis: ['cache', 'database'],
-  slack: ['communication', 'messaging'],
-  discord: ['communication', 'messaging'],
-  jira: ['project-management', 'issue-tracking'],
-  linear: ['project-management', 'issue-tracking'],
-  notion: ['docs', 'knowledge', 'wiki'],
-  figma: ['design', 'ui', 'prototyping'],
-  sentry: ['monitoring', 'error-tracking'],
-  stripe: ['payments', 'billing'],
-};
-
-/**
- * Derive tags from a package name, description, and npm keywords.
- */
-function deriveTags(
-  name: string,
-  _description: string,
-  npmKeywords?: string[],
-): string[] {
-  const lower = name.toLowerCase();
-  const tags: string[] = [];
-
-  for (const [key, mapped] of Object.entries(NAME_TAG_MAP)) {
-    if (lower.includes(key)) {
-      tags.push(...mapped);
+  // Try JSON mode first (most reliable for parsing)
+  for (const cmd of [
+    `npx skills find "${query}" --json 2>nul`,
+    `npx skills find "${query}" 2>nul`,
+  ]) {
+    try {
+      const stdout = execSync(cmd, {
+        timeout: timeoutMs,
+        encoding: 'utf-8',
+        maxBuffer: 1024 * 1024,
+        windowsHide: true,
+      });
+      if (stdout.trim()) {
+        return stdout.trim();
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      errors.push(msg);
     }
   }
 
-  if (npmKeywords) {
-    for (const kw of npmKeywords) {
-      const lowerKw = kw.toLowerCase().replace(/\s+/g, '-');
-      if (!tags.includes(lowerKw)) {
-        tags.push(lowerKw);
+  if (errors.length > 0) {
+    log(
+      '[discovery/skills] all npx skills find attempts failed',
+      errors.join('; '),
+    );
+  }
+  return '';
+}
+
+// ── Output parsing ───────────────────────────────────────────────────────────
+
+/**
+ * Try to parse the CLI output as a JSON array of skill objects.
+ *
+ * Expected JSON format from `--json` flag:
+ * ```json
+ * [
+ *   {
+ *     "name": "skill-name",
+ *     "description": "What the skill does",
+ *     "source": "owner/repo@skill-name"
+ *   }
+ * ]
+ * ```
+ *
+ * Also handles `{ "skills": [...] }` wrapper format.
+ */
+function tryParseJsonSkills(raw: string): Array<{
+  name: string;
+  description?: string;
+  source?: string;
+  installs?: number;
+}> | null {
+  try {
+    const parsed = JSON.parse(raw);
+
+    // Handle array format directly
+    if (Array.isArray(parsed)) {
+      return parsed;
+    }
+
+    // Handle wrapper object format
+    if (parsed && typeof parsed === 'object') {
+      const skills =
+        (parsed as Record<string, unknown>).skills ??
+        (parsed as Record<string, unknown>).results;
+
+      if (Array.isArray(skills)) {
+        return skills;
+      }
+    }
+  } catch {
+    // Not JSON – fall through to text parsing
+  }
+
+  return null;
+}
+
+/**
+ * Regex patterns used to parse text-format `npx skills find` output.
+ *
+ * Matches lines like:
+ * - `• skill-name Description text`
+ * - `1. skill-name - Description text`
+ * - `skill-name - Description text`
+ * - `npx skills add owner/repo@skill -g`
+ */
+const SKILL_BULLET_RE = /^[•\-*\d.\s]+(\S[\w-]*)\s*[-–:]\s*(.+)$/im;
+
+const SKILL_INSTALL_RE = /npx\s+skills\s+add\s+(\S+?)(?:\s+-g\s*)?$/im;
+
+const SKILL_NAME_RE = /^[•\-*\d.\s]*(\S[\w-]*)$/im;
+
+/**
+ * Parse plain-text output from `npx skills find` into skill entries.
+ *
+ * Handles common output formats:
+ * ```text
+ * Found 3 skills:
+ *
+ * • react-component - Generate React components
+ *   npx skills add owner/repo@react-component -g
+ *
+ * 1. testing-utils - Testing utilities for web apps
+ *    Install: npx skills add owner/repo@testing-utils -g
+ * ```
+ *
+ * @param raw - Raw text output to parse
+ * @returns Parsed skill entries (may be empty)
+ */
+function parseTextSkills(raw: string): Array<{
+  name: string;
+  description: string;
+  install_command: string;
+}> {
+  const results: Array<{
+    name: string;
+    description: string;
+    install_command: string;
+  }> = [];
+
+  const lines = raw
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean);
+
+  let currentName = '';
+  let currentDesc = '';
+  let currentInstall = '';
+
+  for (const line of lines) {
+    // Skip header lines
+    if (
+      /^(found|searching|looking|matching)/i.test(line) ||
+      /^-{3,}$/.test(line)
+    ) {
+      continue;
+    }
+
+    // Check if this line contains an install command
+    const installMatch = line.match(SKILL_INSTALL_RE);
+    if (installMatch) {
+      currentInstall = `npx skills add ${installMatch[1]} -g`;
+      // If we have a pending entry, finalize it
+      if (currentName) {
+        results.push({
+          name: currentName,
+          description: currentDesc || 'No description available',
+          install_command: currentInstall,
+        });
+        currentName = '';
+        currentDesc = '';
+        currentInstall = '';
+      }
+      continue;
+    }
+
+    // Check if this line starts a new skill entry (bullet or numbered)
+    const bulletMatch = line.match(SKILL_BULLET_RE);
+    if (bulletMatch) {
+      // Save previous entry if any
+      if (currentName) {
+        results.push({
+          name: currentName,
+          description: currentDesc || 'No description available',
+          install_command: currentInstall || `npx skills add ${currentName} -g`,
+        });
+      }
+      currentName = bulletMatch[1];
+      currentDesc = bulletMatch[2];
+      currentInstall = '';
+      continue;
+    }
+
+    // Check if line is just a name (followed by description on next lines)
+    const nameMatch = line.match(SKILL_NAME_RE);
+    if (nameMatch && !currentName) {
+      // Only start a new entry if we don't have one in progress
+      currentName = nameMatch[1];
+      currentDesc = '';
+      currentInstall = '';
+      continue;
+    }
+
+    // If we have a current name and this looks like a description, append it
+    if (
+      currentName &&
+      !currentInstall &&
+      !results.some((r) => r.name === currentName)
+    ) {
+      if (currentDesc) {
+        currentDesc += ' ' + line;
+      } else {
+        currentDesc = line;
       }
     }
   }
 
-  return [...new Set(tags)];
+  // Flush last entry
+  if (currentName) {
+    results.push({
+      name: currentName,
+      description: currentDesc || 'No description available',
+      install_command: currentInstall || `npx skills add ${currentName} -g`,
+    });
+  }
+
+  return results;
+}
+
+/**
+ * Extract a short skill name from an install source string.
+ *
+ * Examples:
+ * - `owner/repo@skill-name` → `skill-name`
+ * - `vercel-labs/skills@react-component` → `react-component`
+ */
+function extractSkillName(source: string): string {
+  // If source contains @, take the part after @
+  const atIdx = source.lastIndexOf('@');
+  if (atIdx >= 0 && atIdx < source.length - 1) {
+    return source.slice(atIdx + 1);
+  }
+  // Otherwise take the last segment after /
+  const slashIdx = source.lastIndexOf('/');
+  if (slashIdx >= 0 && slashIdx < source.length - 1) {
+    return source.slice(slashIdx + 1);
+  }
+  return source;
+}
+
+// ── Relevance scoring ─────────────────────────────────────────────────────────
+
+/**
+ * Derive tags from a skill name and description.
+ *
+ * Tag derivation has been removed; always returns an empty array.
+ * The orchestrator decides tags dynamically from skill names.
+ *
+ * @returns Empty array
+ */
+function deriveTags(_name: string, _description: string): string[] {
+  return [];
 }
 
 /**
  * Score how relevant a recommendation is to the task context.
  *
- * Examines keyword overlap, name-tag matches, and the npm score (when available)
- * to produce a value in the [0, 1] range.
+ * Examines keyword overlap, name-tag matches to produce a value in the [0, 1] range.
  */
 function scoreRelevance(
   name: string,
   description: string,
   tags: string[],
   keywords: string[],
-  npmScore?: number,
 ): number {
   let score = 0;
 
@@ -429,10 +502,6 @@ function scoreRelevance(
     }
   }
 
-  if (typeof npmScore === 'number' && npmScore > 0) {
-    score += npmScore * 0.2;
-  }
-
   const matchedKeywords = keywords.filter((kw) =>
     allText.includes(kw.toLowerCase()),
   ).length;
@@ -444,38 +513,7 @@ function scoreRelevance(
 }
 
 /**
- * Determine which agents would benefit most from an item based on its tags.
- */
-function deriveRecommendedAgents(
-  type: 'mcp' | 'skill',
-  tags: string[],
-): string[] {
-  const agents: string[] = [];
-
-  if (type === 'mcp') {
-    // MCP path not used in skills module, but kept for type completeness
-  }
-
-  const tagSet = new Set(tags.map((t) => t.toLowerCase()));
-
-  if (tagSet.has('browser') || tagSet.has('ui') || tagSet.has('testing')) {
-    agents.push('explorer');
-  }
-  if (tagSet.has('search') || tagSet.has('docs') || tagSet.has('reference')) {
-    agents.push('librarian');
-  }
-  if (tagSet.has('database') || tagSet.has('sql')) {
-    agents.push('oracle');
-  }
-  if (tagSet.has('design') || tagSet.has('prototyping')) {
-    agents.push('designer');
-  }
-
-  return [...new Set(agents)];
-}
-
-/**
- * Build a human-readable reason string explaining why a package is relevant.
+ * Build a human-readable reason string explaining why a skill is relevant.
  */
 function buildRelevanceReason(
   name: string,
@@ -496,15 +534,48 @@ function buildRelevanceReason(
   return 'Found in search results for task context';
 }
 
-// ── Skill helpers ───────────────────────────────────────────────────────────
+/**
+ * Determine which agents would benefit most from a skill based on its tags.
+ *
+ * Agent recommendation has been removed; always returns an empty array.
+ * The orchestrator decides which agent to delegate to.
+ *
+ * @returns Empty array
+ */
+function deriveRecommendedAgents(_tags: string[]): string[] {
+  return [];
+}
+
+/**
+ * Deduplicate recommendations by case-insensitive name, keeping the one with
+ * the higher relevance score.
+ */
+function deduplicateByName<T extends { name: string; relevance_score: number }>(
+  items: T[],
+): T[] {
+  const map = new Map<string, T>();
+  for (const item of items) {
+    const key = item.name.toLowerCase();
+    const existing = map.get(key);
+    if (!existing || item.relevance_score > existing.relevance_score) {
+      map.set(key, item);
+    }
+  }
+  return [...map.values()];
+}
+
+// ── Filtering ─────────────────────────────────────────────────────────────────
 
 /**
  * Mark and filter skill recommendations against already-installed skills.
  *
- * Same logic as MCP filtering:
- * - Matching items are marked `already_installed: true`
- * - Only included when relevance_score > 0.8
- * - Non-installed items pass through unchanged
+ * For recommendations matching an installed skill:
+ * - Mark them as `already_installed: true`
+ * - Only include them if the relevance score is > 0.8 (significantly better
+ *   than the installed default, meaning this skill is highly relevant to the
+ *   current task)
+ *
+ * Non-installed recommendations pass through unchanged.
  */
 function filterExistingSkills(
   recommendations: SkillRecommendation[],
@@ -523,6 +594,8 @@ function filterExistingSkills(
       return rec;
     })
     .filter((rec) => {
+      // For already-installed items, only show if relevance_score > 0.8
+      // (significantly better enough to mention despite being installed)
       if (rec.already_installed) {
         return rec.relevance_score > 0.8;
       }
@@ -530,269 +603,26 @@ function filterExistingSkills(
     });
 }
 
-/**
- * Build an install command for an OpenCode skill.
- */
-function buildSkillInstallCommand(sourceUrl: string, name: string): string {
-  return `npx skills add ${sourceUrl} --skill ${name}`;
-}
-
-/**
- * Parse a SKILL.md front-matter or heading to extract a skill name and description.
- */
-function parseSkillMd(
-  content: string,
-  defaultName: string,
-): { name: string; description: string } {
-  const lines = content.split('\n');
-  let name = defaultName;
-  let description = '';
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-    // Check for markdown heading (first # heading is usually the name)
-    if (trimmed.startsWith('# ') && !name) {
-      name = trimmed.replace(/^#\s+/, '').trim();
-    }
-    // Check for description after the heading
-    if (name && !description && trimmed && !trimmed.startsWith('#')) {
-      description = trimmed;
-      break;
-    }
-  }
-
-  return { name, description };
-}
-
-/**
- * Try to discover skills from the vercel-labs/skills repository by
- * listing its top-level directory and fetching SKILL.md files.
- */
-async function discoverSkillsFromVercelLabs(
-  _keywords: string[],
-  signal?: AbortSignal,
-): Promise<SkillRecommendation[]> {
-  const items: SkillRecommendation[] = [];
-
-  // List the top-level contents of vercel-labs/skills
-  const contents = await listGitHubRepoContents(
-    'vercel-labs',
-    'skills',
-    '',
-    signal,
-  );
-
-  // Each subdirectory that contains a SKILL.md is a potential skill
-  const dirs = contents.filter((c) => c.type === 'dir');
-  const seenNames = new Set<string>();
-
-  for (const dir of dirs.slice(0, 10)) {
-    const subContents = await listGitHubRepoContents(
-      'vercel-labs',
-      'skills',
-      dir.name,
-      signal,
-    );
-    const skillMd = subContents.find(
-      (c) => c.type === 'file' && c.name === 'SKILL.md',
-    );
-    if (!skillMd || !skillMd.download_url) continue;
-
-    const raw = await fetchRawFile(skillMd.download_url, signal);
-    if (!raw) continue;
-
-    const { name, description } = parseSkillMd(raw, dir.name);
-    if (seenNames.has(name.toLowerCase())) continue;
-    seenNames.add(name.toLowerCase());
-
-    const repoUrl = `https://github.com/vercel-labs/skills`;
-    const tags = deriveTags(name, description);
-    const relevanceScore = scoreRelevance(name, description, tags, _keywords);
-    if (relevanceScore < 0.05) continue;
-
-    items.push({
-      type: 'skill',
-      name,
-      description,
-      install_command: buildSkillInstallCommand(repoUrl, name),
-      relevance_reason: buildRelevanceReason(
-        name,
-        description,
-        tags,
-        _keywords,
-      ),
-      relevance_score: relevanceScore,
-      source_url: `${repoUrl}/tree/main/${dir.name}`,
-      recommended_agents: deriveRecommendedAgents('skill', tags),
-      tags,
-    });
-  }
-
-  return items;
-}
-
-/**
- * Search GitHub broadly for opencode skill-related repositories.
- */
-async function discoverSkillsFromGitHubSearch(
-  keywords: string[],
-  _agentName: string,
-  signal?: AbortSignal,
-): Promise<SkillRecommendation[]> {
-  const queries = buildSkillSearchQueries(keywords, _agentName);
-  const seenRepos = new Set<string>();
-  const items: SkillRecommendation[] = [];
-
-  const concurrencyLimit = 2;
-  const queryBatches: string[][] = [];
-  for (let i = 0; i < queries.length; i += concurrencyLimit) {
-    queryBatches.push(queries.slice(i, i + concurrencyLimit));
-  }
-
-  for (const batch of queryBatches) {
-    const batchResults = await Promise.all(
-      batch.map((q) => searchGitHubCode(q, signal)),
-    );
-
-    for (const results of batchResults) {
-      for (const result of results) {
-        const repoFullName = result.repository.full_name;
-        if (seenRepos.has(repoFullName)) continue;
-        seenRepos.add(repoFullName);
-
-        const name = repoFullName.split('/')[1] ?? repoFullName;
-        const description = result.repository.description ?? '';
-        const repoUrl = result.repository.html_url;
-
-        // Only process results from repos other than vercel-labs/skills
-        // (already handled by discoverSkillsFromVercelLabs)
-        if (repoFullName === 'vercel-labs/skills') continue;
-
-        const tags = deriveTags(name, description);
-        const relevanceScore = scoreRelevance(
-          name,
-          description,
-          tags,
-          keywords,
-        );
-        if (relevanceScore < 0.05) continue;
-
-        items.push({
-          type: 'skill',
-          name,
-          description,
-          install_command: buildSkillInstallCommand(repoUrl, name),
-          relevance_reason: buildRelevanceReason(
-            name,
-            description,
-            tags,
-            keywords,
-          ),
-          relevance_score: relevanceScore,
-          source_url: repoUrl,
-          recommended_agents: deriveRecommendedAgents('skill', tags),
-          tags,
-        });
-      }
-    }
-  }
-
-  return items;
-}
-
-/**
- * Try to discover skills via the OpenCode SDK's skill endpoint.
- */
-async function discoverSkillsFromSdk(
-  _ctx: PluginInput,
-  _keywords: string[],
-  _signal?: AbortSignal,
-): Promise<SkillRecommendation[]> {
-  // Attempt to use the SDK's client.skill API if available.
-  // This is a best-effort call; failures are silently ignored.
-  try {
-    const client = _ctx.client as unknown as Record<string, unknown>;
-    const skillApi = client.skill as
-      | {
-          list?: (args: Record<string, unknown>) => Promise<{ data?: unknown }>;
-        }
-      | undefined;
-
-    if (skillApi?.list) {
-      const result = await skillApi.list({});
-      const data = result.data as
-        | Array<{
-            name?: string;
-            description?: string;
-            source?: string;
-            tags?: string[];
-          }>
-        | undefined;
-
-      if (Array.isArray(data)) {
-        return data
-          .filter((s) => s.name)
-          .map((s) => {
-            const name = s.name ?? 'unknown';
-            const description = s.description ?? '';
-            const sourceUrl = s.source ?? `https://github.com/opencode/${name}`;
-            const tags = (s.tags ?? []).filter(
-              (t): t is string => typeof t === 'string',
-            );
-            const relevanceScore = scoreRelevance(
-              name,
-              description,
-              tags,
-              _keywords,
-            );
-
-            return {
-              type: 'skill' as const,
-              name,
-              description,
-              install_command: buildSkillInstallCommand(sourceUrl, name),
-              relevance_reason: buildRelevanceReason(
-                name,
-                description,
-                tags,
-                _keywords,
-              ),
-              relevance_score: relevanceScore,
-              source_url: sourceUrl,
-              recommended_agents: deriveRecommendedAgents('skill', tags),
-              tags,
-            };
-          })
-          .filter((s) => s.relevance_score >= 0.05);
-      }
-    }
-  } catch {
-    // SDK endpoint not available - fall back to GitHub search only
-  }
-
-  return [];
-}
-
-// ── discoverSkills ─────────────────────────────────────────────────────────
+// ── discoverSkillsOnline ──────────────────────────────────────────────────────
 
 /**
  * Run the full skill discovery flow for a given set of inputs.
  *
- * 1. Builds search queries from keywords and agent name
- * 2. Searches the vercel-labs/skills repository for skill definitions
- * 3. Searches GitHub broadly for opencode skill-related repositories
- * 4. Tries the OpenCode SDK's skill endpoint (if available)
- * 5. Merges, deduplicates, and scores results
+ * 1. Builds search queries from keywords
+ * 2. Executes `npx skills find` CLI for each query
+ * 3. Parses CLI output (JSON preferred, text fallback)
+ * 4. Maps results to recommendations with relevance scores
+ * 5. Marks already-installed items with `already_installed: true`
  * 6. Returns the top N results
  *
- * Does NOT search npm.
- * Results are cached on disk for 7 days (skills change less often).
+ * Results are cached on disk for 24 hours.
  */
-export async function discoverSkills(
-  input: DiscoverSkillsInput,
+export async function discoverSkillsOnline(
+  input: SkillDiscoveryInput,
   ctx: PluginInput,
-): Promise<DiscoverSkillsOutput> {
+): Promise<SkillDiscoveryOutput> {
   const maxResults = input.max_results ?? 5;
+  const queries = input.task_keywords.map((kw) => `skill query: ${kw}`);
 
   // Auto-discover installed skills if caller didn't provide existing names
   let existingSkillNames = input.existing_skill_names;
@@ -806,40 +636,87 @@ export async function discoverSkills(
     }
   }
 
-  const queries = buildSkillSearchQueries(
-    input.task_keywords,
-    input.agent_name,
-  );
   const allRecommendations: SkillRecommendation[] = [];
-  const abortController = new AbortController();
+  const seenNames = new Set<string>();
 
-  // Gather results from all sources in parallel
-  const [vercelResults, gitHubResults, sdkResults] = await Promise.all([
-    discoverSkillsFromVercelLabs(input.task_keywords, abortController.signal),
-    discoverSkillsFromGitHubSearch(
-      input.task_keywords,
-      input.agent_name,
-      abortController.signal,
-    ),
-    discoverSkillsFromSdk(ctx, input.task_keywords, abortController.signal),
-  ]);
+  for (const query of input.task_keywords) {
+    const rawOutput = runSkillsFindCli([query]);
+    if (!rawOutput) continue;
 
-  // Merge and deduplicate
-  const seen = new Set<string>();
-  for (const rec of [...vercelResults, ...gitHubResults, ...sdkResults]) {
-    const key = rec.name.toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    allRecommendations.push(rec);
+    // Try JSON parsing first
+    const jsonSkills = tryParseJsonSkills(rawOutput);
+    if (jsonSkills) {
+      for (const skill of jsonSkills) {
+        const skillName = skill.name || extractSkillName(skill.source ?? '');
+        if (!skillName) continue;
+
+        if (seenNames.has(skillName.toLowerCase())) continue;
+        seenNames.add(skillName.toLowerCase());
+
+        const description = skill.description ?? 'No description available';
+        const source = skill.source ?? skillName;
+        const tags = deriveTags(skillName, description);
+        const relevanceScore = scoreRelevance(
+          skillName,
+          description,
+          tags,
+          input.task_keywords,
+        );
+
+        if (relevanceScore < 0.05) continue;
+
+        allRecommendations.push({
+          type: 'skill',
+          name: skillName,
+          description,
+          install_command: `npx skills add ${source} -g`,
+          relevance_reason: buildRelevanceReason(
+            skillName,
+            description,
+            tags,
+            input.task_keywords,
+          ),
+          relevance_score: relevanceScore,
+        });
+      }
+    } else {
+      // Fall back to text parsing
+      const textSkills = parseTextSkills(rawOutput);
+      for (const skill of textSkills) {
+        if (seenNames.has(skill.name.toLowerCase())) continue;
+        seenNames.add(skill.name.toLowerCase());
+
+        const tags = deriveTags(skill.name, skill.description);
+        const relevanceScore = scoreRelevance(
+          skill.name,
+          skill.description,
+          tags,
+          input.task_keywords,
+        );
+
+        if (relevanceScore < 0.05) continue;
+
+        allRecommendations.push({
+          type: 'skill',
+          name: skill.name,
+          description: skill.description,
+          install_command: skill.install_command,
+          relevance_reason: buildRelevanceReason(
+            skill.name,
+            skill.description,
+            tags,
+            input.task_keywords,
+          ),
+          relevance_score: relevanceScore,
+        });
+      }
+    }
   }
 
-  // Sort by relevance
-  allRecommendations.sort((a, b) => b.relevance_score - a.relevance_score);
+  const unique = deduplicateByName(allRecommendations);
+  unique.sort((a, b) => b.relevance_score - a.relevance_score);
 
-  // Filter out or mark already-installed skills
-  const filtered = filterExistingSkills(allRecommendations, existingSkillNames);
-
-  // Return top N
+  const filtered = filterExistingSkills(unique, existingSkillNames);
   const recommendations = filtered.slice(0, maxResults);
 
   return {
@@ -849,49 +726,46 @@ export async function discoverSkills(
   };
 }
 
-// ── Tool factory ────────────────────────────────────────────────────────────
+// ── Tool factory ──────────────────────────────────────────────────────────────
 
 const z = tool.schema;
 
 /**
- * Create the `discover_skills_online` tool that subagents can call to find
- * installable OpenCode skills for a given task.
+ * Create the `discover_skills` tool that orchestrators can call to find
+ * installable skills for a given task.
  *
  * The tool:
- * 1. Builds search queries from task keywords and agent name
- * 2. Searches the vercel-labs/skills repository and general GitHub for skills
- * 3. Tries the OpenCode SDK's skill endpoint if available
- * 4. Scores each result by relevance (0-1)
- * 5. Marks already-installed skills with `already_installed: true` and
- *    only includes them when relevance_score > 0.8
- * 6. Returns the top N recommendations with install commands
- *
- * Does NOT search npm. Skills are knowledge/prompt resources separate from
- * MCP servers (which are tool/capability resources).
+ * 1. Executes `npx skills find <keywords>` for each keyword
+ * 2. Parses output (prefers JSON, falls back to text)
+ * 3. Scores each result by relevance (0-1)
+ * 4. Checks which skills are already installed locally
+ * 5. Returns the top N recommendations with install commands
  *
  * Results are cached on disk at `~/.config/opencode/discovery-cache.json`
- * with a 7-day TTL and LRU eviction (max 100 entries).
+ * with a 24-hour TTL and LRU eviction (max 100 entries).
  *
  * @param ctx - The OpenCode plugin input (provides client for SDK access)
  * @returns A `ToolDefinition` ready for registration in the plugin's tool hook
  */
-export function createDiscoverSkillsTool(ctx: PluginInput): ToolDefinition {
+export function createDiscoverSkillsTool(
+  ctx: PluginInput,
+): ToolDefinition {
   const cache = loadCacheFile();
   const cachePrefix = 'skill';
 
   return tool({
     description:
-      'Search online for OpenCode skills that could be installed to help ' +
-      'with a given task. ' +
-      'Use this when you want to discover installable skill packages for ' +
-      'task-specific knowledge or workflows. ' +
+      'Search online for skills that could be installed to help with a ' +
+      'given task. Skills provide specialized instructions and workflows ' +
+      'for specific tasks (testing, deployment, accessibility audits, etc.). ' +
+      'Use this when a subagent lacks specialized knowledge or workflows ' +
+      'and you want to discover what skills are available. ' +
       'If existing_skill_names is not provided, automatically discovers ' +
       "what's already installed and filters recommendations accordingly. " +
       'Already-installed skills are shown only when relevance_score > 0.8 ' +
       '(significantly better). ' +
-      'Skills are knowledge and prompt resources (not tool/capability resources ' +
-      'like MCP servers). ' +
-      'Results are cached for 7 days.',
+      'Returns recommendations with install commands (npx skills add ...). ' +
+      'Results are cached for 24 hours.',
     args: {
       task_description: z
         .string()
@@ -901,7 +775,7 @@ export function createDiscoverSkillsTool(ctx: PluginInput): ToolDefinition {
       task_keywords: z
         .array(z.string())
         .describe(
-          'Keywords characterising the task (used to build search queries)',
+          'Keywords characterising the task (used to search for skills)',
         ),
       agent_name: z
         .string()
@@ -920,15 +794,14 @@ export function createDiscoverSkillsTool(ctx: PluginInput): ToolDefinition {
         .default(5)
         .describe('Maximum number of recommendations to return'),
     },
-    execute: async (args, toolCtx) => {
+    execute: async (args, _toolCtx) => {
       const taskKeywords = args.task_keywords ?? [];
-      const agentName = args.agent_name ?? '';
       const maxResults = args.max_results ?? 5;
-      const projectDir = toolCtx.directory || ctx.directory;
+      const existingNames = args.existing_skill_names ?? undefined;
 
-      const cacheKey = buildCacheKey(cachePrefix, taskKeywords, agentName);
+      const cacheKey = buildCacheKey(cachePrefix, taskKeywords);
 
-      const cached = readFromCache<DiscoverSkillsOutput>(cache, cacheKey);
+      const cached = readFromCache<SkillDiscoveryOutput>(cache, cacheKey);
       if (cached) {
         log('[discovery/skills] cache hit for', cacheKey);
         return JSON.stringify({
@@ -938,14 +811,14 @@ export function createDiscoverSkillsTool(ctx: PluginInput): ToolDefinition {
         });
       }
 
-      log(`[discovery/skills] cache miss for project: ${projectDir}`);
+      log('[discovery/skills] cache miss');
 
-      const output = await discoverSkills(
+      const output = await discoverSkillsOnline(
         {
           task_description: args.task_description ?? '',
           task_keywords: taskKeywords,
-          agent_name: agentName,
-          existing_skill_names: args.existing_skill_names ?? undefined,
+          agent_name: args.agent_name ?? '',
+          existing_skill_names: existingNames,
           max_results: maxResults,
         },
         ctx,

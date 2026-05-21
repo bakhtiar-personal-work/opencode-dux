@@ -4,8 +4,7 @@
  * block before the prompt is sent.
  */
 import type { PluginInput } from '@opencode-ai/plugin';
-import { getSkillPermissionsForAgent } from '../../cli/skills';
-import { getAgentOverride, type PluginConfig } from '../../config';
+import type { PluginConfig } from '../../config';
 
 interface MessageInfo {
   role: string;
@@ -110,20 +109,16 @@ export function createFilterAvailableSkillsHook(
   const permissionRulesByAgent = new Map<string, Record<string, SkillRule>>();
 
   const getPermissionRules = async (
-    agentName: string,
+    _agentName: string,
   ): Promise<Record<string, SkillRule>> => {
-    const cached = permissionRulesByAgent.get(agentName);
+    const cached = permissionRulesByAgent.get(_agentName);
     if (cached) {
       return cached;
     }
 
-    const configuredSkills = getAgentOverride(config, agentName)?.skills;
-    const permissionRules = await getSkillPermissionsForAgent(
-      agentName,
-      configuredSkills,
-      ctx,
-    );
-    permissionRulesByAgent.set(agentName, permissionRules);
+    // All skills are allowed by default (orchestrator auto-discovers)
+    const permissionRules: Record<string, SkillRule> = { '*': 'allow' };
+    permissionRulesByAgent.set(_agentName, permissionRules);
     return permissionRules;
   };
 

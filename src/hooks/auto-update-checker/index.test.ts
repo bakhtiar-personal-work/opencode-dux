@@ -170,7 +170,7 @@ describe('auto-update-checker/index', () => {
       expect.objectContaining({
         body: expect.objectContaining({
           title: 'Updating Plugin',
-          message: 'opencode-dux is updating to v0.9.11...',
+          message: 'opencode-dux is updating to v0.9.11',
         }),
       }),
     );
@@ -208,7 +208,7 @@ describe('auto-update-checker/index', () => {
       autoUpdate: false,
     });
     hook.event({ event: { type: 'session.created', properties: {} } });
-    await waitForCalls(logMock, 2);
+    await waitForCalls(logMock, 1);
 
     expect(logMock).toHaveBeenCalledWith(
       '[auto-update-checker] Auto-update disabled; update available: v0.9.1 → v0.9.11',
@@ -240,7 +240,7 @@ describe('auto-update-checker/index', () => {
       expect.objectContaining({
         body: expect.objectContaining({
           title: 'Updating Plugin',
-          message: 'opencode-dux is updating to v0.9.11...',
+          message: 'opencode-dux is updating to v0.9.11',
         }),
       }),
     );
@@ -281,7 +281,7 @@ describe('auto-update-checker/index', () => {
       expect.objectContaining({
         body: expect.objectContaining({
           title: 'Updating Plugin',
-          message: 'opencode-dux is updating to v0.9.11...',
+          message: 'opencode-dux is updating to v0.9.11',
         }),
       }),
     );

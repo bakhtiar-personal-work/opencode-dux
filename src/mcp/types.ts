@@ -1,4 +1,4 @@
-// MCP types - McpName is defined in config/schema.ts to avoid duplication
+// MCP types
 
 export type RemoteMcpConfig = {
   type: 'remote';

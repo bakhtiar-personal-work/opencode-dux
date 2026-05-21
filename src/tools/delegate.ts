@@ -1,6 +1,5 @@
 import type { ToolDefinition } from '@opencode-ai/plugin';
 import { tool } from '@opencode-ai/plugin';
-import { normalizeSkillConfig } from '../cli/skills';
 import type { PluginConfig } from '../config';
 import { ALL_AGENT_NAMES } from '../config/constants';
 import { getAgentOverride } from '../config/utils';
@@ -89,37 +88,6 @@ export function createDelegateTools(
     });
   }
 
-  function buildAgentToolsHint(agentName: string, _taskPrompt: string): string {
-    const override = getAgentOverride(config, agentName);
-    if (!override?.skills && !override?.mcps) return '';
-
-    const lines: string[] = [];
-
-    // Skills hint
-    if (override.skills) {
-      const normalized = normalizeSkillConfig(override.skills);
-      if (normalized.alwaysLoad.length > 0) {
-        lines.push(
-          `When relevant to the task, please use these skills first: ${normalized.alwaysLoad.join(', ')}.`,
-        );
-      }
-    }
-
-    // MCPs hint
-    if (override.mcps) {
-      const normalized = normalizeSkillConfig(override.mcps);
-      if (normalized.alwaysLoad.length > 0) {
-        lines.push(
-          `When relevant to the task, please use these MCP tools first: ${normalized.alwaysLoad.join(', ')}.`,
-        );
-      }
-    }
-
-    if (lines.length === 0) return '';
-
-    return `<skill_requirements>\n${lines.join('\n')}\n</skill_requirements>\n\n`;
-  }
-
   async function runAgentSession(options: {
     parentSessionId: string;
     title: string;
@@ -185,14 +153,9 @@ export function createDelegateTools(
         throw new Error('Failed to obtain subagent session id');
       }
 
-      const hint = buildAgentToolsHint(options.agent, options.promptText);
-      const effectivePrompt = hint
-        ? `${hint}${options.promptText}`
-        : options.promptText;
-
       const parts: PromptBodyPart[] = options.promptParts?.length
-        ? [...options.promptParts, { type: 'text', text: effectivePrompt }]
-        : [{ type: 'text', text: effectivePrompt }];
+        ? [...options.promptParts, { type: 'text', text: options.promptText }]
+        : [{ type: 'text', text: options.promptText }];
 
       const body: PromptBody = {
         agent: options.agent,
@@ -386,16 +349,11 @@ export function createDelegateTools(
             depthTracker.registerChild(parentSessionId, sessionId);
           }
 
-          const hint = buildAgentToolsHint(agentName, args.prompt);
-          const effectiveFirePrompt = hint
-            ? `${hint}${args.prompt}`
-            : args.prompt;
-
           const promptBody: PromptBody = {
             agent: agentName,
             model: modelRef,
             tools: { task: false },
-            parts: partsForPrompt(effectiveFirePrompt),
+            parts: partsForPrompt(args.prompt),
           };
 
           if (effectiveVariant) {
@@ -447,6 +405,14 @@ export function createDelegateTools(
     },
   });
 
+
+  // Track already-collected sessions to prevent duplicate collection spam
+  const alreadyCollected = new Set<string>()
+
+  // Rate limit status API calls per session
+  const lastCollectAttempt = new Map<string, number>()
+  const COLLECT_COOLDOWN_MS = 5_000 // 5 second cooldown
+
   const delegateCollect: ToolDefinition = tool({
     description:
       'Collect results from a fire_forget delegation. ' +
@@ -457,6 +423,19 @@ export function createDelegateTools(
         .describe('Session ID from delegate_subagent fire_forget'),
     },
     execute: async (args) => {
+      // Check if already collected (dedup)
+      if (alreadyCollected.has(args.session_id)) {
+        return 'Session was already collected. Result is available in previous turns.'
+      }
+
+      // Check cooldown for non-terminal status
+      const lastAttempt = lastCollectAttempt.get(args.session_id) ?? 0
+      const elapsed = Date.now() - lastAttempt
+      if (elapsed < COLLECT_COOLDOWN_MS) {
+        return 'Session status checked recently. Wait before polling again.'
+      }
+      lastCollectAttempt.set(args.session_id, Date.now())
+
       try {
         const sid = args.session_id;
         const statusResult = await (
@@ -470,6 +449,7 @@ export function createDelegateTools(
           | undefined;
 
         if (status === 'idle' || status === 'completed' || status === 'error') {
+          alreadyCollected.add(args.session_id)
           recordSessionDone(args.session_id);
 
           const extraction = await extractSessionResult(
@@ -493,7 +473,7 @@ export function createDelegateTools(
           return extraction.text;
         }
 
-        return `Session still running (status: ${status ?? 'unknown'}). Try again shortly. Use original delegate_subagent session_id.`;
+        return 'Session is still running (status: ' + (status ?? 'unknown') + '). Move on to other work and check back later — do not retry immediately.';
       } catch (err) {
         return `Error collecting result: ${err instanceof Error ? err.message : String(err)}`;
       }

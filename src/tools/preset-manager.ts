@@ -1,7 +1,6 @@
 import type { PluginInput } from '@opencode-ai/plugin';
 import type {
   AgentOverrideConfig,
-  ModelEntry,
   PluginConfig,
   Preset,
 } from '../config';
@@ -248,15 +247,6 @@ export function createPresetManager(ctx: PluginInput, config: PluginConfig) {
 
     if (typeof override.model === 'string') {
       agentConfig.model = override.model;
-    } else if (Array.isArray(override.model) && override.model.length > 0) {
-      // Array-form model (fallback chain): pick the first entry.
-      // The full chain resolution only happens at init time via config() hook,
-      // so at runtime we use the primary model from the array.
-      const first = override.model[0];
-      agentConfig.model = typeof first === 'string' ? first : first.id;
-      if (typeof first !== 'string' && first.variant) {
-        agentConfig.variant = first.variant;
-      }
     }
 
     if (typeof override.temperature === 'number') {
@@ -295,12 +285,7 @@ export function createPresetManager(ctx: PluginInput, config: PluginConfig) {
       const models = agentNames
         .map((a) => {
           const cfg = preset[a];
-          const modelStr =
-            typeof cfg.model === 'string'
-              ? cfg.model
-              : Array.isArray(cfg.model) && cfg.model.length > 0
-                ? resolveFirstModel(cfg.model)
-                : undefined;
+          const modelStr = typeof cfg.model === 'string' ? cfg.model : undefined;
           return modelStr ? `    ${a} → ${modelStr}` : `    ${a}`;
         })
         .join('\n');
@@ -310,17 +295,6 @@ export function createPresetManager(ctx: PluginInput, config: PluginConfig) {
     lines.push('\nUsage: /preset <name> to switch.');
 
     return lines.join('\n');
-  }
-
-  /**
-   * Resolve the first model from an array-form model entry.
-   */
-  function resolveFirstModel(
-    models: Array<string | ModelEntry>,
-  ): string | undefined {
-    if (models.length === 0) return undefined;
-    const first = models[0];
-    return typeof first === 'string' ? first : first.id;
   }
 
   return {

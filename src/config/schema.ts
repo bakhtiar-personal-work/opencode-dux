@@ -1,15 +1,5 @@
 import { z } from 'zod';
 
-const FALLBACK_AGENT_NAMES = [
-  'orchestrator',
-  'oracle',
-  'designer',
-  'explorer',
-  'librarian',
-  'fixer',
-  'steward',
-  'interpreter',
-] as const;
 
 const MANUAL_AGENT_NAMES = [
   'orchestrator',
@@ -30,23 +20,6 @@ export const ProviderModelIdSchema = z
 export const ManualAgentPlanSchema = z
   .object({
     primary: ProviderModelIdSchema,
-    fallback1: ProviderModelIdSchema,
-    fallback2: ProviderModelIdSchema,
-    fallback3: ProviderModelIdSchema,
-  })
-  .superRefine((value, ctx) => {
-    const unique = new Set([
-      value.primary,
-      value.fallback1,
-      value.fallback2,
-      value.fallback3,
-    ]);
-    if (unique.size !== 4) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'primary and fallbacks must be unique per agent',
-      });
-    }
   });
 
 export const ManualPlanSchema = z
@@ -64,64 +37,19 @@ export type ManualAgentName = (typeof MANUAL_AGENT_NAMES)[number];
 export type ManualAgentPlan = z.infer<typeof ManualAgentPlanSchema>;
 export type ManualPlan = z.infer<typeof ManualPlanSchema>;
 
-const AgentModelChainSchema = z.array(z.string()).min(1);
-
-const FallbackChainsSchema = z
-  .object({
-    orchestrator: AgentModelChainSchema.optional(),
-    oracle: AgentModelChainSchema.optional(),
-    designer: AgentModelChainSchema.optional(),
-    explorer: AgentModelChainSchema.optional(),
-    librarian: AgentModelChainSchema.optional(),
-    fixer: AgentModelChainSchema.optional(),
-    steward: AgentModelChainSchema.optional(),
-    interpreter: AgentModelChainSchema.optional(),
-  })
-  .catchall(AgentModelChainSchema);
-
-export type FallbackAgentName = (typeof FALLBACK_AGENT_NAMES)[number];
-
-const SkillOrMcpConfigSchema = z.union([
-  z.array(z.string()),
-  z.object({
-    'always-load': z.array(z.string()).optional(),
-    mandatory: z.array(z.string()).optional(), // DEPRECATED - remove in next release
-    wildcard: z.boolean().optional(),
-  }),
-]);
 
 // Agent override configuration (distinct from SDK's AgentConfig)
 export const AgentOverrideConfigSchema = z
   .object({
-    model: z
-      .union([
-        z.string(),
-        z
-          .array(
-            z.union([
-              z.string(),
-              z.object({
-                id: z.string(),
-                variant: z.string().optional(),
-              }),
-            ]),
-          )
-          .min(1),
-      ])
-      .optional(),
+    model: z.string().optional(),
     temperature: z.number().min(0).max(2).optional(),
     variant: z.string().optional().catch(undefined),
     options: z.record(z.string(), z.unknown()).optional(), // provider-specific model options (e.g., textVerbosity, thinking budget)
     displayName: z.string().min(1).optional(),
-    skills: SkillOrMcpConfigSchema.optional(), // skills this agent can use ("*" = all, "!item" = exclude)
-    mcps: SkillOrMcpConfigSchema.optional(), // MCPs this agent can use (same syntax as skills)
   })
-  .strict();
+  .passthrough();
 
 export type AgentOverrideConfig = z.infer<typeof AgentOverrideConfigSchema>;
-
-/** Normalized model entry with optional per-model variant. */
-export type ModelEntry = { id: string; variant?: string };
 
 export const PresetSchema = z.record(z.string(), AgentOverrideConfigSchema);
 
@@ -132,10 +60,6 @@ export const WebsearchConfigSchema = z.object({
   provider: z.enum(['exa', 'tavily']).default('exa'),
 });
 export type WebsearchConfig = z.infer<typeof WebsearchConfigSchema>;
-
-// MCP names
-export const McpNameSchema = z.enum(['websearch', 'context7', 'grep_app']);
-export type McpName = z.infer<typeof McpNameSchema>;
 
 export const SessionManagerConfigSchema = z.object({
   maxSessionsPerAgent: z.number().int().min(1).max(10).default(2),
@@ -203,21 +127,6 @@ export const ContextPressureConfigSchema = z.object({
 
 export type ContextPressureConfig = z.infer<typeof ContextPressureConfigSchema>;
 
-export const FailoverConfigSchema = z.object({
-  enabled: z.boolean().default(true),
-  timeoutMs: z.number().min(0).default(15000),
-  retryDelayMs: z.number().min(0).default(500),
-  chains: FallbackChainsSchema.default({}),
-  retry_on_empty: z
-    .boolean()
-    .default(true)
-    .describe(
-      'When true (default), empty provider responses are treated as failures, ' +
-        'triggering fallback/retry. Set to false to treat them as successes.',
-    ),
-});
-
-export type FailoverConfig = z.infer<typeof FailoverConfigSchema>;
 
 export const PluginConfigSchema = z.object({
   preset: z.string().optional(),
@@ -237,12 +146,9 @@ export const PluginConfigSchema = z.object({
   sessionManager: SessionManagerConfigSchema.optional(),
   todoContinuation: TodoContinuationConfigSchema.optional(),
   contextPressure: ContextPressureConfigSchema.optional(),
-  fallback: FailoverConfigSchema.optional(),
 });
 
 export type PluginConfig = z.infer<typeof PluginConfigSchema>;
 
 // Agent names - re-exported from constants for convenience
 export type { AgentName } from './constants';
-
-export type SkillOrMcpConfig = z.infer<typeof SkillOrMcpConfigSchema>;

@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Plugin } from '@opencode-ai/plugin';
@@ -23,7 +23,7 @@ import {
 } from './config/runtime-preset';
 import { getLocalDiscovery } from './discovery/local';
 import { createDiscoverMcpServersTool } from './discovery/mcp-servers';
-import { createDiscoverSkillsTool } from './discovery/skills';
+
 import {
   createApplyPatchHook,
   createAutoUpdateCheckerHook,
@@ -36,12 +36,10 @@ import {
   createPostFileToolNudgeHook,
   createTaskSessionManagerHook,
   createTodoContinuationHook,
-  ForegroundFallbackManager,
 } from './hooks';
 import { getLatestVersion } from './hooks/auto-update-checker';
 import { processImageAttachments } from './hooks/image-hook';
 import { createBuiltinMcps } from './mcp';
-import { discoverSkills } from './skills/registry';
 import type { UsageService } from './subscriptions';
 import { createUsageService } from './subscriptions';
 import {
@@ -363,8 +361,7 @@ const OpenCodeDux: Plugin = async (ctx) => {
   let agentDefs: Awaited<ReturnType<typeof createAgents>>;
   let agents: Awaited<ReturnType<typeof getAgentConfigs>>;
   let builtinMcps: ReturnType<typeof createBuiltinMcps>;
-  let modelArrayMap: Record<string, Array<{ id: string; variant?: string }>>;
-  let runtimeChains: Record<string, string[]>;
+
   let depthTracker: SubagentDepthTracker;
   let autoUpdateChecker: ReturnType<typeof createAutoUpdateCheckerHook>;
   let phaseReminderHook: ReturnType<typeof createPhaseReminderHook>;
@@ -379,7 +376,6 @@ const OpenCodeDux: Plugin = async (ctx) => {
   let delegateTaskRetryHook: ReturnType<typeof createDelegateTaskRetryHook>;
   let applyPatchHook: ReturnType<typeof createApplyPatchHook>;
   let jsonErrorRecoveryHook: ReturnType<typeof createJsonErrorRecoveryHook>;
-  let foregroundFallback: ForegroundFallbackManager;
   let todoContinuationHook: ReturnType<typeof createTodoContinuationHook>;
   let taskSessionManagerHook: ReturnType<typeof createTaskSessionManagerHook>;
   let contextPressureReminderHook: ReturnType<
@@ -391,9 +387,6 @@ const OpenCodeDux: Plugin = async (ctx) => {
   let delegateTools: Record<string, unknown>;
   let discoverMcpTool:
     | ReturnType<typeof createDiscoverMcpServersTool>
-    | undefined;
-  let discoverSkillTool:
-    | ReturnType<typeof createDiscoverSkillsTool>
     | undefined;
   let rewriteDisplayNameMentions: ReturnType<
     typeof createDisplayNameMentionRewriter
@@ -473,45 +466,6 @@ const OpenCodeDux: Plugin = async (ctx) => {
       log(`[init] agents: ${Object.keys(agents).join(', ')}`);
     }
 
-    // Build a map of agent name → priority model array for runtime
-    // fallback. Populated when the user configures model as an array in
-    // their plugin config.
-    modelArrayMap = {} as Record<
-      string,
-      Array<{ id: string; variant?: string }>
-    >;
-    for (const agentDef of agentDefs) {
-      if (agentDef._modelArray && agentDef._modelArray.length > 0) {
-        modelArrayMap[agentDef.name] = agentDef._modelArray;
-      }
-    }
-    // Build runtime fallback chains for all foreground agents. Each chain
-    // is an ordered list of model strings to try when the current model is
-    // rate-limited. Seeds from _modelArray entries (when the user
-    // configures model as an array), then appends fallback.chains entries.
-    runtimeChains = {} as Record<string, string[]>;
-    for (const agentDef of agentDefs) {
-      if (agentDef._modelArray?.length) {
-        runtimeChains[agentDef.name] = agentDef._modelArray.map((m) => m.id);
-      }
-    }
-    if (config.fallback?.enabled !== false) {
-      const chains =
-        (config.fallback?.chains as Record<string, string[] | undefined>) ?? {};
-      for (const [agentName, chainModels] of Object.entries(chains)) {
-        if (!chainModels?.length) continue;
-        const existing = runtimeChains[agentName] ?? [];
-        const seen = new Set(existing);
-        for (const m of chainModels) {
-          if (!seen.has(m)) {
-            seen.add(m);
-            existing.push(m);
-          }
-        }
-        runtimeChains[agentName] = existing;
-      }
-    }
-
     depthTracker = new SubagentDepthTracker();
 
     // Initialize delegate tools for orchestrator variant-based subagent spawning
@@ -520,8 +474,8 @@ const OpenCodeDux: Plugin = async (ctx) => {
     builtinMcps = createBuiltinMcps(undefined, config.websearch);
 
     if (isFirstInit) {
-      console.log(`  \u{1F50C} MCPs: ${Object.keys(builtinMcps).join(', ')}`);
-      log(`[init] MCPs: ${Object.keys(builtinMcps).join(', ')}`);
+      console.log("  \u{1F50C} Built-in MCPs: " + Object.keys(builtinMcps).join(', '));
+      log("[init] Built-in MCPs: " + Object.keys(builtinMcps).join(', '));
     }
 
     // Warm the local discovery cache asynchronously (non-blocking init).
@@ -538,13 +492,6 @@ const OpenCodeDux: Plugin = async (ctx) => {
     } catch (err) {
       log('[plugin] failed to create discover_mcp_servers tool', String(err));
       discoverMcpTool = undefined;
-    }
-    try {
-      discoverSkillTool = createDiscoverSkillsTool(ctx);
-      toolsOnline.push('discover_skills_online');
-    } catch (err) {
-      log('[plugin] failed to create discover_skills_online tool', String(err));
-      discoverSkillTool = undefined;
     }
     if (isFirstInit) {
       console.log(
@@ -663,14 +610,6 @@ const OpenCodeDux: Plugin = async (ctx) => {
     // Initialize JSON parse error recovery hook
     jsonErrorRecoveryHook = createJsonErrorRecoveryHook(ctx);
 
-    // Initialize foreground fallback manager for runtime model switching
-    foregroundFallback = new ForegroundFallbackManager(
-      ctx.client,
-      runtimeChains,
-      config.fallback?.enabled !== false &&
-        Object.keys(runtimeChains).length > 0,
-    );
-
     // Initialize todo-continuation hook (opt-in auto-continue for
     // incomplete todos)
     todoContinuationHook = createTodoContinuationHook(ctx, {
@@ -696,10 +635,10 @@ const OpenCodeDux: Plugin = async (ctx) => {
 
     if (isFirstInit) {
       console.log(
-        '  \u{1F517} hooks: auto-update, phase-reminder, skills-filter, apply-patch, json-recovery, fallback, todo-continuation, session-manager, pressure-reminder',
+        '  \u{1F517} hooks: auto-update, phase-reminder, skills-filter, apply-patch, json-recovery, todo-continuation, session-manager, pressure-reminder',
       );
       log(
-        '[init] hooks: auto-update, phase-reminder, skills-filter, apply-patch, json-recovery, fallback, todo-continuation, session-manager, pressure-reminder',
+        '[init] hooks: auto-update, phase-reminder, skills-filter, apply-patch, json-recovery, todo-continuation, session-manager, pressure-reminder',
       );
     }
 
@@ -708,8 +647,7 @@ const OpenCodeDux: Plugin = async (ctx) => {
       Object.keys(todoContinuationHook.tool).length +
       1 + // webfetch
       2 + // ast_grep_search, ast_grep_replace
-      (discoverMcpTool ? 1 : 0) + // discover_mcp_servers
-      (discoverSkillTool ? 1 : 0); // discover_skills_online
+      (discoverMcpTool ? 1 : 0); // discover_mcp_servers
 
     if (isFirstInit) {
       console.log(
@@ -720,22 +658,11 @@ const OpenCodeDux: Plugin = async (ctx) => {
       );
       didLogVerboseInit = true;
 
-      // ── Version status display ──────────────────────────────────────
+      // Persist currentVersion for "just updated" detection on next startup
       const currentVersion = readPluginVersion();
-
       if (currentVersion) {
-        // Persist currentVersion for "just updated" detection on next startup
         updateSnapshot((s) => {
           s.pluginVersion = currentVersion;
-        });
-
-        // Version display: fire-and-forget so plugin registration is not blocked.
-        // Show it asynchronously — version display is UX, not critical path.
-        scheduleVersionDisplay(currentVersion).catch((err) => {
-          const versionErrMsg =
-            err instanceof Error ? err.message : String(err);
-          console.log('  📦 Version check failed:', versionErrMsg);
-          log('[version] Version check failed: ' + versionErrMsg);
         });
       }
     }
@@ -799,8 +726,8 @@ const OpenCodeDux: Plugin = async (ctx) => {
       const savedVersion = snapshot.pluginVersion ?? null;
 
       // 2. Always fetch latest version from npm on every startup
-      console.log('  📦 Checking for updates...');
-      log('[version] Checking for updates...');
+      console.log('📦 Checking for updates');
+      log('[version] Checking for updates');
       const latestVersion = await getLatestVersion('latest');
       console.log(`  📦 Fetched latest version: ${latestVersion ?? 'failed'}`);
       log(`[version] Fetched latest version: ${latestVersion ?? 'failed'}`);
@@ -885,9 +812,6 @@ const OpenCodeDux: Plugin = async (ctx) => {
       ast_grep_search,
       ast_grep_replace,
       ...(discoverMcpTool ? { discover_mcp_servers: discoverMcpTool } : {}),
-      ...(discoverSkillTool
-        ? { discover_skills_online: discoverSkillTool }
-        : {}),
     },
 
     mcp: builtinMcps,
@@ -927,98 +851,9 @@ const OpenCodeDux: Plugin = async (ctx) => {
       }
       const configAgent = opencodeConfig.agent as Record<string, unknown>;
 
-      // Model resolution for foreground agents: combine _modelArray
-      // entries with fallback.chains config, then pick the first model in
-      // the effective array for startup-time selection.
-      //
-      // Runtime failover on API errors (e.g. rate limits
-      // mid-conversation) is handled separately by
-      // ForegroundFallbackManager via the event hook.
-      const fallbackChainsEnabled = config.fallback?.enabled !== false;
-      const fallbackChains = fallbackChainsEnabled
-        ? ((config.fallback?.chains as Record<string, string[] | undefined>) ??
-          {})
-        : {};
-
-      // Build effective model arrays: seed from _modelArray, then append
-      // fallback.chains entries so the resolver considers the full chain
-      // when picking the best available provider at startup.
-      const effectiveArrays: Record<
-        string,
-        Array<{ id: string; variant?: string }>
-      > = {};
-
-      for (const [agentName, models] of Object.entries(modelArrayMap)) {
-        effectiveArrays[agentName] = [...models];
-      }
-
-      for (const [agentName, chainModels] of Object.entries(fallbackChains)) {
-        if (!chainModels || chainModels.length === 0) continue;
-
-        if (!effectiveArrays[agentName]) {
-          // Agent has no _modelArray - seed from its current string model
-          // so the fallback chain appends after it rather than replacing
-          // it.
-          const entry = configAgent[agentName] as
-            | Record<string, unknown>
-            | undefined;
-          const currentModel =
-            typeof entry?.model === 'string' ? entry.model : undefined;
-          effectiveArrays[agentName] = currentModel
-            ? [{ id: currentModel }]
-            : [];
-        }
-
-        const seen = new Set(effectiveArrays[agentName].map((m) => m.id));
-        for (const chainModel of chainModels) {
-          if (!seen.has(chainModel)) {
-            seen.add(chainModel);
-            effectiveArrays[agentName].push({ id: chainModel });
-          }
-        }
-      }
-
-      if (Object.keys(effectiveArrays).length > 0) {
-        for (const [agentName, modelArray] of Object.entries(effectiveArrays)) {
-          if (modelArray.length === 0) continue;
-
-          // Use the first model in the effective array. Not all providers
-          // require entries in opencodeConfig.provider - some are loaded
-          // automatically by opencode (e.g. github-copilot, openrouter).
-          // We cannot distinguish these from truly unconfigured providers
-          // at config-hook time, so we cannot gate on the provider config
-          // keys. Runtime failover is handled separately by
-          // ForegroundFallbackManager.
-          const chosen = modelArray[0];
-          const entry = configAgent[agentName] as
-            | Record<string, unknown>
-            | undefined;
-          if (entry) {
-            entry.model = chosen.id;
-            if (chosen.variant) {
-              entry.variant = chosen.variant;
-            }
-          } else {
-            // Agent exists in slim but not in opencodeConfig.agent -
-            // create entry
-            (configAgent as Record<string, unknown>)[agentName] = {
-              model: chosen.id,
-              ...(chosen.variant ? { variant: chosen.variant } : {}),
-            };
-          }
-          log('[plugin] resolved model from array', {
-            agent: agentName,
-            model: chosen.id,
-            variant: chosen.variant,
-          });
-        }
-      }
-
       // Runtime preset override: if /preset switched to a runtime preset,
       // override the model/variant/temperature from the preset's agent
-      // config. This runs after the normal model resolution because the
-      // config() hook re-runs with stale modelArrayMap after dispose(),
-      // but the runtime preset data is in the captured `config` closure.
+      // config.
       const runtimePresetName = getActiveRuntimePreset();
       if (runtimePresetName && config.presets?.[runtimePresetName]) {
         const runtimePreset = config.presets[runtimePresetName];
@@ -1033,16 +868,6 @@ const OpenCodeDux: Plugin = async (ctx) => {
 
           if (typeof override.model === 'string') {
             entry.model = override.model;
-          } else if (
-            Array.isArray(override.model) &&
-            override.model.length > 0
-          ) {
-            const first = override.model[0];
-            entry.model = typeof first === 'string' ? first : first.id;
-            // Extract inline variant from array-form model entry
-            if (typeof first !== 'string' && first.variant) {
-              entry.variant = first.variant;
-            }
           }
           // Explicitly set or clear scalar fields so switching from
           // Preset A (which sets a field) to Preset B (which doesn't)
@@ -1160,45 +985,43 @@ const OpenCodeDux: Plugin = async (ctx) => {
       presetManager.registerCommand(opencodeConfig);
       usageService?.registerCommand(opencodeConfig);
 
-      // One-time startup summary: log bundled skills, installed skills, and MCPs
+      // One-time startup summary: log user-installed MCPs (exclude built-in ones already logged at init)
       if (!didLogStartupSummary) {
         didLogStartupSummary = true;
 
-        const bundledSkillsDir = join(ctx.directory, 'src', 'skills');
-        if (existsSync(bundledSkillsDir)) {
-          try {
-            const skills = readdirSync(bundledSkillsDir, {
-              withFileTypes: true,
-            })
-              .filter((d) => d.isDirectory())
-              .map((d) => d.name);
-            if (skills.length > 0) {
-              console.log(
-                `\u{1F4E6} Bundled skills available: ${skills.join(', ')}`,
-              );
-              log(`[startup] Bundled skills available: ${skills.join(', ')}`);
-            }
-          } catch {
-            // Silently ignore scan failures
-          }
-        }
-
-        const installedSkills = await discoverSkills(ctx.directory);
-        if (installedSkills.length > 0) {
-          console.log(
-            `\u{1F4A1} Auto-discovered ${installedSkills.length} skill(s): ${installedSkills.map((s) => s.name).join(', ')}`,
-          );
-          log(
-            `[startup] Auto-discovered ${installedSkills.length} skill(s): ${installedSkills.map((s) => s.name).join(', ')}`,
-          );
-        }
-
-        const mcpKeys = Object.keys(
+        const allMcpKeys = Object.keys(
           (opencodeConfig.mcp as Record<string, unknown>) ?? builtinMcps,
         );
-        if (mcpKeys.length > 0) {
-          console.log(`\u{1F50C} MCP servers: ${mcpKeys.join(', ')}`);
-          log(`[startup] MCP servers: ${mcpKeys.join(', ')}`);
+        const builtinMcpNames = Object.keys(builtinMcps);
+        const userMcpKeys = allMcpKeys.filter(
+          (key) => !builtinMcpNames.includes(key),
+        );
+        if (userMcpKeys.length > 0) {
+          console.log(`\u{1F50C} MCP servers: ${userMcpKeys.join(', ')}`);
+          log(`[startup] MCP servers: ${userMcpKeys.join(', ')}`);
+        }
+
+        // Log installed skills (await to ensure it loads before continuing)
+        try {
+          const discovery = await getLocalDiscovery(ctx);
+    const skillNames = (discovery.skills || []).map(s => s.name).filter(Boolean);
+          if (skillNames.length > 0) {
+            console.log(`\u{1F3AF} Skills: ${skillNames.join(', ')}`);
+            log(`[startup] Skills: ${skillNames.join(', ')}`);
+          }
+        } catch (err) {
+          log('[startup] Failed to load skills list:', String(err));
+        }
+
+        // ── Version status display ──────────────────────────────────────
+        const currentVersion = readPluginVersion();
+        if (currentVersion) {
+          scheduleVersionDisplay(currentVersion).catch((err) => {
+            const versionErrMsg =
+              err instanceof Error ? err.message : String(err);
+            console.log('  📦 Version check failed:', versionErrMsg);
+            log('[version] Version check failed: ' + versionErrMsg);
+          });
         }
       }
     },
@@ -1466,9 +1289,6 @@ const OpenCodeDux: Plugin = async (ctx) => {
           });
         }
       }
-
-      // Runtime model fallback for foreground agents (rate-limit detection)
-      await foregroundFallback.handleEvent(input.event);
 
       // Todo-continuation: auto-continue orchestrator on incomplete todos
       await todoContinuationHook.handleEvent(input);
@@ -1840,7 +1660,6 @@ export default OpenCodeDux;
 export type {
   AgentName,
   AgentOverrideConfig,
-  McpName,
   PluginConfig,
 } from './config';
 export type { RemoteMcpConfig } from './mcp';

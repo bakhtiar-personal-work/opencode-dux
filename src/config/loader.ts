@@ -169,7 +169,6 @@ export function loadPluginConfig(directory: string): PluginConfig {
         config.contextPressure,
         projectConfig.contextPressure,
       ),
-      fallback: deepMerge(config.fallback, projectConfig.fallback),
     };
   }
 

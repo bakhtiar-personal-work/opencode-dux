@@ -146,82 +146,18 @@ describe('orchestrator agent', () => {
     expect(orchestrator?.config.variant).toBe('high');
   });
 
-  test('orchestrator stores model array with per-model variants in _modelArray', async () => {
-    const config: PluginConfig = {
-      agents: {
-        orchestrator: {
-          model: [
-            { id: 'google/gemini-3-pro', variant: 'high' },
-            { id: 'github-copilot/claude-3.5-haiku' },
-            'openai/gpt-4',
-          ],
-        },
-      },
-    };
-    const agents = await createAgents(config);
-    const orchestrator = agents.find((a) => a.name === 'orchestrator');
-    expect(orchestrator?._modelArray).toEqual([
-      { id: 'google/gemini-3-pro', variant: 'high' },
-      { id: 'github-copilot/claude-3.5-haiku' },
-      { id: 'openai/gpt-4' },
-    ]);
-    expect(orchestrator?.config.model).toBeUndefined();
-  });
-});
-
-describe('per-model variant in array config', () => {
-  test('subagent stores model array with per-model variants', async () => {
-    const config: PluginConfig = {
-      agents: {
-        explorer: {
-          model: [
-            { id: 'google/gemini-3-flash', variant: 'low' },
-            'openai/gpt-4o-mini',
-          ],
-        },
-      },
-    };
-    const agents = await createAgents(config);
-    const explorer = agents.find((a) => a.name === 'explorer');
-    expect(explorer?._modelArray).toEqual([
-      { id: 'google/gemini-3-flash', variant: 'low' },
-      { id: 'openai/gpt-4o-mini' },
-    ]);
-    expect(explorer?.config.model).toBeUndefined();
-  });
-
-  test('top-level variant preserved alongside per-model variants', async () => {
-    const config: PluginConfig = {
-      agents: {
-        orchestrator: {
-          model: [
-            { id: 'google/gemini-3-pro', variant: 'high' },
-            'openai/gpt-4',
-          ],
-          variant: 'low',
-        },
-      },
-    };
-    const agents = await createAgents(config);
-    const orchestrator = agents.find((a) => a.name === 'orchestrator');
-    // top-level variant still set as default
-    expect(orchestrator?.config.variant).toBe('low');
-    // per-model variants stored in _modelArray
-    expect(orchestrator?._modelArray?.[0]?.variant).toBe('high');
-    expect(orchestrator?._modelArray?.[1]?.variant).toBeUndefined();
-  });
 });
 
 describe('skill permissions', () => {
-  test('orchestrator gets deny all by default when no skill config provided', async () => {
+  test('orchestrator gets allow all by default when no skill config provided', async () => {
     const agents = await createAgents();
     const orchestrator = agents.find((a) => a.name === 'orchestrator');
     expect(orchestrator).toBeDefined();
     const skillPerm = (
       orchestrator?.config.permission as Record<string, unknown>
     )?.skill as Record<string, string>;
-    // Without explicit skill config, all skills are denied
-    expect(skillPerm?.['*']).toBe('deny');
+    // By default all skills are allowed (orchestrator auto-discovers)
+    expect(skillPerm?.['*']).toBe('allow');
   });
 });
 
@@ -295,8 +231,7 @@ describe('getAgentConfigs', () => {
     const configs = await getAgentConfigs();
     expect(configs.orchestrator).toBeDefined();
     expect(configs.explorer).toBeDefined();
-    // orchestrator has no hardcoded default model; resolved at runtime via
-    // chat.message hook when _modelArray is configured, or left to the user
+    // orchestrator has no hardcoded default model; resolved at runtime or left to the user
     expect(configs.explorer.model).toBeDefined();
   });
 
@@ -455,18 +390,22 @@ describe('AgentOverrideConfigSchema options validation', () => {
     expect(result.success).toBe(false);
   });
 
-  test('rejects empty model arrays', () => {
+  test('rejects non-string model values', () => {
     const result = AgentOverrideConfigSchema.safeParse({
       model: [],
     });
     expect(result.success).toBe(false);
   });
 
-  test('rejects description field on overrides', () => {
+  test('passes through unknown fields on overrides (strict mode removed)', () => {
     const result = AgentOverrideConfigSchema.safeParse({
       model: 'openai/gpt-5.5',
-      description: 'not supported for custom agents',
+      description: 'extra field that was previously rejected',
     } as Record<string, unknown>);
-    expect(result.success).toBe(false);
+    // strict() was removed so old configs with skills/mcps fields don't fail
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.model).toBe('openai/gpt-5.5');
+    }
   });
 });

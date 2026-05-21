@@ -120,8 +120,7 @@ export async function createAgents(
       if (override) {
         applyOverrides(agent, override);
       }
-      // Pass both skills AND mcps from the override
-      await applyDefaultPermissions(agent, override?.skills, override?.mcps);
+      await applyDefaultPermissions(agent);
       return agent;
     }),
   );
@@ -131,10 +130,7 @@ export async function createAgents(
   // 2a. Compute which subagents have model assignments (for filtering descriptions in orchestrator prompt)
   const enabledSubagentNames = new Set<string>();
   for (const agent of builtInSubAgents) {
-    if (
-      agent.config.model ||
-      (agent._modelArray && agent._modelArray.length > 0)
-    ) {
+    if (agent.config.model) {
       enabledSubagentNames.add(agent.name);
     }
   }
@@ -170,11 +166,7 @@ export async function createAgents(
   if (orchestratorOverride) {
     applyOverrides(orchestrator, orchestratorOverride);
   }
-  await applyDefaultPermissions(
-    orchestrator,
-    orchestratorOverride?.skills,
-    orchestratorOverride?.mcps,
-  );
+  await applyDefaultPermissions(orchestrator);
 
   // Collect all display names from orchestrator and all subagents
   const displayNameMap = new Map<string, string>();
