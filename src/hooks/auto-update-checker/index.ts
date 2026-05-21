@@ -120,6 +120,18 @@ async function runBackgroundUpdateCheck(
     return;
   }
 
+  // Show "Updating..." Toast to indicate install is starting
+  ctx.client.tui
+    .showToast({
+      body: {
+        title: 'Updating Plugin',
+        message: `opencode-dux is updating to v${latestVersion}...`,
+        variant: 'info',
+        duration: 15000, // Long enough to cover install time (~5-10s typical, 60s max)
+      },
+    })
+    .catch(() => {});
+
   const installDir = await preparePackageUpdate(latestVersion, PACKAGE_NAME);
   if (!installDir) {
     log('[auto-update-checker] Failed to prepare install root for auto-update');

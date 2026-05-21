@@ -161,11 +161,20 @@ describe('auto-update-checker/index', () => {
       `./index?test=${importCounter++}`
     );
     const { ctx } = createCtx();
+    const showToast = ctx.client.tui.showToast;
 
     const hook = createAutoUpdateCheckerHook(ctx as never);
     hook.event({ event: { type: 'session.created', properties: {} } });
     await waitForCalls(logMock, 2);
 
+    expect(showToast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: expect.objectContaining({
+          title: 'Updating Plugin',
+          message: 'opencode-dux is updating to v0.9.11...',
+        }),
+      }),
+    );
     expect(cacheMocks.preparePackageUpdate).toHaveBeenCalledWith(
       '0.9.11',
       'opencode-dux',
@@ -222,11 +231,20 @@ describe('auto-update-checker/index', () => {
       `./index?test=${importCounter++}`
     );
     const { ctx } = createCtx();
+    const showToast = ctx.client.tui.showToast;
 
     const hook = createAutoUpdateCheckerHook(ctx as never);
     hook.event({ event: { type: 'session.created', properties: {} } });
     await waitForCalls(logMock, 2);
 
+    expect(showToast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: expect.objectContaining({
+          title: 'Updating Plugin',
+          message: 'opencode-dux is updating to v0.9.11...',
+        }),
+      }),
+    );
     expect(crossSpawnMock).not.toHaveBeenCalled();
     expect(logMock).toHaveBeenCalledWith(
       '[auto-update-checker] Failed to prepare install root for auto-update',
@@ -254,11 +272,20 @@ describe('auto-update-checker/index', () => {
       `./index?test=${importCounter++}`
     );
     const { ctx } = createCtx();
+    const showToast = ctx.client.tui.showToast;
 
     const hook = createAutoUpdateCheckerHook(ctx as never);
     hook.event({ event: { type: 'session.created', properties: {} } });
     await waitForCalls(logMock, 2);
 
+    expect(showToast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: expect.objectContaining({
+          title: 'Updating Plugin',
+          message: 'opencode-dux is updating to v0.9.11...',
+        }),
+      }),
+    );
     expect(crossSpawnMock).toHaveBeenCalledWith(
       ['npm', 'install'],
       expect.objectContaining({ cwd: '/tmp/opencode' }),
