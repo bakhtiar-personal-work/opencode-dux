@@ -150,10 +150,7 @@ async function runBackgroundUpdateCheck(
   const installSuccess = await runNpmInstallSafe(installDir);
 
   if (installSuccess) {
-    console.log(
-      `\n  \u2705 Update installed: v${currentVersion} \u2192 v${latestVersion}`,
-    );
-    console.log('     Restart OpenCode to apply\n');
+    console.log(`  \u2705 v${currentVersion} \u2192 v${latestVersion}`);
     log(
       `[auto-update-checker] Update installed: ${currentVersion} → ${latestVersion}`,
     );

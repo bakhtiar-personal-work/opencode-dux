@@ -834,7 +834,6 @@ const OpenCodeDux: Plugin = async (ctx) => {
           log(
             `[version] Current version: v${currentVersion} \u2192 v${latestVersion}`,
           );
-          log('[version] Please restart OpenCode to complete the update.');
         } else {
           const latestIndicator =
             cacheFresh && latestVersion === currentVersion ? ' (latest)' : '';
@@ -855,9 +854,7 @@ const OpenCodeDux: Plugin = async (ctx) => {
         Date.now() - lastChecked < VERSION_CACHE_STALE_MS &&
         latestVersion !== currentVersion
       ) {
-        console.log(
-          `  📦 Update available, please restart OpenCode to complete the update after opencode launch.`,
-        );
+        console.log(`  \u{1F4E6} v${currentVersion} \u2192 v${latestVersion}`);
         log(
           `[auto-update-checker] Update available: v${currentVersion} → v${latestVersion}`,
         );
