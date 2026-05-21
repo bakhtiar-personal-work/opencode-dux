@@ -560,6 +560,11 @@ const OpenCodeDux: Plugin = async (ctx) => {
       autoUpdate: config.autoUpdate ?? true,
     });
 
+    // Trigger auto-update check after init completes.
+    // setTimeout(0) defers to next microtask, ensuring plugin factory
+    // has fully returned before the update check starts.
+    setTimeout(() => autoUpdateChecker.trigger(), 0);
+
     // Initialize phase reminder hook for workflow compliance
     phaseReminderHook = createPhaseReminderHook();
 

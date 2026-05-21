@@ -293,4 +293,71 @@ describe('auto-update-checker/index', () => {
       '[auto-update-checker] npm install failed; update not installed',
     );
   });
+
+  describe('trigger()', () => {
+    test('runs background update when not checked', async () => {
+      checkerMocks.findPluginEntry.mockImplementation(() => ({
+        pinnedVersion: null,
+        isPinned: false,
+      }));
+      checkerMocks.getCachedVersion.mockImplementation(() => '0.9.1');
+      checkerMocks.getLatestVersion.mockImplementation(async () => '0.9.11');
+
+      const { createAutoUpdateCheckerHook } = await import(
+        `./index?test=${importCounter++}`
+      );
+      const { ctx } = createCtx();
+
+      const hook = createAutoUpdateCheckerHook(ctx as never);
+      hook.trigger();
+      await waitForCalls(logMock, 2);
+
+      expect(logMock).toHaveBeenCalledWith(
+        '[auto-update-checker] Update installed: 0.9.1 → 0.9.11',
+      );
+    });
+
+    test('is no-op when hasChecked is true', async () => {
+      checkerMocks.findPluginEntry.mockImplementation(() => ({
+        pinnedVersion: null,
+        isPinned: false,
+      }));
+      checkerMocks.getCachedVersion.mockImplementation(() => '0.9.1');
+      checkerMocks.getLatestVersion.mockImplementation(async () => '0.9.11');
+
+      const { createAutoUpdateCheckerHook } = await import(
+        `./index?test=${importCounter++}`
+      );
+      const { ctx } = createCtx();
+
+      const hook = createAutoUpdateCheckerHook(ctx as never);
+      // First call sets hasChecked and runs update
+      hook.trigger();
+      await waitForCalls(logMock, 2);
+      logMock.mockClear();
+
+      // Second call should be no-op (hasChecked is true)
+      hook.trigger();
+      // Give it a moment - should not log anything new
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      expect(checkerMocks.findPluginEntry).toHaveBeenCalledTimes(1);
+    });
+
+    test('skips for local dev installs', async () => {
+      checkerMocks.getLocalDevVersion.mockImplementation(() => '0.9.11-dev');
+
+      const { createAutoUpdateCheckerHook } = await import(
+        `./index?test=${importCounter++}`
+      );
+      const { ctx } = createCtx();
+
+      const hook = createAutoUpdateCheckerHook(ctx as never);
+      hook.trigger();
+      await waitForCalls(logMock);
+
+      expect(checkerMocks.findPluginEntry).not.toHaveBeenCalled();
+      expect(checkerMocks.getLatestVersion).not.toHaveBeenCalled();
+    });
+  });
 });

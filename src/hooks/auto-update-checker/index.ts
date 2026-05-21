@@ -52,6 +52,25 @@ export function createAutoUpdateCheckerHook(
         });
       }, 0);
     },
+
+    // NEW: Trigger update check (call with setTimeout to defer)
+    trigger: () => {
+      if (hasChecked) return;
+      hasChecked = true;
+
+      setTimeout(async () => {
+        const localDevVersion = getLocalDevVersion(ctx.directory);
+
+        if (localDevVersion) {
+          log('[auto-update-checker] Local development mode');
+          return;
+        }
+
+        runBackgroundUpdateCheck(ctx, autoUpdate).catch((err) => {
+          log('[auto-update-checker] Background update check failed:', err);
+        });
+      }, 0);
+    },
   };
 }
 
