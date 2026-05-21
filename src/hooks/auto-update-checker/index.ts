@@ -138,7 +138,7 @@ async function runBackgroundUpdateCheck(
         title: 'Updating Plugin',
         message: `opencode-dux is updating to v${latestVersion}`,
         variant: 'info',
-        duration: 5000,
+        duration: 3000,
       },
     })
     .catch(() => {});
@@ -165,7 +165,7 @@ async function runBackgroundUpdateCheck(
           title: 'Plugin Update Failed',
           message: `Failed to prepare update for opencode-dux v${latestVersion}. You can retry later or update manually.`,
           variant: 'error',
-          duration: 5000,
+          duration: 3000,
         },
       })
       .catch(() => {});
@@ -186,7 +186,7 @@ async function runBackgroundUpdateCheck(
           title: 'Plugin Updated',
           message: `opencode-dux updated to v${latestVersion}. Restart OpenCode to apply.`,
           variant: 'success',
-          duration: 5000,
+          duration: 3000,
         },
       })
       .catch(() => {});
@@ -209,7 +209,7 @@ async function runBackgroundUpdateCheck(
           title: 'Plugin Update Failed',
           message: `Failed to update opencode-dux to v${latestVersion}. npm install failed. You can retry later or update manually.`,
           variant: 'error',
-          duration: 5000,
+          duration: 3000,
         },
       })
       .catch(() => {});
