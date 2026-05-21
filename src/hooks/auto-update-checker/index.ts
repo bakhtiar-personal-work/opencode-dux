@@ -2,11 +2,7 @@ import type { PluginInput } from '@opencode-ai/plugin';
 import { crossSpawn } from '../../utils/compat';
 import { log } from '../../utils/logger';
 import { writeVersionCache } from '../../version-store';
-import {
-  clearPackageCache,
-  preparePackageUpdate,
-  resolveInstallContext,
-} from './cache';
+import { preparePackageUpdate, resolveInstallContext } from './cache';
 import {
   extractChannel,
   findPluginEntry,
@@ -125,9 +121,9 @@ async function runBackgroundUpdateCheck(
     .showToast({
       body: {
         title: 'Updating Plugin',
-        message: `opencode-dux is updating to v${latestVersion}...`,
+        message: `opencode-dux is updating to v${latestVersion}`,
         variant: 'info',
-        duration: 15000, // Long enough to cover install time (~5-10s typical, 60s max)
+        duration: 5000,
       },
     })
     .catch(() => {});
@@ -152,7 +148,7 @@ async function runBackgroundUpdateCheck(
           title: 'Plugin Update Failed',
           message: `Failed to prepare update for opencode-dux v${latestVersion}. You can retry later or update manually.`,
           variant: 'error',
-          duration: 10000,
+          duration: 5000,
         },
       })
       .catch(() => {});
@@ -162,7 +158,6 @@ async function runBackgroundUpdateCheck(
   const installSuccess = await runNpmInstallSafe(installDir);
 
   if (installSuccess) {
-    console.log(`  \u2705 v${currentVersion} \u2192 v${latestVersion}`);
     log(
       `[auto-update-checker] Update installed: ${currentVersion} → ${latestVersion}`,
     );
@@ -174,16 +169,10 @@ async function runBackgroundUpdateCheck(
           title: 'Plugin Updated',
           message: `opencode-dux updated to v${latestVersion}. Restart OpenCode to apply.`,
           variant: 'success',
-          duration: 10000,
+          duration: 5000,
         },
       })
       .catch(() => {});
-
-    // Clear package cache after successful update
-    const deleted = await clearPackageCache();
-    log(
-      `[auto-update-checker] Post-update cache clear: ${deleted} directories deleted`,
-    );
   } else {
     log('[auto-update-checker] npm install failed; update not installed');
     ctx.client.app
@@ -203,7 +192,7 @@ async function runBackgroundUpdateCheck(
           title: 'Plugin Update Failed',
           message: `Failed to update opencode-dux to v${latestVersion}. npm install failed. You can retry later or update manually.`,
           variant: 'error',
-          duration: 10000,
+          duration: 5000,
         },
       })
       .catch(() => {});
@@ -250,7 +239,6 @@ async function runNpmInstallSafe(installDir: string): Promise<boolean> {
   }
 }
 
-export { clearPackageCache } from './cache';
 export { getLatestVersion } from './checker';
 
 export type { AutoUpdateCheckerOptions } from './types';

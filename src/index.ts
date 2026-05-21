@@ -846,15 +846,14 @@ const OpenCodeDux: Plugin = async (ctx) => {
         }
       }
 
-      // If a newer version is available, notify the user. Cache clearing is
-      // handled by the auto-update checker after a successful install.
+      // If a newer version is available, notify the user. The auto-update
+      // checker handles installation in the background.
       if (
         latestVersion &&
         lastChecked &&
         Date.now() - lastChecked < VERSION_CACHE_STALE_MS &&
         latestVersion !== currentVersion
       ) {
-        console.log(`  \u{1F4E6} v${currentVersion} \u2192 v${latestVersion}`);
         log(
           `[auto-update-checker] Update available: v${currentVersion} → v${latestVersion}`,
         );
