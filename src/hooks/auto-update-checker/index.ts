@@ -117,10 +117,6 @@ async function runBackgroundUpdateCheck(
     return;
   }
 
-  log(
-    `[auto-update-checker] Update available (${channel}): ${currentVersion} → ${latestVersion}`,
-  );
-
   if (pluginInfo.isPinned) {
     log(
       `[auto-update-checker] Version is pinned; skipping auto-update. Update available: v${currentVersion} → v${latestVersion}`,
@@ -146,6 +142,8 @@ async function runBackgroundUpdateCheck(
       },
     })
     .catch(() => {});
+
+    log(`[auto-update-checker] Starting auto-update: ${currentVersion} → ${latestVersion}`);
 
   const installDir = await preparePackageUpdate(latestVersion, PACKAGE_NAME);
   if (!installDir) {
@@ -236,6 +234,7 @@ async function runNpmInstallSafe(installDir: string): Promise<boolean> {
       stderr: 'pipe',
     });
 
+    log('[auto-update-checker] Running npm install in background for directory:', installDir);
     const timeoutPromise = new Promise<'timeout'>((resolve) =>
       setTimeout(() => resolve('timeout'), 60_000),
     );
@@ -251,6 +250,7 @@ async function runNpmInstallSafe(installDir: string): Promise<boolean> {
       return false;
     }
 
+    log('[auto-update-checker] npm install process completed with exit code:', proc.exitCode);
     return proc.exitCode === 0;
   } catch (err) {
     log('[auto-update-checker] npm install error:', err);
