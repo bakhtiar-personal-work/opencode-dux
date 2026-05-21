@@ -22,11 +22,11 @@ import type {
 // Re-export for consumers
 export type { StoredAccount };
 
-const ACCOUNT_NAME_REGEX = /^[a-zA-Z0-9]{1,12}$/;
+const ACCOUNT_NAME_REGEX = /^[a-zA-Z0-9_-]{1,12}$/;
 
 /**
  * Validate an account name.
- * Rules: 1–12 chars, alphanumeric only (no spaces, no special chars).
+ * Rules: 1–12 chars, alphanumeric, dashes, and underscores only (no spaces, no other special chars).
  */
 export function validateAccountName(
   name: string,
@@ -44,7 +44,7 @@ export function validateAccountName(
     return {
       valid: false,
       error:
-        'Account name must be alphanumeric only (letters and numbers, no spaces or special characters).',
+        'Account name must be alphanumeric, dashes, or underscores only (no spaces or other special characters).',
     };
   }
   return { valid: true };

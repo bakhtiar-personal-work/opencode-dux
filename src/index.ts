@@ -352,7 +352,7 @@ async function probeJSDOM(): Promise<string | null> {
 let didLogVerboseInit = false;
 let didLogStartupSummary = false;
 
-const OhMyOpenCodeLite: Plugin = async (ctx) => {
+const OpenCodeDux: Plugin = async (ctx) => {
   const sessionId = new Date().toISOString().replace(/[-:]/g, '').slice(0, 15);
   initLogger(sessionId);
   log('[plugin] factory invoked');
@@ -1850,7 +1850,7 @@ const OhMyOpenCodeLite: Plugin = async (ctx) => {
   };
 };
 
-export default OhMyOpenCodeLite;
+export default OpenCodeDux;
 
 export type {
   AgentName,
