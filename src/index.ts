@@ -726,8 +726,8 @@ const OpenCodeDux: Plugin = async (ctx) => {
       const savedVersion = snapshot.pluginVersion ?? null;
 
       // 2. Always fetch latest version from npm on every startup
-      console.log('📦 Checking for updates');
-      log('[version] Checking for updates');
+      console.log('📦 Checking for updates...');
+      log('[version] Checking for updates...');
       const latestVersion = await getLatestVersion('latest');
       console.log(`  📦 Fetched latest version: ${latestVersion ?? 'failed'}`);
       log(`[version] Fetched latest version: ${latestVersion ?? 'failed'}`);
@@ -989,6 +989,9 @@ const OpenCodeDux: Plugin = async (ctx) => {
       if (!didLogStartupSummary) {
         didLogStartupSummary = true;
 
+        console.log('\u{1F50C} Loading MCP servers...');
+        log('[startup] Loading MCP servers...');
+
         const allMcpKeys = Object.keys(
           (opencodeConfig.mcp as Record<string, unknown>) ?? builtinMcps,
         );
@@ -1003,6 +1006,9 @@ const OpenCodeDux: Plugin = async (ctx) => {
 
         // Log installed skills (await to ensure it loads before continuing)
         try {
+          console.log('\u{1F3AF} Loading skills...');
+          log('[startup] Loading skills...');
+
           const discovery = await getLocalDiscovery(ctx);
     const skillNames = (discovery.skills || []).map(s => s.name).filter(Boolean);
           if (skillNames.length > 0) {
