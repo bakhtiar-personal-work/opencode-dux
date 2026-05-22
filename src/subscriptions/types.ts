@@ -128,7 +128,7 @@ export interface CodexUsageEntry {
   accountName: string;
   fetchedAt: number;
   error?: string;
-  /** 5-hour rolling window (primary_window from API) */
+  /** Primary usage window (5H for paid plans, 7D for free plans) */
   primaryWindow: UsageWindow;
   /** 7-day rolling window (secondary_window from API). Null for free plan users. */
   secondaryWindow: UsageWindow | null;

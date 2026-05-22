@@ -127,17 +127,19 @@ Manage API accounts directly from the OpenCode prompt via `/subscriptions`:
 - `/subscriptions add-opencode-go <name> <workspace-id>` - Add OpenCode Go account
 - `/subscriptions add-neuralwatt <name> <api-key>` - Add Neuralwatt account
 - `/subscriptions add-codex-device <name>` - Add Codex (OpenAI) account via device auth
-- `/subscriptions switch <provider> <name>` - Activate an account for a provider
-- `/subscriptions remove <name>` - Delete an account
+- `/subscriptions switch <provider> <name>` - Activate an account for a provider (use full provider names)
+- `/subscriptions remove <provider> <name>` - Delete an account (provider + name to prevent collisions)
 - `/subscriptions refresh` - Force refresh usage data
 
 ### Supported providers
 
-| Provider        | Usage tracking                                        | Auth method                |
-| --------------- | ----------------------------------------------------- | -------------------------- |
-| **OpenCode Go** | Dashboard scraping (rolling, weekly, monthly windows) | Workspace ID + auth cookie |
-| **Neuralwatt**  | REST API (credits, kWh, token usage)                  | API key                    |
-| **Codex**       | REST API (5H/7D rate limits, credits)                 | Device code auth (OAuth)   |
+| Provider        | Provider ID     | Usage tracking                                        | Auth method                |
+| --------------- | --------------- | ----------------------------------------------------- | -------------------------- |
+| **OpenCode Go** | `opencode-go`   | Dashboard scraping (rolling, weekly, monthly windows) | Workspace ID + auth cookie |
+| **Neuralwatt**  | `neuralwatt`    | REST API (credits, kWh, token usage)                  | API key                    |
+| **Codex**       | `codex`         | REST API (5H/7D rate limits, credits)                 | Device code auth (OAuth)   |
+
+**Note**: Accounts are identified by provider + name combination. You can have accounts with the same name across different providers (e.g., "Main" for Codex, "Main" for Neuralwatt) without collisions. Use `/subscriptions remove <provider> <name>` to remove a specific account.
 
 Usage data appears in the TUI sidebar under **API Usage**.
 

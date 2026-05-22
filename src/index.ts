@@ -479,9 +479,9 @@ const OpenCodeDux: Plugin = async (ctx) => {
 
     if (isFirstInit) {
       console.log(
-        '  \u{1F50C} Built-in MCPs: ' + Object.keys(builtinMcps).join(', '),
+        '  \u{1F50C} built-in MCPs: ' + Object.keys(builtinMcps).join(', '),
       );
-      log('[init] Built-in MCPs: ' + Object.keys(builtinMcps).join(', '));
+      log('[init] built-in MCPs: ' + Object.keys(builtinMcps).join(', '));
     }
 
     // Warm the local discovery cache asynchronously (non-blocking init).
@@ -508,10 +508,10 @@ const OpenCodeDux: Plugin = async (ctx) => {
     }
     if (isFirstInit) {
       console.log(
-        `  \u{1F527} tools: webfetch, ast_grep_search, ast_grep_replace${toolsOnline.length ? `, ${toolsOnline.join(', ')}` : ''}`,
+        `  \u{1F527} built-in tools: webfetch, ast_grep_search, ast_grep_replace${toolsOnline.length ? `, ${toolsOnline.join(', ')}` : ''}`,
       );
       log(
-        `[init] tools: webfetch, ast_grep_search, ast_grep_replace${toolsOnline.length ? `, ${toolsOnline.join(', ')}` : ''}`,
+        `[init] built-in tools: webfetch, ast_grep_search, ast_grep_replace${toolsOnline.length ? `, ${toolsOnline.join(', ')}` : ''}`,
       );
     }
 

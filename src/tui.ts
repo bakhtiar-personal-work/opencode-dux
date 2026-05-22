@@ -599,7 +599,7 @@ function renderCodexUsage(
   rows: Child[],
   theme: { text: unknown; textMuted: unknown; accent: unknown },
 ): void {
-  // 5H row
+  // Primary usage window (5H for paid, 7D for free)
   if (entry.primaryWindow) {
     const w = entry.primaryWindow;
     const usageColor = getUsageColor(w.percentRemaining);
@@ -616,7 +616,7 @@ function renderCodexUsage(
         },
         [
           box({ flexDirection: 'row' }, [
-            text({ fg: theme.accent }, ['5H ']),
+            text({ fg: theme.accent }, [entry.secondaryWindow ? '5H ' : '7D ']),
             text({ fg: usageColor || theme.text }, [bar]),
             text({ fg: usageColor || theme.textMuted }, [` ${pct}%`]),
           ]),
@@ -667,9 +667,11 @@ function renderCodexUsage(
 
   // Plan type row
   if (entry.planType) {
+    const displayPlan =
+      entry.planType.charAt(0).toUpperCase() + entry.planType.slice(1);
     rows.push(
       box({ width: '100%', flexDirection: 'row' }, [
-        text({ fg: theme.textMuted }, [`   Plan: ${entry.planType}`]),
+        text({ fg: theme.textMuted }, [`   Plan: ${displayPlan}`]),
       ]),
     );
   }
