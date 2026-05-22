@@ -1,12 +1,44 @@
-import { execSync } from 'node:child_process';
+import { exec, execSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import * as fs from 'node:fs';
 import os from 'node:os';
 import * as path from 'node:path';
+import { promisify } from 'node:util';
 import type { PluginInput, ToolDefinition } from '@opencode-ai/plugin';
 import { tool } from '@opencode-ai/plugin';
 import { log } from '../utils/logger';
 import { getLocalDiscovery } from './local';
+
+const execAsync = promisify(exec);
+
+/**
+ * Simple concurrency limiter for Promise-based operations.
+ * Limits how many promises can run concurrently.
+ */
+async function withConcurrency<T, R>(
+  items: T[],
+  fn: (item: T) => Promise<R>,
+  concurrency: number,
+): Promise<R[]> {
+  const results: R[] = [];
+  const executing: Promise<R>[] = [];
+
+  for (const item of items) {
+    const p = fn(item).then((result) => {
+      results.push(result);
+      executing.splice(executing.indexOf(p), 1);
+      return result;
+    });
+    results.push(undefined as R); // placeholder, will be replaced
+    executing.push(p);
+    if (executing.length >= concurrency) {
+      await Promise.race(executing);
+    }
+  }
+
+  await Promise.all(executing);
+  return results.filter((r) => r !== undefined);
+}
 
 /**
  * Input parameters for discovering skills online.
@@ -26,6 +58,17 @@ export interface SkillDiscoveryInput {
   /** Maximum number of recommendations to return (default: 5). */
   max_results?: number;
 }
+
+/**
+ * Result of probing the npx skills CLI availability.
+ * Distinguishes between npx missing, skills package missing, timeout, etc.
+ */
+type SkillsCliProbe =
+  | { status: 'available' }
+  | { status: 'npx_not_installed'; error: string }
+  | { status: 'npx_ok_skills_not_found'; error: string }
+  | { status: 'timeout'; error: string }
+  | { status: 'unknown_error'; error: string };
 
 /**
  * A single recommendation for an installable skill.
@@ -208,8 +251,7 @@ function writeToCache<T>(
 /**
  * Run `npx skills find` for the given keywords and return the raw stdout.
  *
- * Tries JSON output mode first (`--json`), then falls back to plain text.
- * Returns an empty string when neither mode succeeds.
+ * Returns an empty string when the command fails.
  *
  * @param keywords - Search keywords
  * @param timeoutMs - Timeout in milliseconds for the exec call
@@ -217,99 +259,132 @@ function writeToCache<T>(
  */
 function runSkillsFindCli(keywords: string[], timeoutMs = 30_000): string {
   const query = keywords.join(' ');
-  const errors: string[] = [];
 
-  // Try JSON mode first (most reliable for parsing)
-  for (const cmd of [
-    `npx skills find "${query}" --json 2>nul`,
-    `npx skills find "${query}" 2>nul`,
-  ]) {
-    try {
-      const stdout = execSync(cmd, {
-        timeout: timeoutMs,
-        encoding: 'utf-8',
-        maxBuffer: 1024 * 1024,
-        windowsHide: true,
-      });
-      if (stdout.trim()) {
-        return stripAnsi(stdout.trim());
-      }
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      errors.push(msg);
+  const cmd = `npx skills find "${query}"`;
+  try {
+    const stdout = execSync(cmd, {
+      timeout: timeoutMs,
+      encoding: 'utf-8',
+      maxBuffer: 1024 * 1024,
+      windowsHide: true,
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    if (stdout.trim()) {
+      return stripAnsi(stdout.trim());
     }
-  }
-
-  if (errors.length > 0) {
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    const stderr = (err as { stderr?: string }).stderr;
     log(
-      '[discovery/skills] all npx skills find attempts failed',
-      errors.join('; '),
+      '[discovery/skills] npx skills find failed',
+      stderr ? `${msg} (stderr: ${stderr.trim()})` : msg,
     );
   }
+
+  return '';
+}
+
+/**
+ * Async version of runSkillsFindCli for parallel execution.
+ * Runs `npx skills find` for the given keywords and returns raw stdout.
+ * Uses async exec to avoid blocking the event loop.
+ */
+async function runSkillsFindCliAsync(
+  keywords: string[],
+  timeoutMs = 10_000,
+): Promise<string> {
+  const query = keywords.join(' ');
+
+  const cmd = `npx skills find "${query}"`;
+  try {
+    const { stdout } = await execAsync(cmd, {
+      timeout: timeoutMs,
+      encoding: 'utf-8',
+      maxBuffer: 1024 * 1024,
+      windowsHide: true,
+    });
+    if (stdout.trim()) {
+      return stripAnsi(stdout.trim());
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    const stderr = (err as { stderr?: string }).stderr;
+    log(
+      '[discovery/skills] npx skills find failed',
+      stderr ? `${msg} (stderr: ${stderr.trim()})` : msg,
+    );
+  }
+
   return '';
 }
 
 /**
  * Check whether the `npx skills` CLI is available on this system.
  *
- * Runs `npx skills --version` with a short timeout to probe availability
- * without blocking for long.
+ * Runs a two-step probe: first verifies npx itself is on PATH, then checks
+ * whether the skills package can be resolved/executed. Distinguishes between
+ * npx missing, skills package missing, network timeouts, and unknown errors.
+ *
+ * Timeouts are handled with a retry at 30s to accommodate first-time downloads.
  */
-function probeSkillsCli(): boolean {
+function probeSkillsCli(): SkillsCliProbe {
+  // Step 1: Check npx exists
   try {
-    execSync('npx skills --version', {
+    execSync('npx --version', {
       timeout: 5_000,
       encoding: 'utf-8',
       windowsHide: true,
+      stdio: ['pipe', 'pipe', 'pipe'],
     });
-    return true;
-  } catch {
-    return false;
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code === 'ENOENT') {
+      return {
+        status: 'npx_not_installed',
+        error: 'npx command not found on PATH',
+      };
+    }
+    return {
+      status: 'unknown_error',
+      error: `npx --version failed: ${String(err)}`,
+    };
   }
-}
 
-/**
- * Search the npm registry for skill packages matching the given keywords.
- *
- * Used as a fallback when the `npx skills` CLI is unavailable or returns
- * no results. Filters results to packages that declare both an `opencode` /
- * `opencode-plugin` keyword AND a skill-related keyword (`skill`,
- * `agent-skills`, `ai-skills`).
- */
-async function runNpmSkillsSearch(
-  keywords: string[],
-  signal?: AbortSignal,
-): Promise<Array<{ name: string; description?: string; source?: string }>> {
-  const query = encodeURIComponent(`opencode skill ${keywords.join(' ')}`);
-  const url = `https://registry.npmjs.org/-/v1/search?text=${query}&size=20`;
+  // Step 2: Check skills package (with longer timeout for first fetch)
+  const diagnosticTimeoutMs = 15_000;
+  const fallbackTimeoutMs = 30_000;
+
   try {
-    const res = await fetch(url, { signal });
-    if (!res.ok) return [];
-    const body = await res.json();
-    const objects: Array<{
-      package: { name: string; description?: string; keywords?: string[] };
-    }> = body.objects ?? [];
-    return objects
-      .filter((o) => {
-        const kws = (o.package.keywords ?? []).map((k: string) =>
-          k.toLowerCase(),
-        );
-        // Must have both 'opencode' and 'skill' keywords to be a real skill package
-        const hasOpencode =
-          kws.includes('opencode') || kws.includes('opencode-plugin');
-        const hasSkill =
-          kws.includes('skill') ||
-          kws.includes('agent-skills') ||
-          kws.includes('ai-skills');
-        return hasOpencode && hasSkill;
-      })
-      .map((o) => ({
-        name: o.package.name,
-        description: o.package.description,
-        source: o.package.name,
-      }));
-  } catch {
-    return [];
+    execSync('npx skills --version', {
+      timeout: diagnosticTimeoutMs,
+      encoding: 'utf-8',
+      windowsHide: true,
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    return { status: 'available' };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (message.includes('ETIMEDOUT') || message.includes('killed')) {
+      // Retry with even longer timeout — first fetch may need it
+      try {
+        execSync('npx skills --version', {
+          timeout: fallbackTimeoutMs,
+          encoding: 'utf-8',
+          windowsHide: true,
+          stdio: ['pipe', 'pipe', 'pipe'],
+        });
+        return { status: 'available' };
+      } catch (_retryErr) {
+        return {
+          status: 'timeout',
+          error: `npx skills --version timed out after ${fallbackTimeoutMs / 1000}s (first-time download may be slow)`,
+        };
+      }
+    }
+    return {
+      status: 'npx_ok_skills_not_found',
+      error: message,
+    };
   }
 }
 
@@ -388,7 +463,7 @@ function stripAnsi(str: string): string {
  * Group 2: optional install count (e.g. 2.1K)
  */
 const SKILL_ENTRY_RE =
-  /^([\w.-]+\/[\w.-]+@[\w.-]+)(?:\s+([\d.]+K?)\s+installs)?$/;
+  /^([\w.-]+\/[\w.-]+@[\w.:-]+)(?:\s+([\d.]+K?)\s+installs)?$/;
 
 /**
  * Match a URL line starting with └:
@@ -503,68 +578,7 @@ function extractSkillName(source: string): string {
   return source;
 }
 
-/**
- * Score how relevant a recommendation is to the task context.
- *
- * Examines keyword overlap, name-tag matches to produce a value in the [0, 1] range.
- */
-function scoreRelevance(
-  name: string,
-  description: string,
-  tags: string[],
-  keywords: string[],
-): number {
-  let score = 0;
 
-  const nameLower = name.toLowerCase();
-  const descLower = description.toLowerCase();
-  const tagsLower = tags.map((t) => t.toLowerCase());
-  const allText = `${nameLower} ${descLower} ${tagsLower.join(' ')}`;
-
-  for (const kw of keywords) {
-    const kwLower = kw.toLowerCase();
-    if (nameLower.includes(kwLower)) {
-      score += 0.35;
-    }
-    if (descLower.includes(kwLower)) {
-      score += 0.2;
-    }
-    if (tagsLower.includes(kwLower)) {
-      score += 0.15;
-    }
-  }
-
-  const matchedKeywords = keywords.filter((kw) =>
-    allText.includes(kw.toLowerCase()),
-  ).length;
-  if (keywords.length > 0) {
-    score += (matchedKeywords / keywords.length) * 0.1;
-  }
-
-  return Math.min(score, 1);
-}
-
-/**
- * Build a human-readable reason string explaining why a skill is relevant.
- */
-function buildRelevanceReason(
-  name: string,
-  description: string,
-  tags: string[],
-  keywords: string[],
-): string {
-  const matchedKeywords = keywords.filter(
-    (kw) =>
-      name.toLowerCase().includes(kw.toLowerCase()) ||
-      description.toLowerCase().includes(kw.toLowerCase()) ||
-      tags.some((t) => t.includes(kw.toLowerCase())),
-  );
-
-  if (matchedKeywords.length > 0) {
-    return `Matches keywords: ${matchedKeywords.join(', ')}`;
-  }
-  return 'Found in search results for task context';
-}
 
 /**
  * Deduplicate recommendations by case-insensitive name, keeping the one with
@@ -585,82 +599,27 @@ function deduplicateByName<T extends { name: string; relevance_score: number }>(
 }
 
 /**
- * Mark and filter skill recommendations against already-installed skills.
+ * Match locally-installed skills against task keywords and return
+ * recommendations with high priority scores.
  *
- * For recommendations matching an installed skill:
- * - Mark them as `already_installed: true`
- * - Only include them if the relevance score is > 0.8 (significantly better
- *   than the installed default, meaning this skill is highly relevant to the
- *   current task)
- *
- * Non-installed recommendations pass through unchanged.
- */
-function filterExistingSkills(
-  recommendations: SkillRecommendation[],
-  existingNames: string[] | undefined,
-): SkillRecommendation[] {
-  if (!existingNames || existingNames.length === 0) return recommendations;
-
-  const installed = new Set(existingNames.map((n) => n.toLowerCase()));
-
-  return recommendations
-    .map((rec) => {
-      const lower = rec.name.toLowerCase();
-      if (installed.has(lower)) {
-        return { ...rec, already_installed: true };
-      }
-      return rec;
-    })
-    .filter((rec) => {
-      // For already-installed items, only show if relevance_score > 0.8
-      // (significantly better enough to mention despite being installed)
-      if (rec.already_installed) {
-        return rec.relevance_score > 0.8;
-      }
-      return true;
-    });
-}
-
-/**
- * Score locally-installed skills against task keywords and return
- * recommendations for those that meet the relevance threshold.
+ * Local skills are already installed, so they're most actionable
+ * and always ranked first in the two-tier system.
  */
 function matchLocalSkills(
   skills: Array<{ name: string; description?: string; tags?: string[] }>,
   taskKeywords: string[],
 ): SkillRecommendation[] {
-  const recommendations: SkillRecommendation[] = [];
-
-  for (const skill of skills) {
-    const name = skill.name;
-    const description = skill.description ?? '';
-    const tags = skill.tags ?? [];
-    const relevanceScore = scoreRelevance(
-      name,
-      description,
-      tags,
-      taskKeywords,
-    );
-
-    if (relevanceScore < 0.01) continue;
-
-    recommendations.push({
-      type: 'skill',
-      name,
-      description: description || 'No description available',
-      install_command: `npx skills add ${name} -g`,
-      relevance_reason: buildRelevanceReason(
-        name,
-        description,
-        tags,
-        taskKeywords,
-      ),
-      relevance_score: relevanceScore,
-      already_installed: true,
-    });
-  }
-
-  return recommendations;
+  // Return all local skills with high priority score (0.9-1.0 range)
+  // Local skills are already installed, so they're most actionable
+  return skills.map((skill, index) => ({
+    type: 'skill',
+    name: skill.name,
+    description: skill.description ?? 'No description available',
+    install_command: `npx skills add ${skill.name} -g`,
+    relevance_reason: `Already installed locally - matches keywords: ${taskKeywords.join(', ')}`,
+    relevance_score: 0.95 - (index * 0.01), // High priority, slight variation for sorting
+    already_installed: true,
+  }));
 }
 
 /**
@@ -716,111 +675,101 @@ export async function discoverSkillsOnline(
   }
 
   // Probe the CLI once before the loop
-  const cliAvailable = probeSkillsCli();
+  const probe = probeSkillsCli();
 
-  if (cliAvailable) {
-    for (const query of input.task_keywords) {
-      const rawOutput = runSkillsFindCli([query]);
-      if (!rawOutput) continue;
+  if (probe.status !== 'available') {
+    switch (probe.status) {
+      case 'npx_not_installed':
+        throw new Error(
+          'npx is not installed or not on PATH. Install Node.js (which includes npx) from https://nodejs.org.',
+        );
+      case 'npx_ok_skills_not_found':
+        throw new Error(
+          `npx is available but the "skills" package could not be loaded: ${probe.error}\n` +
+            `Try running manually: npx skills find <keyword>`,
+        );
+      case 'timeout':
+        throw new Error(
+          `npx skills CLI probe timed out (first-time download may be slow).\n` +
+            `Try running manually to warm the cache: npx skills --version`,
+        );
+      case 'unknown_error':
+        throw new Error(
+          `npx skills CLI probe failed: ${probe.error}\n` +
+            `Verify npx works: npx --version`,
+        );
+    }
+  }
 
-      // Try JSON parsing first
-      const jsonSkills = tryParseJsonSkills(rawOutput);
-      if (jsonSkills) {
-        for (const skill of jsonSkills) {
-          const skillName = skill.name || extractSkillName(skill.source ?? '');
-          if (!skillName) continue;
+  // Parallel keyword search with concurrency cap to avoid overwhelming the registry
+  const rawOutputs = await withConcurrency(
+    input.task_keywords,
+    async (query) => runSkillsFindCliAsync([query]),
+    5, // max 5 concurrent npx calls
+  );
 
-          if (seenNames.has(skillName.toLowerCase())) continue;
-          seenNames.add(skillName.toLowerCase());
+  for (const rawOutput of rawOutputs) {
+    if (!rawOutput) continue;
 
-          const description = skill.description ?? 'No description available';
-          const source = skill.source ?? skillName;
+    // Try JSON parsing first
+    const jsonSkills = tryParseJsonSkills(rawOutput);
+    if (jsonSkills) {
+      for (const [index, skill] of jsonSkills.entries()) {
+        const skillName = skill.name || extractSkillName(skill.source ?? '');
+        if (!skillName) continue;
 
-          allRecommendations.push({
-            type: 'skill',
-            name: skillName,
-            description,
-            install_command: `npx skills add ${source} -g`,
-            relevance_reason: `Found by npx skills find matching "${query}"`,
-            relevance_score: Math.max(
-              0.5,
-              1.0 - allRecommendations.length * 0.1,
-            ),
-          });
-        }
-      } else {
-        // Fall back to text parsing
-        const textSkills = parseTextSkills(rawOutput);
-        for (const skill of textSkills) {
-          if (seenNames.has(skill.name.toLowerCase())) continue;
-          seenNames.add(skill.name.toLowerCase());
+        if (seenNames.has(skillName.toLowerCase())) continue;
+        seenNames.add(skillName.toLowerCase());
 
-          allRecommendations.push({
-            type: 'skill',
-            name: skill.name,
-            description: skill.description,
-            install_command: skill.install_command,
-            source_url: skill.source_url,
-            relevance_reason: `Found by npx skills find matching "${query}"`,
-            relevance_score: Math.max(
-              0.5,
-              1.0 - allRecommendations.length * 0.1,
-            ),
-          });
-        }
+        const description = skill.description ?? 'No description available';
+        const source = skill.source ?? skillName;
+
+        allRecommendations.push({
+          type: 'skill',
+          name: skillName,
+          description,
+          install_command: `npx skills add ${source} -g`,
+          relevance_reason: `Found by npx skills find matching keyword`,
+          relevance_score: 0.5 + (1.0 / (index + 1)) * 0.4, // Range: 0.5-0.9, lower than locals
+        });
+      }
+    } else {
+      // Fall back to text parsing
+      const textSkills = parseTextSkills(rawOutput);
+      for (const [index, skill] of textSkills.entries()) {
+        if (seenNames.has(skill.name.toLowerCase())) continue;
+        seenNames.add(skill.name.toLowerCase());
+
+        allRecommendations.push({
+          type: 'skill',
+          name: skill.name,
+          description: skill.description,
+          install_command: skill.install_command,
+          source_url: skill.source_url,
+          relevance_reason: `Found by npx skills find matching keyword`,
+          relevance_score: 0.5 + (1.0 / (index + 1)) * 0.4, // Range: 0.5-0.9, lower than locals
+        });
       }
     }
   }
 
-  // If CLI was unavailable or returned no results, fall back to npm registry search
-  if (!cliAvailable || allRecommendations.length === 0) {
-    const npmResults = await runNpmSkillsSearch(input.task_keywords);
-    for (const skill of npmResults) {
-      const skillName = skill.name;
-      if (seenNames.has(skillName.toLowerCase())) continue;
-      seenNames.add(skillName.toLowerCase());
-
-      const description = skill.description ?? 'No description available';
-      const source = skill.source ?? skillName;
-      const relevanceScore = scoreRelevance(
-        skillName,
-        description,
-        [],
-        input.task_keywords,
-      );
-
-      if (relevanceScore < 0.01) continue;
-
-      allRecommendations.push({
-        type: 'skill',
-        name: skillName,
-        description,
-        install_command: `npx skills add ${source} -g`,
-        relevance_reason: buildRelevanceReason(
-          skillName,
-          description,
-          [],
-          input.task_keywords,
-        ),
-        relevance_score: relevanceScore,
-      });
-    }
+  // If CLI returned no results, return empty (no npm fallback)
+  if (allRecommendations.length === 0) {
+    return {
+      recommendations: [],
+      from_cache: false,
+      queries_used: queries,
+    };
   }
 
-  // Merge local matches with online results, deduplicating against local
-  const localByName = new Set(localMatches.map((r) => r.name.toLowerCase()));
-  const merged = [...localMatches];
-  for (const rec of allRecommendations) {
-    const key = rec.name.toLowerCase();
-    if (localByName.has(key)) continue; // skip online dupes of local items
-    merged.push(rec);
-  }
-  const unique = deduplicateByName(merged);
-  unique.sort((a, b) => b.relevance_score - a.relevance_score);
-  const recommendations = unique.slice(0, maxResults);
+  // Two-tier: locals first, then online (no score comparison needed)
+  const onlineUnique = deduplicateByName(allRecommendations);
+  const sortedLocals = localMatches.sort((a, b) => b.relevance_score - a.relevance_score);
+  const sortedOnline = onlineUnique.sort((a, b) => b.relevance_score - a.relevance_score);
+  const final = [...sortedLocals, ...sortedOnline].slice(0, maxResults);
 
   return {
-    recommendations,
+    recommendations: final,
     from_cache: false,
     queries_used: queries,
   };
@@ -861,8 +810,8 @@ export function createDiscoverSkillsTool(ctx: PluginInput): ToolDefinition {
       'and you want to discover what skills are available. ' +
       'If existing_skill_names is not provided, automatically discovers ' +
       "what's already installed and filters recommendations accordingly. " +
-      'Already-installed skills are shown only when relevance_score > 0.8 ' +
-      '(significantly better). ' +
+      'Already-installed skills are always shown first (highest priority), ' +
+      'followed by online recommendations. ' +
       'Returns recommendations with install commands (npx skills add ...). ' +
       'Results are cached for 24 hours.',
     args: {
@@ -898,34 +847,64 @@ export function createDiscoverSkillsTool(ctx: PluginInput): ToolDefinition {
       const maxResults = args.max_results ?? 5;
       const existingNames = args.existing_skill_names ?? undefined;
 
-      const cacheKey = buildCacheKey(cachePrefix, taskKeywords);
+      // Per-keyword cache check for better hit rate
+      const uncachedKeywords: string[] = [];
+      const keywordResults: Map<string, string> = new Map();
 
-      const cached = readFromCache<SkillDiscoveryOutput>(cache, cacheKey);
-      if (cached) {
-        log('[discovery/skills] cache hit for', cacheKey);
-        return JSON.stringify({
-          ...cached,
-          from_cache: true,
-          recommendations: cached.recommendations.slice(0, maxResults),
-        });
+      for (const keyword of taskKeywords) {
+        const perKwKey = buildCacheKey(`${cachePrefix}:kw`, [keyword]);
+        const cached = readFromCache<string>(cache, perKwKey);
+        if (cached) {
+          keywordResults.set(keyword, cached);
+          log('[discovery/skills] per-keyword cache hit for', keyword);
+        } else {
+          uncachedKeywords.push(keyword);
+        }
       }
 
-      log('[discovery/skills] cache miss');
+      // If all keywords cached, return empty (local skills will be used)
+      if (uncachedKeywords.length === 0 && keywordResults.size > 0) {
+        // All keywords cached - skip online search, use local skills only
+        log('[discovery/skills] all keywords cached');
+      }
 
-      const output = await discoverSkillsOnline(
-        {
-          task_description: args.task_description ?? '',
-          task_keywords: taskKeywords,
-          agent_name: args.agent_name ?? '',
-          existing_skill_names: existingNames,
-          max_results: maxResults,
-        },
-        ctx,
-      );
+      try {
+        const output = await discoverSkillsOnline(
+          {
+            task_description: args.task_description ?? '',
+            task_keywords:
+              uncachedKeywords.length > 0 ? uncachedKeywords : taskKeywords,
+            agent_name: args.agent_name ?? '',
+            existing_skill_names: existingNames,
+            max_results: maxResults,
+          },
+          ctx,
+        );
 
-      writeToCache(cache, cacheKey, output, SKILL_CACHE_TTL_MS);
+        writeToCache(
+          cache,
+          buildCacheKey(cachePrefix, taskKeywords),
+          output,
+          SKILL_CACHE_TTL_MS,
+        );
 
-      return JSON.stringify(output);
+        // Cache each keyword individually for future per-keyword hits
+        for (const keyword of taskKeywords) {
+          const perKwKey = buildCacheKey(`${cachePrefix}:kw`, [keyword]);
+          writeToCache(
+            cache,
+            perKwKey,
+            keywordResults.get(keyword) || '',
+            SKILL_CACHE_TTL_MS,
+          );
+        }
+
+        return JSON.stringify(output);
+      } catch (err) {
+        // Return plain text error, not JSON
+        const message = err instanceof Error ? err.message : String(err);
+        return `Skills discovery unavailable: ${message}`;
+      }
     },
   });
 }
