@@ -562,66 +562,42 @@ ${buildVariantGlossaryBlock()}`;
 export function buildDiscoveryGuidanceBlock(): string {
   return `
 <discovery_guidance>
-You have access to discovery tools for finding external capabilities:
+You have tools to discover external capabilities — MCP servers (external tools/data) and skills (specialized workflows).
 
-**For MCP Servers** (external tools/data sources):
+DECISION GATE: Should you discover anything?
 
-**AUTOMATIC MCP DISCOVERY** (BEFORE ANY DELEGATION):
-For EVERY non-trivial task, BEFORE delegating to a subagent:
-1. Consider: "Could an MCP server improve this task's outcome?"
-   - Database access (PostgreSQL, MongoDB, Redis, etc.)
-   - API integration (Stripe, GitHub, Slack, etc.)
-   - External data sources (weather, maps, financial data, etc.)
-   - Specialized tools (browser automation, file system access, etc.)
+SKIP discovery entirely — do NOT call discover_skills or discover_mcp_servers — when ALL of:
+  - The task is trivial: typo fix, variable rename, mechanical edit, known-path change
+  - The subagent already has all needed capabilities
+  - Speed matters and discovery overhead isn't justified
 
-2. If YES → Call \`discover_mcp_servers\` tool:
-   - Provide task_description: What the subagent needs to accomplish
-   - Provide task_keywords: 2-5 keywords describing needed capabilities
-   - Results include installation commands and relevance scores
+PROCEED with discovery when the task is non-trivial AND:
+  - A subagent might benefit from external tools (database access, API integration, browser)
+  - A specialized workflow could improve quality (testing, deployment, accessibility audit)
+  - You are uncertain whether existing capabilities are sufficient (discovery is cheap with caching)
 
-3. For each recommended MCP:
-   - Check if already configured in user's OpenCode config
-   - If configured: note "✅ Already available"
-   - If NOT configured: show install command \`npx mcp add <server>\`
+DISCOVERY FLOW (unified for MCP and skills)
 
-4. Present findings before delegation:
-   - List available MCPs that can help
-   - Recommend missing MCPs with install commands
-   - Ask user if they want to install before proceeding
+BEFORE delegating to a subagent for a non-trivial task:
 
-**When NOT to discover MCPs** (rare):
-- Routine tasks (simple edits, basic searches)
-- When subagent already has all needed capabilities
-- When speed is critical and MCP overhead isn't justified
+1. Call discover_mcp_servers or discover_skills (or both, in parallel):
+   - Provide task_description + task_keywords describing what's needed
+   - Each tool automatically checks local resources first
+   - If local matches are sufficient, the tool returns them without online search
+   - Results include relevance scores and already_installed flags
+   - Results are cached for 24 hours on disk
 
-**For Skills** (agent workflow enhancements):
+2. For each recommendation:
+   - already_installed: true → note "✅ Already available" in delegation context
+   - NOT installed → present install command to user before proceeding
 
-**AUTOMATIC SKILL DISCOVERY** (BEFORE ANY DELEGATION):
-For EVERY non-trivial task, BEFORE delegating to a subagent:
-1. Consider: "Could a skill improve this task's outcome?"
-   - Specialized domains (React, testing, accessibility, databases, APIs, etc.)
-   - Complex workflows (deployment, CI/CD, security audits, performance optimization)
-   - Quality improvements (code review, design review, best practices)
-   
-2. If YES → Call \`discover_skills\` tool:
-   - Provide task_description: What the subagent needs to accomplish
-   - Provide task_keywords: 2-5 keywords describing needed skill areas
-   - Results include install commands and relevance scores
+3. Present findings to the user before delegating:
+   - List what's available and relevant
+   - Ask user to install missing items before proceeding
 
-3. For each recommended skill:
-   - Check if already installed (tool marks with \`already_installed: true\`)
-   - If installed: ✅ Include in delegation prompt with "### Skill context: <name>"
-   - If NOT installed: Show install command \`npx skills add <source> -g\`
-   - Ask user if they want to install before proceeding
-
-4. Present findings before delegation:
-   - List available skills that can help
-   - Recommend missing skills with install commands
-   - Ask user if they want to install before proceeding
-
-**When to SKIP skill discovery** (rare):
-- Trivial tasks (fix typo, rename variable)
-- Time-critical operations where skill overhead isn't justified
-- When subagent has complete domain expertise (e.g., @explorer for file search)
+SEPARATION OF CONCERNS
+- Orchestrator decides WHEN to discover and PRESENTS results
+- Discovery tools decide HOW to search (local-first, then online)
+- Users decide whether to install (planning gate applies)
 </discovery_guidance>`;
 }
