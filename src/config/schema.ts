@@ -1,40 +1,5 @@
 import { z } from 'zod';
 
-const MANUAL_AGENT_NAMES = [
-  'orchestrator',
-  'oracle',
-  'designer',
-  'explorer',
-  'librarian',
-  'fixer',
-] as const;
-
-export const ProviderModelIdSchema = z
-  .string()
-  .regex(
-    /^[^/\s]+\/[^\s]+$/,
-    'Expected provider/model format (provider/.../model)',
-  );
-
-export const ManualAgentPlanSchema = z.object({
-  primary: ProviderModelIdSchema,
-});
-
-export const ManualPlanSchema = z
-  .object({
-    orchestrator: ManualAgentPlanSchema,
-    oracle: ManualAgentPlanSchema,
-    designer: ManualAgentPlanSchema,
-    explorer: ManualAgentPlanSchema,
-    librarian: ManualAgentPlanSchema,
-    fixer: ManualAgentPlanSchema,
-  })
-  .strict();
-
-export type ManualAgentName = (typeof MANUAL_AGENT_NAMES)[number];
-export type ManualAgentPlan = z.infer<typeof ManualAgentPlanSchema>;
-export type ManualPlan = z.infer<typeof ManualPlanSchema>;
-
 // Agent override configuration (distinct from SDK's AgentConfig)
 export const AgentOverrideConfigSchema = z
   .object({
@@ -127,15 +92,14 @@ export type ContextPressureConfig = z.infer<typeof ContextPressureConfigSchema>;
 export const PluginConfigSchema = z.object({
   preset: z.string().optional(),
   setDefaultAgent: z.boolean().optional(),
-  scoringEngineVersion: z.enum(['v1', 'v2-shadow', 'v2']).optional(),
-  balanceProviderUsage: z.boolean().optional(),
+
   autoUpdate: z
     .boolean()
     .optional()
     .describe(
       'Disable automatic installation of plugin updates when false. Defaults to true.',
     ),
-  manualPlan: ManualPlanSchema.optional(),
+
   presets: z.record(z.string(), PresetSchema).optional(),
   agents: z.record(z.string(), AgentOverrideConfigSchema).optional(),
   websearch: WebsearchConfigSchema.optional(),

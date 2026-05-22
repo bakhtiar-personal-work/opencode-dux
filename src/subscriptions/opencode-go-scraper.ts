@@ -10,7 +10,6 @@ import type { OpenCodeGoUsageEntry, UsageDetail, UsageWindow } from './types';
 
 const DASHBOARD_URL_PREFIX = 'https://opencode.ai/workspace/';
 const DASHBOARD_URL_SUFFIX = '/go';
-const USAGE_URL_SUFFIX = '/usage';
 const USER_AGENT =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Gecko/20100101 Firefox/148.0';
 const _SCRAPE_TIMEOUT_MS = 10_000;
@@ -174,122 +173,6 @@ export async function scrapeQuota(
         : `Fetch failed: ${message}`,
     };
   }
-}
-
-/**
- * Scrape detailed usage data from the /usage page.
- * The page embeds individual usage records in SolidJS SSR hydration format
- * as $R[N]={id:"usg_...} records with model, inputTokens, outputTokens, cost fields.
- * No total or summary is present - we aggregate from individual records.
- */
-export async function scrapeUsagePage(
-  workspaceId: string,
-  authCookie: string,
-  signal?: AbortSignal,
-): Promise<UsageDetail | { error: string }> {
-  const url = `${DASHBOARD_URL_PREFIX}${encodeURIComponent(workspaceId)}${USAGE_URL_SUFFIX}`;
-
-  try {
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'User-Agent': USER_AGENT,
-        Accept: 'text/html',
-        Cookie: `auth=${authCookie}`,
-      },
-      signal,
-    });
-
-    if (!response.ok) {
-      const text = await response.text();
-      const snippet = text.slice(0, 200).replace(/\s+/g, ' ').trim();
-      return { error: `Usage page error ${response.status}: ${snippet}` };
-    }
-
-    const html = await response.text();
-
-    // Parse SSR hydration data directly from the raw HTML.
-    // The /usage page embeds records as $R[N]={id:"usg_...} in SolidJS SSR output.
-    return parseUsageSSR(html);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    return { error: `Failed to fetch usage page: ${message}` };
-  }
-}
-
-function parseUsageSSR(payload: string): UsageDetail | { error: string } {
-  // Find all usage records embedded in SSR hydration data.
-  // Format: $R[N]={id:"usg_...",...,model:"...",inputTokens:N,outputTokens:N,cost:N,...}
-  const records: Array<{
-    model: string;
-    inputTokens: number;
-    outputTokens: number;
-    cost: number;
-  }> = [];
-
-  const recordRegex = /\$R\[\d+\]=\{id:"usg_[^}]+?\}/g;
-
-  for (
-    let match: RegExpExecArray | null = recordRegex.exec(payload);
-    match;
-    match = recordRegex.exec(payload)
-  ) {
-    const text = match[0];
-
-    const modelMatch = text.match(/model:"([^"]+)"/);
-    if (!modelMatch) continue;
-
-    const inputTokens = Number(text.match(/inputTokens:(\d+)/)?.[1] ?? 0);
-    const outputTokens = Number(text.match(/outputTokens:(\d+)/)?.[1] ?? 0);
-    const cost = Number(text.match(/cost:(\d+)/)?.[1] ?? 0);
-
-    records.push({
-      model: modelMatch[1],
-      inputTokens,
-      outputTokens,
-      cost,
-    });
-  }
-
-  if (records.length === 0) {
-    return { error: 'Could not parse usage data from the page.' };
-  }
-
-  // Aggregate by model
-  const perModelMap = new Map<
-    string,
-    { calls: number; cost: number; inputTokens: number; outputTokens: number }
-  >();
-
-  for (const r of records) {
-    const existing = perModelMap.get(r.model) ?? {
-      calls: 0,
-      cost: 0,
-      inputTokens: 0,
-      outputTokens: 0,
-    };
-    existing.calls += 1;
-    existing.cost += r.cost;
-    existing.inputTokens += r.inputTokens;
-    existing.outputTokens += r.outputTokens;
-    perModelMap.set(r.model, existing);
-  }
-
-  const totalCalls = records.length;
-  // Cost appears to be in micro-dollars (1/1,000,000 of a dollar)
-  // Divide by 1,000,000 to get dollar amount
-  const totalCostDollars =
-    records.reduce((sum, r) => sum + r.cost, 0) / 1_000_000;
-
-  const perModel = Array.from(perModelMap.entries())
-    .map(([model, data]) => ({
-      model,
-      calls: data.calls,
-      cost: data.cost / 1_000_000,
-    }))
-    .sort((a, b) => b.calls - a.calls);
-
-  return { totalCalls, totalCost: totalCostDollars, perModel };
 }
 
 function _parseUsageHTML(

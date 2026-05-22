@@ -36,14 +36,6 @@ export type PromptBodyPart = SessionPromptBody['parts'][number];
 export type PromptBody = SessionPromptBody & { variant?: string };
 
 /**
- * Extract the short model label from a "provider/model" string.
- * E.g. "openai/gpt-5.4-mini" → "gpt-5.4-mini"
- */
-export function shortModelLabel(model: string): string {
-  return model.split('/').pop() ?? model;
-}
-
-/**
  * Parse a model reference string into provider and model IDs.
  * @param model - Model string in format "provider/model"
  * @returns Object with providerID and modelID, or null if invalid

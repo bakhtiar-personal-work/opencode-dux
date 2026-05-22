@@ -19,9 +19,8 @@ export {
 } from './accounts-store';
 export { scrapeCodexQuota } from './codex-scraper';
 export { scrapeNeuralwattQuota } from './neuralwatt-scraper';
-export { scrapeQuota, scrapeUsagePage } from './opencode-go-scraper';
+export { scrapeQuota } from './opencode-go-scraper';
 export {
-  formatProviderLabel,
   PROVIDERS,
   resolveProvider,
   tuiProviderLabel,

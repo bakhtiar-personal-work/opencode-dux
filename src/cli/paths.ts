@@ -63,7 +63,7 @@ export function getConfigJson(): string {
   return getOpenCodeConfigPaths()[0];
 }
 
-export function getConfigJsonc(): string {
+function getConfigJsonc(): string {
   return getOpenCodeConfigPaths()[1];
 }
 
@@ -71,18 +71,18 @@ export function getLiteConfig(): string {
   return join(getConfigDir(), 'opencode-dux.json');
 }
 
-export function getLiteConfigJsonc(): string {
+function getLiteConfigJsonc(): string {
   return join(getConfigDir(), 'opencode-dux.jsonc');
 }
 
-export function getTuiConfig(): string {
+function getTuiConfig(): string {
   const customConfigPath = getCustomTuiConfigPath();
   if (customConfigPath) return customConfigPath;
 
   return join(getConfigDir(), 'tui.json');
 }
 
-export function getTuiConfigJsonc(): string {
+function getTuiConfigJsonc(): string {
   return join(getConfigDir(), 'tui.jsonc');
 }
 

@@ -50,36 +50,6 @@ describe('loadPluginConfig', () => {
     expect(config.agents?.oracle?.model).toBe('test/model');
   });
 
-  test('loads scoringEngineVersion flag when configured', () => {
-    const projectDir = path.join(tempDir, 'project');
-    const projectConfigDir = path.join(projectDir, '.opencode');
-    fs.mkdirSync(projectConfigDir, { recursive: true });
-    fs.writeFileSync(
-      path.join(projectConfigDir, 'opencode-dux.json'),
-      JSON.stringify({
-        scoringEngineVersion: 'v2-shadow',
-      }),
-    );
-
-    const config = loadPluginConfig(projectDir);
-    expect(config.scoringEngineVersion).toBe('v2-shadow');
-  });
-
-  test('loads balanceProviderUsage flag when configured', () => {
-    const projectDir = path.join(tempDir, 'project');
-    const projectConfigDir = path.join(projectDir, '.opencode');
-    fs.mkdirSync(projectConfigDir, { recursive: true });
-    fs.writeFileSync(
-      path.join(projectConfigDir, 'opencode-dux.json'),
-      JSON.stringify({
-        balanceProviderUsage: true,
-      }),
-    );
-
-    const config = loadPluginConfig(projectDir);
-    expect(config.balanceProviderUsage).toBe(true);
-  });
-
   test('loads autoUpdate flag when configured', () => {
     const projectDir = path.join(tempDir, 'project');
     const projectConfigDir = path.join(projectDir, '.opencode');
@@ -93,40 +63,6 @@ describe('loadPluginConfig', () => {
 
     const config = loadPluginConfig(projectDir);
     expect(config.autoUpdate).toBe(false);
-  });
-
-  test('loads manual plan structure when configured', () => {
-    const projectDir = path.join(tempDir, 'project');
-    const projectConfigDir = path.join(projectDir, '.opencode');
-    fs.mkdirSync(projectConfigDir, { recursive: true });
-    fs.writeFileSync(
-      path.join(projectConfigDir, 'opencode-dux.json'),
-      JSON.stringify({
-        manualPlan: {
-          orchestrator: {
-            primary: 'openai/gpt-5.5',
-          },
-          oracle: {
-            primary: 'openai/gpt-5.5',
-          },
-          designer: {
-            primary: 'openai/gpt-5.5',
-          },
-          explorer: {
-            primary: 'openai/gpt-5.5',
-          },
-          librarian: {
-            primary: 'openai/gpt-5.5',
-          },
-          fixer: {
-            primary: 'openai/gpt-5.5',
-          },
-        },
-      }),
-    );
-
-    const config = loadPluginConfig(projectDir);
-    expect(config.manualPlan?.oracle?.primary).toBe('openai/gpt-5.5');
   });
 
   test('ignores invalid config (schema violation or malformed JSON)', () => {

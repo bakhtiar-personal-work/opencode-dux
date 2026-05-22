@@ -8,7 +8,6 @@ import {
   ensureConfigDir,
   getConfigDir,
   getConfigJson,
-  getConfigJsonc,
   getConfigSearchDirs,
   getExistingConfigPath,
   getLiteConfig,
@@ -87,11 +86,6 @@ describe('paths', () => {
   test('getConfigJson() returns correct path', () => {
     process.env.XDG_CONFIG_HOME = '/tmp/xdg-config';
     expect(getConfigJson()).toBe(p('/tmp/xdg-config/opencode/opencode.json'));
-  });
-
-  test('getConfigJsonc() returns correct path', () => {
-    process.env.XDG_CONFIG_HOME = '/tmp/xdg-config';
-    expect(getConfigJsonc()).toBe(p('/tmp/xdg-config/opencode/opencode.jsonc'));
   });
 
   test('getLiteConfig() returns correct path', () => {

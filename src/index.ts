@@ -39,7 +39,6 @@ import {
   createTodoContinuationHook,
 } from './hooks';
 import { getLatestVersion } from './hooks/auto-update-checker';
-import { processImageAttachments } from './hooks/image-hook';
 import { createBuiltinMcps } from './mcp';
 import type { UsageService } from './subscriptions';
 import { createUsageService } from './subscriptions';
@@ -1595,8 +1594,6 @@ const OpenCodeDux: Plugin = async (ctx) => {
           part.text = rewriteDisplayNameMentions(part.text);
         }
       }
-
-      processImageAttachments();
 
       await todoContinuationHook.handleMessagesTransform({
         messages: typedOutput.messages,
