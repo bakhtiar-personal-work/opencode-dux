@@ -9,8 +9,6 @@
 /** Provider discriminator. */
 export type SubscriptionProvider = 'opencode-go' | 'neuralwatt' | 'codex';
 
-// ── Account definitions (discriminated union) ──
-
 export interface OpenCodeGoAccount {
   provider: 'opencode-go';
   name: string;
@@ -43,8 +41,6 @@ export type StoredAccount =
   | NeuralwattAccount
   | CodexAccount;
 
-// ── Usage window (OpenCode Go) ──
-
 /** Per-time-window usage data scraped from the OpenCode Go dashboard. */
 export interface UsageWindow {
   /** Usage percentage [0..100] */
@@ -56,8 +52,6 @@ export interface UsageWindow {
   /** ISO reset timestamp */
   resetTimeIso: string;
 }
-
-// ── OpenCode Go usage entry ──
 
 /** Snapshot entry per OpenCode Go account - stored in tui-state.json. */
 export interface OpenCodeGoUsageEntry {
@@ -77,8 +71,6 @@ export interface OpenCodeGoUsageEntry {
   /** Error message if the scrape failed for this account. */
   error?: string;
 }
-
-// ── Neuralwatt types ──
 
 export interface NeuralwattBalance {
   credits_remaining_usd: number;
@@ -131,8 +123,6 @@ export interface NeuralwattUsageEntry {
   error?: string;
 }
 
-// ── Codex usage entry ──
-
 export interface CodexUsageEntry {
   provider: 'codex';
   accountName: string;
@@ -157,8 +147,6 @@ export type SubscriptionUsageEntry =
   | NeuralwattUsageEntry
   | CodexUsageEntry;
 
-// ── Detailed usage (OpenCode Go /usage page) ──
-
 /** Detailed usage data from the /usage page. */
 export interface UsageDetail {
   /** Total number of API calls. */
@@ -172,8 +160,6 @@ export interface UsageDetail {
     cost: number;
   }>;
 }
-
-// ── Config ──
 
 /** Config for the subscription tracking feature. */
 export interface SubscriptionsConfig {

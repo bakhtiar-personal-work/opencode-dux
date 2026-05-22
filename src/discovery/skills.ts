@@ -8,8 +8,6 @@ import { tool } from '@opencode-ai/plugin';
 import { log } from '../utils/logger';
 import { getLocalDiscovery } from './local';
 
-// ── Skill interfaces ──────────────────────────────────────────────────────────
-
 /**
  * Input parameters for discovering skills online.
  */
@@ -65,8 +63,6 @@ export interface SkillDiscoveryOutput {
   /** The search queries that were executed. */
   queries_used: string[];
 }
-
-// ── Cache ─────────────────────────────────────────────────────────────────────
 
 /** Maximum number of cache entries before LRU eviction kicks in. */
 const CACHE_MAX_ENTRIES = 100;
@@ -209,8 +205,6 @@ function writeToCache<T>(
   saveCacheFile(cache);
 }
 
-// ── CLI execution ─────────────────────────────────────────────────────────────
-
 /**
  * Run `npx skills find` for the given keywords and return the raw stdout.
  *
@@ -254,8 +248,6 @@ function runSkillsFindCli(keywords: string[], timeoutMs = 30_000): string {
   }
   return '';
 }
-
-// ── Output parsing ───────────────────────────────────────────────────────────
 
 /**
  * Try to parse the CLI output as a JSON array of skill objects.
@@ -457,8 +449,6 @@ function extractSkillName(source: string): string {
   return source;
 }
 
-// ── Relevance scoring ─────────────────────────────────────────────────────────
-
 /**
  * Derive tags from a skill name and description.
  *
@@ -564,8 +554,6 @@ function deduplicateByName<T extends { name: string; relevance_score: number }>(
   return [...map.values()];
 }
 
-// ── Filtering ─────────────────────────────────────────────────────────────────
-
 /**
  * Mark and filter skill recommendations against already-installed skills.
  *
@@ -602,8 +590,6 @@ function filterExistingSkills(
       return true;
     });
 }
-
-// ── discoverSkillsOnline ──────────────────────────────────────────────────────
 
 /**
  * Run the full skill discovery flow for a given set of inputs.
@@ -725,8 +711,6 @@ export async function discoverSkillsOnline(
     queries_used: queries,
   };
 }
-
-// ── Tool factory ──────────────────────────────────────────────────────────────
 
 const z = tool.schema;
 

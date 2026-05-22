@@ -70,8 +70,6 @@ function deriveTags(_name: string): string[] {
   return [];
 }
 
-// ── Recommended agents derivation ───────────────────────────────────────────
-
 /**
  * Derive recommended agent names for a given MCP or skill name.
  *
@@ -83,8 +81,6 @@ function deriveTags(_name: string): string[] {
 function deriveRecommendedAgents(_name: string): string[] {
   return [];
 }
-
-// ── Timeout helper ──────────────────────────────────────────────────────────
 
 /**
  * Race a promise against a configurable timeout.
@@ -111,8 +107,6 @@ function withTimeout<T>(
     ),
   ]);
 }
-
-// ── Internal SDK call helpers ───────────────────────────────────────────────
 
 /**
  * Scan MCP servers via `ctx.client.mcp.status()`.
@@ -284,8 +278,6 @@ async function scanInstanceSkills(): Promise<DiscoveredSkill[]> {
   return skills;
 }
 
-// ── Cache ───────────────────────────────────────────────────────────────────
-
 /** Internal cache entry for a completed scan result. */
 interface CacheEntry {
   result: LocalDiscoveryResult;
@@ -297,8 +289,6 @@ const CACHE_TTL_MS = 5 * 60 * 1_000;
 
 /** Module-level scan result cache. */
 let cache: CacheEntry | null = null;
-
-// ── Exported API ────────────────────────────────────────────────────────────
 
 /**
  * Scan locally configured MCP servers and skills.

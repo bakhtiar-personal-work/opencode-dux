@@ -13,15 +13,11 @@
  * 5. Refresh tokens via `/oauth/token` with `grant_type=refresh_token`
  */
 
-// ── Constants ──
-
 const AUTH_ORIGIN = 'https://auth.openai.com';
 const CLIENT_ID = 'app_EMoamEEZ73f0CkXaXp7hrann';
 const VERIFICATION_URL = 'https://auth.openai.com/codex/device';
 const DEFAULT_INTERVAL_MS = 5_000;
 const MAX_WAIT_MS = 15 * 60 * 1_000;
-
-// ── Types ──
 
 export interface DeviceAuthSession {
   /** Server-assigned device auth identifier. */
@@ -44,8 +40,6 @@ export interface CodexTokens {
   /** Optional OpenID Connect ID token. */
   idToken?: string;
 }
-
-// ── Helpers ──
 
 /**
  * Sleep for the given number of milliseconds, respecting an AbortSignal.
@@ -73,8 +67,6 @@ function urlEncodeBody(params: Record<string, string>): string {
     .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
     .join('&');
 }
-
-// ── Exported Functions ──
 
 /**
  * Initiate the device code authorization flow.
@@ -154,7 +146,6 @@ export async function completeDeviceAuth(
   const exchangeUrl = `${AUTH_ORIGIN}/oauth/token`;
   const startedAt = Date.now();
 
-  // ── Polling loop ──
   let authorizationCode: string;
   let codeVerifier: string;
 
@@ -203,7 +194,6 @@ export async function completeDeviceAuth(
     break;
   }
 
-  // ── Exchange authorization code for tokens ──
   const body = urlEncodeBody({
     grant_type: 'authorization_code',
     client_id: CLIENT_ID,

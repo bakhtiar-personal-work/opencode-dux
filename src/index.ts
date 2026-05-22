@@ -23,6 +23,7 @@ import {
 } from './config/runtime-preset';
 import { getLocalDiscovery } from './discovery/local';
 import { createDiscoverMcpServersTool } from './discovery/mcp-servers';
+import { createDiscoverSkillsTool } from './discovery/skills';
 
 import {
   createApplyPatchHook,
@@ -388,6 +389,9 @@ const OpenCodeDux: Plugin = async (ctx) => {
   let discoverMcpTool:
     | ReturnType<typeof createDiscoverMcpServersTool>
     | undefined;
+  let discoverSkillsTool:
+    | ReturnType<typeof createDiscoverSkillsTool>
+    | undefined;
   let rewriteDisplayNameMentions: ReturnType<
     typeof createDisplayNameMentionRewriter
   >;
@@ -492,6 +496,13 @@ const OpenCodeDux: Plugin = async (ctx) => {
     } catch (err) {
       log('[plugin] failed to create discover_mcp_servers tool', String(err));
       discoverMcpTool = undefined;
+    }
+    try {
+      discoverSkillsTool = createDiscoverSkillsTool(ctx);
+      toolsOnline.push('discover_skills');
+    } catch (err) {
+      log('[plugin] failed to create discover_skills tool', String(err));
+      discoverSkillsTool = undefined;
     }
     if (isFirstInit) {
       console.log(
@@ -678,7 +689,6 @@ const OpenCodeDux: Plugin = async (ctx) => {
     throw err;
   }
 
-  // ── Health check: validate registrations ────────────────────────────
   const agentCount = Object.keys(agents).length;
   const mcpCount = Object.keys(builtinMcps).length;
   const mcpThreshold = HEALTH_CHECK.minMcps;
@@ -705,7 +715,6 @@ const OpenCodeDux: Plugin = async (ctx) => {
     });
   }
 
-  // ── Probe jsdom (async, non-blocking) ───────────────────────────────
   // Don't await this; we don't want to block init. The warning will
   // appear shortly after startup if jsdom is broken.
   probeJSDOM().then((err) => {
@@ -716,7 +725,6 @@ const OpenCodeDux: Plugin = async (ctx) => {
     }
   });
 
-  // ── Deferred version display ────────────────────────────────
   async function scheduleVersionDisplay(
     currentVersion: string,
   ): Promise<boolean> {
@@ -812,6 +820,7 @@ const OpenCodeDux: Plugin = async (ctx) => {
       ast_grep_search,
       ast_grep_replace,
       ...(discoverMcpTool ? { discover_mcp_servers: discoverMcpTool } : {}),
+      ...(discoverSkillsTool ? { discover_skills: discoverSkillsTool } : {}),
     },
 
     mcp: builtinMcps,
@@ -1019,7 +1028,6 @@ const OpenCodeDux: Plugin = async (ctx) => {
           log('[startup] Failed to load skills list:', String(err));
         }
 
-        // ── Version status display ──────────────────────────────────────
         const currentVersion = readPluginVersion();
         if (currentVersion) {
           scheduleVersionDisplay(currentVersion).catch((err) => {

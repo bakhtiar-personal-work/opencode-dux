@@ -7,8 +7,6 @@ import { tool } from '@opencode-ai/plugin';
 import { log } from '../utils/logger';
 import { getLocalDiscovery } from './local';
 
-// ── MCP interfaces ───────────────────────────────────────────────────────────
-
 /**
  * Input parameters for discovering MCP servers online.
  */
@@ -64,8 +62,6 @@ export interface McpDiscoveryOutput {
   /** The search queries that were executed. */
   queries_used: string[];
 }
-
-// ── Cache ────────────────────────────────────────────────────────────────────
 
 /** Maximum number of cache entries before LRU eviction kicks in. */
 const CACHE_MAX_ENTRIES = 100;
@@ -212,8 +208,6 @@ function writeToCache<T>(
   saveCacheFile(cache);
 }
 
-// ── MCP search query construction ───────────────────────────────────────────
-
 /**
  * Build an array of MCP-focused search query strings from the task keywords
  * and agent name.
@@ -236,8 +230,6 @@ function buildMcpSearchQueries(
 
   return queries;
 }
-
-// ── NPM registry search ─────────────────────────────────────────────────────
 
 /** URL of the npm registry search endpoint. */
 const NPM_SEARCH_URL = 'https://registry.npmjs.org/-/v1/search';
@@ -330,8 +322,6 @@ function isMcpLike(pkg: NpmSearchObject): boolean {
 
   return false;
 }
-
-// ── Relevance scoring ───────────────────────────────────────────────────────
 
 /**
  * Derive tags from a package name, description, and npm keywords.
@@ -451,8 +441,6 @@ function deduplicateByName<T extends { name: string; relevance_score: number }>(
   return [...map.values()];
 }
 
-// ── MCP helpers ─────────────────────────────────────────────────────────────
-
 /**
  * Extract a short server name from an MCP package name.
  *
@@ -538,8 +526,6 @@ function filterExistingMcps(
       return true;
     });
 }
-
-// ── discoverMcpServers ──────────────────────────────────────────────────────
 
 /**
  * Run the full MCP discovery flow for a given set of inputs.
@@ -638,8 +624,6 @@ export async function discoverMcpServers(
     queries_used: queries,
   };
 }
-
-// ── Tool factory ────────────────────────────────────────────────────────────
 
 const z = tool.schema;
 
