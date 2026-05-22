@@ -405,13 +405,12 @@ export function createDelegateTools(
     },
   });
 
-
   // Track already-collected sessions to prevent duplicate collection spam
-  const alreadyCollected = new Set<string>()
+  const alreadyCollected = new Set<string>();
 
   // Rate limit status API calls per session
-  const lastCollectAttempt = new Map<string, number>()
-  const COLLECT_COOLDOWN_MS = 5_000 // 5 second cooldown
+  const lastCollectAttempt = new Map<string, number>();
+  const COLLECT_COOLDOWN_MS = 5_000; // 5 second cooldown
 
   const delegateCollect: ToolDefinition = tool({
     description:
@@ -425,16 +424,16 @@ export function createDelegateTools(
     execute: async (args) => {
       // Check if already collected (dedup)
       if (alreadyCollected.has(args.session_id)) {
-        return 'Session was already collected. Result is available in previous turns.'
+        return 'Session was already collected. Result is available in previous turns.';
       }
 
       // Check cooldown for non-terminal status
-      const lastAttempt = lastCollectAttempt.get(args.session_id) ?? 0
-      const elapsed = Date.now() - lastAttempt
+      const lastAttempt = lastCollectAttempt.get(args.session_id) ?? 0;
+      const elapsed = Date.now() - lastAttempt;
       if (elapsed < COLLECT_COOLDOWN_MS) {
-        return 'Session status checked recently. Wait before polling again.'
+        return 'Session status checked recently. Wait before polling again.';
       }
-      lastCollectAttempt.set(args.session_id, Date.now())
+      lastCollectAttempt.set(args.session_id, Date.now());
 
       try {
         const sid = args.session_id;
@@ -449,7 +448,7 @@ export function createDelegateTools(
           | undefined;
 
         if (status === 'idle' || status === 'completed' || status === 'error') {
-          alreadyCollected.add(args.session_id)
+          alreadyCollected.add(args.session_id);
           recordSessionDone(args.session_id);
 
           const extraction = await extractSessionResult(
@@ -473,7 +472,11 @@ export function createDelegateTools(
           return extraction.text;
         }
 
-        return 'Session is still running (status: ' + (status ?? 'unknown') + '). Move on to other work and check back later — do not retry immediately.';
+        return (
+          'Session is still running (status: ' +
+          (status ?? 'unknown') +
+          '). Move on to other work and check back later — do not retry immediately.'
+        );
       } catch (err) {
         return `Error collecting result: ${err instanceof Error ? err.message : String(err)}`;
       }

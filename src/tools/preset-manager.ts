@@ -1,9 +1,5 @@
 import type { PluginInput } from '@opencode-ai/plugin';
-import type {
-  AgentOverrideConfig,
-  PluginConfig,
-  Preset,
-} from '../config';
+import type { AgentOverrideConfig, PluginConfig, Preset } from '../config';
 import { AGENT_ALIASES } from '../config/constants';
 import {
   getActiveRuntimePreset,
@@ -285,7 +281,8 @@ export function createPresetManager(ctx: PluginInput, config: PluginConfig) {
       const models = agentNames
         .map((a) => {
           const cfg = preset[a];
-          const modelStr = typeof cfg.model === 'string' ? cfg.model : undefined;
+          const modelStr =
+            typeof cfg.model === 'string' ? cfg.model : undefined;
           return modelStr ? `    ${a} → ${modelStr}` : `    ${a}`;
         })
         .join('\n');

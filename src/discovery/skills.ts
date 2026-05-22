@@ -232,7 +232,7 @@ function runSkillsFindCli(keywords: string[], timeoutMs = 30_000): string {
         windowsHide: true,
       });
       if (stdout.trim()) {
-        return stdout.trim();
+        return stripAnsi(stdout.trim());
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -247,6 +247,70 @@ function runSkillsFindCli(keywords: string[], timeoutMs = 30_000): string {
     );
   }
   return '';
+}
+
+/**
+ * Check whether the `npx skills` CLI is available on this system.
+ *
+ * Runs `npx skills --version` with a short timeout to probe availability
+ * without blocking for long.
+ */
+function probeSkillsCli(): boolean {
+  try {
+    execSync('npx skills --version', {
+      timeout: 5_000,
+      encoding: 'utf-8',
+      windowsHide: true,
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Search the npm registry for skill packages matching the given keywords.
+ *
+ * Used as a fallback when the `npx skills` CLI is unavailable or returns
+ * no results. Filters results to packages that declare both an `opencode` /
+ * `opencode-plugin` keyword AND a skill-related keyword (`skill`,
+ * `agent-skills`, `ai-skills`).
+ */
+async function runNpmSkillsSearch(
+  keywords: string[],
+  signal?: AbortSignal,
+): Promise<Array<{ name: string; description?: string; source?: string }>> {
+  const query = encodeURIComponent(`opencode skill ${keywords.join(' ')}`);
+  const url = `https://registry.npmjs.org/-/v1/search?text=${query}&size=20`;
+  try {
+    const res = await fetch(url, { signal });
+    if (!res.ok) return [];
+    const body = await res.json();
+    const objects: Array<{
+      package: { name: string; description?: string; keywords?: string[] };
+    }> = body.objects ?? [];
+    return objects
+      .filter((o) => {
+        const kws = (o.package.keywords ?? []).map((k: string) =>
+          k.toLowerCase(),
+        );
+        // Must have both 'opencode' and 'skill' keywords to be a real skill package
+        const hasOpencode =
+          kws.includes('opencode') || kws.includes('opencode-plugin');
+        const hasSkill =
+          kws.includes('skill') ||
+          kws.includes('agent-skills') ||
+          kws.includes('ai-skills');
+        return hasOpencode && hasSkill;
+      })
+      .map((o) => ({
+        name: o.package.name,
+        description: o.package.description,
+        source: o.package.name,
+      }));
+  } catch {
+    return [];
+  }
 }
 
 /**
@@ -297,46 +361,70 @@ function tryParseJsonSkills(raw: string): Array<{
 }
 
 /**
+ * Strip ANSI escape codes from a string.
+ *
+ * Removes sequences like `[38;5;250m`, `[0m`, etc. that terminals use for
+ * colour and styling. These are emitted by `npx skills find` and must be
+ * removed before any text or JSON parsing.
+ */
+function stripAnsi(str: string): string {
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: ANSI escape sequences use the ESC control character
+  return str.replace(/\u001B\[[0-9;]*[a-zA-Z]/g, '');
+}
+
+/**
  * Regex patterns used to parse text-format `npx skills find` output.
  *
- * Matches lines like:
- * - `• skill-name Description text`
- * - `1. skill-name - Description text`
- * - `skill-name - Description text`
- * - `npx skills add owner/repo@skill -g`
+ * Actual CLI output format (no --json support):
+ * ```text
+ * vercel-labs/json-render@react 2.1K installs
+ * └ https://skills.sh/vercel-labs/json-render/react
+ * ```
  */
-const SKILL_BULLET_RE = /^[•\-*\d.\s]+(\S[\w-]*)\s*[-–:]\s*(.+)$/im;
 
-const SKILL_INSTALL_RE = /npx\s+skills\s+add\s+(\S+?)(?:\s+-g\s*)?$/im;
+/**
+ * Match a skill entry line: owner/repo@skill-name [install-count installs]
+ * Group 1: the full identifier (e.g. vercel-labs/json-render@react)
+ * Group 2: optional install count (e.g. 2.1K)
+ */
+const SKILL_ENTRY_RE =
+  /^([\w.-]+\/[\w.-]+@[\w.-]+)(?:\s+([\d.]+K?)\s+installs)?$/;
 
-const SKILL_NAME_RE = /^[•\-*\d.\s]*(\S[\w-]*)$/im;
+/**
+ * Match a URL line starting with └:
+ * Group 1: the full URL (e.g. https://skills.sh/vercel-labs/json-render/react)
+ */
+const SKILL_URL_RE = /^└\s+(https?:\/\/\S+)/;
 
 /**
  * Parse plain-text output from `npx skills find` into skill entries.
  *
- * Handles common output formats:
+ * The `npx skills find` CLI (v1.5.7) does NOT support --json output.
+ * Actual output format:
  * ```text
- * Found 3 skills:
+ * vercel-labs/json-render@react 2.1K installs
+ * └ https://skills.sh/vercel-labs/json-render/react
  *
- * • react-component - Generate React components
- *   npx skills add owner/repo@react-component -g
- *
- * 1. testing-utils - Testing utilities for web apps
- *    Install: npx skills add owner/repo@testing-utils -g
+ * vercel-labs/json-render@react-pdf 1K installs
+ * └ https://skills.sh/vercel-labs/json-render/react-pdf
  * ```
  *
- * @param raw - Raw text output to parse
+ * Banner lines before the first `owner/repo@skill` line are skipped.
+ *
+ * @param raw - Raw ANSI-free text output to parse
  * @returns Parsed skill entries (may be empty)
  */
 function parseTextSkills(raw: string): Array<{
   name: string;
   description: string;
   install_command: string;
+  source_url?: string;
 }> {
   const results: Array<{
     name: string;
     description: string;
     install_command: string;
+    source_url?: string;
   }> = [];
 
   const lines = raw
@@ -346,73 +434,38 @@ function parseTextSkills(raw: string): Array<{
 
   let currentName = '';
   let currentDesc = '';
-  let currentInstall = '';
+  let currentUrl = '';
+  let started = false;
 
   for (const line of lines) {
-    // Skip header lines
-    if (
-      /^(found|searching|looking|matching)/i.test(line) ||
-      /^-{3,}$/.test(line)
-    ) {
-      continue;
-    }
-
-    // Check if this line contains an install command
-    const installMatch = line.match(SKILL_INSTALL_RE);
-    if (installMatch) {
-      currentInstall = `npx skills add ${installMatch[1]} -g`;
-      // If we have a pending entry, finalize it
+    // Check for skill entry line: owner/repo@skill-name [installs]
+    const entryMatch = line.match(SKILL_ENTRY_RE);
+    if (entryMatch) {
+      // Flush previous entry before starting a new one
       if (currentName) {
         results.push({
           name: currentName,
           description: currentDesc || 'No description available',
-          install_command: currentInstall,
-        });
-        currentName = '';
-        currentDesc = '';
-        currentInstall = '';
-      }
-      continue;
-    }
-
-    // Check if this line starts a new skill entry (bullet or numbered)
-    const bulletMatch = line.match(SKILL_BULLET_RE);
-    if (bulletMatch) {
-      // Save previous entry if any
-      if (currentName) {
-        results.push({
-          name: currentName,
-          description: currentDesc || 'No description available',
-          install_command: currentInstall || `npx skills add ${currentName} -g`,
+          install_command: `npx skills add ${currentName} -g`,
+          source_url: currentUrl || undefined,
         });
       }
-      currentName = bulletMatch[1];
-      currentDesc = bulletMatch[2];
-      currentInstall = '';
+      currentName = entryMatch[1];
+      currentDesc = entryMatch[2]
+        ? `Skill with ${entryMatch[2]} installs`
+        : 'No description available';
+      currentUrl = '';
+      started = true;
       continue;
     }
 
-    // Check if line is just a name (followed by description on next lines)
-    const nameMatch = line.match(SKILL_NAME_RE);
-    if (nameMatch && !currentName) {
-      // Only start a new entry if we don't have one in progress
-      currentName = nameMatch[1];
-      currentDesc = '';
-      currentInstall = '';
-      continue;
-    }
+    // Skip banner lines before the first skill entry
+    if (!started) continue;
 
-    // If we have a current name and this looks like a description, append it
-    if (
-      currentName &&
-      !currentInstall &&
-      !results.some((r) => r.name === currentName)
-    ) {
-      if (currentDesc) {
-        currentDesc += ' ' + line;
-      } else {
-        currentDesc = line;
-      }
+    // Check for URL line: └ https://skills.sh/...
+    const urlMatch = line.match(SKILL_URL_RE);
+    if (urlMatch) {
+      currentUrl = urlMatch[1];
     }
   }
 
@@ -421,7 +474,8 @@ function parseTextSkills(raw: string): Array<{
     results.push({
       name: currentName,
       description: currentDesc || 'No description available',
-      install_command: currentInstall || `npx skills add ${currentName} -g`,
+      install_command: `npx skills add ${currentName} -g`,
+      source_url: currentUrl || undefined,
     });
   }
 
@@ -447,18 +501,6 @@ function extractSkillName(source: string): string {
     return source.slice(slashIdx + 1);
   }
   return source;
-}
-
-/**
- * Derive tags from a skill name and description.
- *
- * Tag derivation has been removed; always returns an empty array.
- * The orchestrator decides tags dynamically from skill names.
- *
- * @returns Empty array
- */
-function deriveTags(_name: string, _description: string): string[] {
-  return [];
 }
 
 /**
@@ -522,18 +564,6 @@ function buildRelevanceReason(
     return `Matches keywords: ${matchedKeywords.join(', ')}`;
   }
   return 'Found in search results for task context';
-}
-
-/**
- * Determine which agents would benefit most from a skill based on its tags.
- *
- * Agent recommendation has been removed; always returns an empty array.
- * The orchestrator decides which agent to delegate to.
- *
- * @returns Empty array
- */
-function deriveRecommendedAgents(_tags: string[]): string[] {
-  return [];
 }
 
 /**
@@ -608,7 +638,7 @@ export async function discoverSkillsOnline(
   ctx: PluginInput,
 ): Promise<SkillDiscoveryOutput> {
   const maxResults = input.max_results ?? 5;
-  const queries = input.task_keywords.map((kw) => `skill query: ${kw}`);
+  const queries = [...input.task_keywords];
 
   // Auto-discover installed skills if caller didn't provide existing names
   let existingSkillNames = input.existing_skill_names;
@@ -625,77 +655,95 @@ export async function discoverSkillsOnline(
   const allRecommendations: SkillRecommendation[] = [];
   const seenNames = new Set<string>();
 
-  for (const query of input.task_keywords) {
-    const rawOutput = runSkillsFindCli([query]);
-    if (!rawOutput) continue;
+  // Probe the CLI once before the loop
+  const cliAvailable = probeSkillsCli();
 
-    // Try JSON parsing first
-    const jsonSkills = tryParseJsonSkills(rawOutput);
-    if (jsonSkills) {
-      for (const skill of jsonSkills) {
-        const skillName = skill.name || extractSkillName(skill.source ?? '');
-        if (!skillName) continue;
+  if (cliAvailable) {
+    for (const query of input.task_keywords) {
+      const rawOutput = runSkillsFindCli([query]);
+      if (!rawOutput) continue;
 
-        if (seenNames.has(skillName.toLowerCase())) continue;
-        seenNames.add(skillName.toLowerCase());
+      // Try JSON parsing first
+      const jsonSkills = tryParseJsonSkills(rawOutput);
+      if (jsonSkills) {
+        for (const skill of jsonSkills) {
+          const skillName = skill.name || extractSkillName(skill.source ?? '');
+          if (!skillName) continue;
 
-        const description = skill.description ?? 'No description available';
-        const source = skill.source ?? skillName;
-        const tags = deriveTags(skillName, description);
-        const relevanceScore = scoreRelevance(
+          if (seenNames.has(skillName.toLowerCase())) continue;
+          seenNames.add(skillName.toLowerCase());
+
+          const description = skill.description ?? 'No description available';
+          const source = skill.source ?? skillName;
+
+          allRecommendations.push({
+            type: 'skill',
+            name: skillName,
+            description,
+            install_command: `npx skills add ${source} -g`,
+            relevance_reason: `Found by npx skills find matching "${query}"`,
+            relevance_score: Math.max(
+              0.5,
+              1.0 - allRecommendations.length * 0.1,
+            ),
+          });
+        }
+      } else {
+        // Fall back to text parsing
+        const textSkills = parseTextSkills(rawOutput);
+        for (const skill of textSkills) {
+          if (seenNames.has(skill.name.toLowerCase())) continue;
+          seenNames.add(skill.name.toLowerCase());
+
+          allRecommendations.push({
+            type: 'skill',
+            name: skill.name,
+            description: skill.description,
+            install_command: skill.install_command,
+            source_url: skill.source_url,
+            relevance_reason: `Found by npx skills find matching "${query}"`,
+            relevance_score: Math.max(
+              0.5,
+              1.0 - allRecommendations.length * 0.1,
+            ),
+          });
+        }
+      }
+    }
+  }
+
+  // If CLI was unavailable or returned no results, fall back to npm registry search
+  if (!cliAvailable || allRecommendations.length === 0) {
+    const npmResults = await runNpmSkillsSearch(input.task_keywords);
+    for (const skill of npmResults) {
+      const skillName = skill.name;
+      if (seenNames.has(skillName.toLowerCase())) continue;
+      seenNames.add(skillName.toLowerCase());
+
+      const description = skill.description ?? 'No description available';
+      const source = skill.source ?? skillName;
+      const relevanceScore = scoreRelevance(
+        skillName,
+        description,
+        [],
+        input.task_keywords,
+      );
+
+      if (relevanceScore < 0.01) continue;
+
+      allRecommendations.push({
+        type: 'skill',
+        name: skillName,
+        description,
+        install_command: `npx skills add ${source} -g`,
+        relevance_reason: buildRelevanceReason(
           skillName,
           description,
-          tags,
+          [],
           input.task_keywords,
-        );
-
-        if (relevanceScore < 0.05) continue;
-
-        allRecommendations.push({
-          type: 'skill',
-          name: skillName,
-          description,
-          install_command: `npx skills add ${source} -g`,
-          relevance_reason: buildRelevanceReason(
-            skillName,
-            description,
-            tags,
-            input.task_keywords,
-          ),
-          relevance_score: relevanceScore,
-        });
-      }
-    } else {
-      // Fall back to text parsing
-      const textSkills = parseTextSkills(rawOutput);
-      for (const skill of textSkills) {
-        if (seenNames.has(skill.name.toLowerCase())) continue;
-        seenNames.add(skill.name.toLowerCase());
-
-        const tags = deriveTags(skill.name, skill.description);
-        const relevanceScore = scoreRelevance(
-          skill.name,
-          skill.description,
-          tags,
-          input.task_keywords,
-        );
-
-        if (relevanceScore < 0.05) continue;
-
-        allRecommendations.push({
-          type: 'skill',
-          name: skill.name,
-          description: skill.description,
-          install_command: skill.install_command,
-          relevance_reason: buildRelevanceReason(
-            skill.name,
-            skill.description,
-            tags,
-            input.task_keywords,
-          ),
-          relevance_score: relevanceScore,
-        });
-      }
+        ),
+        relevance_score: relevanceScore,
+      });
     }
   }
 
@@ -731,9 +779,7 @@ const z = tool.schema;
  * @param ctx - The OpenCode plugin input (provides client for SDK access)
  * @returns A `ToolDefinition` ready for registration in the plugin's tool hook
  */
-export function createDiscoverSkillsTool(
-  ctx: PluginInput,
-): ToolDefinition {
+export function createDiscoverSkillsTool(ctx: PluginInput): ToolDefinition {
   const cache = loadCacheFile();
   const cachePrefix = 'skill';
 

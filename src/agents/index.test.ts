@@ -145,7 +145,6 @@ describe('orchestrator agent', () => {
     const orchestrator = agents.find((a) => a.name === 'orchestrator');
     expect(orchestrator?.config.variant).toBe('high');
   });
-
 });
 
 describe('skill permissions', () => {

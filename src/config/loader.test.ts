@@ -297,8 +297,6 @@ describe('deepMerge behavior', () => {
     const config = loadPluginConfig(projectDir);
     expect(config.agents?.oracle?.model).toBe('user/model');
   });
-
-
 });
 
 describe('preset resolution', () => {

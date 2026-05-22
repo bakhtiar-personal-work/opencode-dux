@@ -478,8 +478,10 @@ const OpenCodeDux: Plugin = async (ctx) => {
     builtinMcps = createBuiltinMcps(undefined, config.websearch);
 
     if (isFirstInit) {
-      console.log("  \u{1F50C} Built-in MCPs: " + Object.keys(builtinMcps).join(', '));
-      log("[init] Built-in MCPs: " + Object.keys(builtinMcps).join(', '));
+      console.log(
+        '  \u{1F50C} Built-in MCPs: ' + Object.keys(builtinMcps).join(', '),
+      );
+      log('[init] Built-in MCPs: ' + Object.keys(builtinMcps).join(', '));
     }
 
     // Warm the local discovery cache asynchronously (non-blocking init).
@@ -1019,7 +1021,9 @@ const OpenCodeDux: Plugin = async (ctx) => {
           log('[startup] Loading skills...');
 
           const discovery = await getLocalDiscovery(ctx);
-    const skillNames = (discovery.skills || []).map(s => s.name).filter(Boolean);
+          const skillNames = (discovery.skills || [])
+            .map((s) => s.name)
+            .filter(Boolean);
           if (skillNames.length > 0) {
             console.log(`\u{1F3AF} Skills: ${skillNames.join(', ')}`);
             log(`[startup] Skills: ${skillNames.join(', ')}`);

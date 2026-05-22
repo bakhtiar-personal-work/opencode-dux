@@ -1,6 +1,5 @@
 import { z } from 'zod';
 
-
 const MANUAL_AGENT_NAMES = [
   'orchestrator',
   'oracle',
@@ -17,10 +16,9 @@ export const ProviderModelIdSchema = z
     'Expected provider/model format (provider/.../model)',
   );
 
-export const ManualAgentPlanSchema = z
-  .object({
-    primary: ProviderModelIdSchema,
-  });
+export const ManualAgentPlanSchema = z.object({
+  primary: ProviderModelIdSchema,
+});
 
 export const ManualPlanSchema = z
   .object({
@@ -36,7 +34,6 @@ export const ManualPlanSchema = z
 export type ManualAgentName = (typeof MANUAL_AGENT_NAMES)[number];
 export type ManualAgentPlan = z.infer<typeof ManualAgentPlanSchema>;
 export type ManualPlan = z.infer<typeof ManualPlanSchema>;
-
 
 // Agent override configuration (distinct from SDK's AgentConfig)
 export const AgentOverrideConfigSchema = z
@@ -126,7 +123,6 @@ export const ContextPressureConfigSchema = z.object({
 });
 
 export type ContextPressureConfig = z.infer<typeof ContextPressureConfigSchema>;
-
 
 export const PluginConfigSchema = z.object({
   preset: z.string().optional(),

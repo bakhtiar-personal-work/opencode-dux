@@ -216,7 +216,5 @@ export function getAccount(
   name: string,
 ): StoredAccount | undefined {
   const file = readAccountsFile();
-  return file.accounts.find(
-    (a) => a.provider === provider && a.name === name,
-  );
+  return file.accounts.find((a) => a.provider === provider && a.name === name);
 }

@@ -216,17 +216,16 @@ function writeToCache<T>(
  */
 function buildMcpSearchQueries(
   keywords: string[],
-  agentName: string,
+  _agentName: string,
 ): string[] {
   const queries: string[] = [];
 
   for (const kw of keywords) {
-    queries.push(`opencode MCP server ${kw}`);
-    queries.push(`modelcontextprotocol ${kw}`);
+    queries.push(`${kw} mcp-server`);
   }
 
-  // Add a general query scoped to the requesting agent
-  queries.push(`opencode ${agentName} MCP`);
+  // Broad catch-all: discover MCP servers regardless of keyword specificity
+  queries.push('mcp-server');
 
   return queries;
 }
@@ -253,18 +252,6 @@ interface NpmSearchObject {
 }
 
 /**
- * Known MCP package name substrings that identify an npm package
- * as an MCP server implementation.
- */
-const KNOWN_MCP_NAMES = [
-  'playwright',
-  'puppeteer',
-  'filesystem',
-  'github',
-  'postgres',
-] as const;
-
-/**
  * Search the npm registry for packages matching a query.
  *
  * Returns the raw search objects; the caller is responsible for filtering
@@ -280,7 +267,6 @@ async function searchNpm(
     const res = await fetch(url, {
       signal,
       headers: {
-        Accept: 'application/vnd.npm.install-v1+json',
         'User-Agent': 'opencode-dux/1.0',
       },
     });
@@ -301,42 +287,41 @@ async function searchNpm(
 }
 
 /**
- * Determine whether an npm package name looks like a verified MCP server.
+ * Determine whether an npm package looks like an MCP server using broad heuristics.
  *
- * Only matches verified MCP patterns:
- * - `@modelcontextprotocol/server-*` namespace
- * - `@anthropic/mcp-server-*` namespace
- * - Known MCP package names (playwright, puppeteer, filesystem, github, postgres)
+ * Matches:
+ * - Known official namespaces (`@modelcontextprotocol/server-*`, `@anthropic/mcp-server-*`)
+ * - Name contains `mcp-server` or `server-mcp`
+ * - Package declares MCP-related keywords (`mcp`, `modelcontextprotocol`, `claude`)
+ * - Description mentions "model context protocol" or "mcp server"
  */
 function isMcpLike(pkg: NpmSearchObject): boolean {
   const name = pkg.package.name.toLowerCase();
+  const desc = (pkg.package.description ?? '').toLowerCase();
+  const keywords = (pkg.package.keywords ?? []).map((k: string) =>
+    k.toLowerCase(),
+  );
 
-  // Check known namespaces
+  // 1. Known official namespaces
   if (name.startsWith('@modelcontextprotocol/server-')) return true;
   if (name.startsWith('@anthropic/mcp-server-')) return true;
 
-  // Check known MCP package names
-  for (const known of KNOWN_MCP_NAMES) {
-    if (name.includes(known)) return true;
-  }
+  // 2. Broad heuristic: name contains mcp-server or server-mcp
+  if (name.includes('mcp-server') || name.includes('server-mcp')) return true;
+
+  // 3. Keyword check: package declares mcp-related keywords
+  if (
+    keywords.some(
+      (k) => k === 'mcp' || k === 'modelcontextprotocol' || k === 'claude',
+    )
+  )
+    return true;
+
+  // 4. Description check: mentions MCP protocol
+  if (desc.includes('model context protocol') || desc.includes('mcp server'))
+    return true;
 
   return false;
-}
-
-/**
- * Derive tags from a package name, description, and npm keywords.
- *
- * Tag derivation has been removed; always returns an empty array.
- * The orchestrator decides tags dynamically from names.
- *
- * @returns Empty array
- */
-function deriveTags(
-  _name: string,
-  _description: string,
-  _npmKeywords?: string[],
-): string[] {
-  return [];
 }
 
 /**
@@ -384,21 +369,6 @@ function scoreRelevance(
   }
 
   return Math.min(score, 1);
-}
-
-/**
- * Determine which agents would benefit most from an item based on its tags.
- *
- * Agent recommendation has been removed; always returns an empty array.
- * The orchestrator decides which agent to delegate to.
- *
- * @returns Empty array
- */
-function deriveRecommendedAgents(
-  _type: 'mcp' | 'skill',
-  _tags: string[],
-): string[] {
-  return [];
 }
 
 /**
@@ -495,9 +465,6 @@ function deriveSourceUrl(pkg: NpmSearchObject): string | undefined {
  *
  * For recommendations matching an installed MCP:
  * - Mark them as `already_installed: true`
- * - Only include them if the relevance score is > 0.8 (significantly better
- *   than the installed default, meaning this MCP is highly relevant to the
- *   current task)
  *
  * Non-installed recommendations pass through unchanged.
  */
@@ -509,22 +476,13 @@ function filterExistingMcps(
 
   const installed = new Set(existingNames.map((n) => n.toLowerCase()));
 
-  return recommendations
-    .map((rec) => {
-      const lower = rec.name.toLowerCase();
-      if (installed.has(lower)) {
-        return { ...rec, already_installed: true };
-      }
-      return rec;
-    })
-    .filter((rec) => {
-      // For already-installed items, only show if relevance_score > 0.8
-      // (significantly better enough to mention despite being installed)
-      if (rec.already_installed) {
-        return rec.relevance_score > 0.8;
-      }
-      return true;
-    });
+  return recommendations.map((rec) => {
+    const lower = rec.name.toLowerCase();
+    if (installed.has(lower)) {
+      return { ...rec, already_installed: true };
+    }
+    return rec;
+  });
 }
 
 /**
@@ -533,8 +491,8 @@ function filterExistingMcps(
  * 1. Builds search queries from keywords and agent name
  * 2. Searches the npm registry for matching MCP packages
  * 3. Maps results to recommendations with relevance scores
- * 4. Marks already-installed items with `already_installed: true` and
- *    only includes them when relevance_score > 0.8
+ * 4. Marks already-installed items with `already_installed: true`
+ *    (they are always included, with the flag set)
  * 5. Returns the top N results
  *
  * Results are cached on disk for 24 hours.
@@ -582,7 +540,7 @@ export async function discoverMcpServers(
         if (!isMcpLike(obj)) continue;
 
         const description = obj.package.description ?? '';
-        const tags = deriveTags(pkgName, description, obj.package.keywords);
+        const tags: string[] = [];
         const relevanceScore = scoreRelevance(
           pkgName,
           description,
@@ -656,8 +614,7 @@ export function createDiscoverMcpServersTool(ctx: PluginInput): ToolDefinition {
       'want to discover what external MCP servers are available. ' +
       'If existing_mcp_names is not provided, automatically discovers ' +
       "what's already installed and filters recommendations accordingly. " +
-      'Already-installed MCPs are shown only when relevance_score > 0.8 ' +
-      '(significantly better). ' +
+      'Already-installed MCPs are marked with an `already_installed: true` flag. ' +
       'Returns recommendations with ready-to-use mcpServers config blocks. ' +
       'Results are cached for 24 hours.',
     args: {
