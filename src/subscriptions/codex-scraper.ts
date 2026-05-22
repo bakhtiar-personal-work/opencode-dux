@@ -99,11 +99,14 @@ export async function scrapeCodexQuota(
     };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
+    const isTimeout = err instanceof Error && err.name === 'AbortError';
     return {
       provider: 'codex',
       accountName,
       fetchedAt: Date.now(),
-      error: `Codex fetch failed: ${message}`,
+      error: isTimeout
+        ? 'Codex API request timed out. The service may be slow or unreachable.'
+        : `Codex fetch failed: ${message}`,
       primaryWindow: { ...EMPTY_WINDOW },
       secondaryWindow: null,
       credits: { ...EMPTY_CREDITS },

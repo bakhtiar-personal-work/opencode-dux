@@ -91,6 +91,7 @@ export async function scrapeNeuralwattQuota(
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
+    const isTimeout = err instanceof Error && err.name === 'AbortError';
     return {
       provider: 'neuralwatt',
       accountName: '',
@@ -102,7 +103,9 @@ export async function scrapeNeuralwattQuota(
       },
       subscription: null,
       fetchedAt: now,
-      error: `Fetch failed: ${message}`,
+      error: isTimeout
+        ? 'Neuralwatt API request timed out. The service may be slow or unreachable.'
+        : `Fetch failed: ${message}`,
     };
   }
 }

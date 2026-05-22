@@ -86,7 +86,7 @@ describe('accounts-store (subscriptions)', () => {
     }
   });
 
-  test('saveAccount can change provider type for same name', () => {
+  test('saveAccount keeps separate accounts for same name different providers', () => {
     saveAccount({
       provider: 'opencode-go',
       name: 'personal',
@@ -100,41 +100,126 @@ describe('accounts-store (subscriptions)', () => {
     });
 
     const accounts = loadAccounts();
-    expect(accounts).toHaveLength(1);
-    expect(accounts[0].provider).toBe('neuralwatt');
+    expect(accounts).toHaveLength(2);
+    const goAccounts = accounts.filter((a) => a.provider === 'opencode-go');
+    const nwAccounts = accounts.filter((a) => a.provider === 'neuralwatt');
+    expect(goAccounts).toHaveLength(1);
+    expect(goAccounts[0].name).toBe('personal');
+    expect(nwAccounts).toHaveLength(1);
+    expect(nwAccounts[0].name).toBe('personal');
   });
 
-  test('removeAccount removes by name', () => {
+  test('saveAccount overwrites same provider+name combination', () => {
+    saveAccount({
+      provider: 'opencode-go',
+      name: 'personal',
+      workspaceId: 'wrk_123',
+      authCookie: 'cookie-old',
+    });
+    saveAccount({
+      provider: 'opencode-go',
+      name: 'personal',
+      workspaceId: 'wrk_456',
+      authCookie: 'cookie-new',
+    });
+
+    const accounts = loadAccounts();
+    expect(accounts).toHaveLength(1);
+    const acct = accounts[0];
+    if (acct.provider === 'opencode-go') {
+      expect(acct.workspaceId).toBe('wrk_456');
+      expect(acct.authCookie).toBe('cookie-new');
+    }
+  });
+
+  test('saveAccount does not overwrite same name across different providers', () => {
+    saveAccount({
+      provider: 'opencode-go',
+      name: 'Main',
+      workspaceId: 'wrk_123',
+      authCookie: 'cookie-abc',
+    });
+    saveAccount({
+      provider: 'neuralwatt',
+      name: 'Main',
+      apiKey: 'sk-neuralwatt',
+    });
+    saveAccount({
+      provider: 'codex',
+      name: 'Main',
+      accessToken: 'cx-token',
+    });
+
+    const accounts = loadAccounts();
+    // All three "Main" accounts should coexist since they're different providers
+    const providers = accounts.map((a) => a.provider).sort();
+    expect(providers).toEqual(['codex', 'neuralwatt', 'opencode-go']);
+    // Verify each account belongs to the right provider
+    const goAccount = getAccount('opencode-go', 'Main');
+    expect(goAccount).toBeDefined();
+    expect((goAccount as any).authCookie).toBe('cookie-abc');
+    const nwAccount = getAccount('neuralwatt', 'Main');
+    expect(nwAccount).toBeDefined();
+    expect((nwAccount as any).apiKey).toBe('sk-neuralwatt');
+    const cxAccount = getAccount('codex', 'Main');
+    expect(cxAccount).toBeDefined();
+    expect((cxAccount as any).accessToken).toBe('cx-token');
+  });
+
+  test('removeAccount removes only the matching provider+name pair', () => {
+    saveAccount({
+      provider: 'opencode-go',
+      name: 'Main',
+      workspaceId: 'wrk_123',
+      authCookie: 'cookie-abc',
+    });
+    saveAccount({
+      provider: 'neuralwatt',
+      name: 'Main',
+      apiKey: 'sk-neuralwatt',
+    });
+
+    // Remove only the opencode-go "Main" account
+    const removed = removeAccount('opencode-go', 'Main');
+    expect(removed).toBe(true);
+
+    const accounts = loadAccounts();
+    expect(accounts).toHaveLength(1);
+    expect(accounts[0].provider).toBe('neuralwatt');
+    expect(accounts[0].name).toBe('Main');
+  });
+
+  test('removeAccount removes by provider and name', () => {
     saveAccount({
       provider: 'opencode-go',
       name: 'personal',
       workspaceId: 'wrk_123',
       authCookie: 'cookie-abc',
     });
-    const removed = removeAccount('personal');
+    const removed = removeAccount('opencode-go', 'personal');
     expect(removed).toBe(true);
     expect(loadAccounts()).toHaveLength(0);
   });
 
   test('removeAccount returns false for unknown name', () => {
-    const removed = removeAccount('nonexistent');
+    const removed = removeAccount('opencode-go', 'nonexistent');
     expect(removed).toBe(false);
   });
 
-  test('getAccount finds by name', () => {
+  test('getAccount finds by provider and name', () => {
     saveAccount({
       provider: 'opencode-go',
       name: 'personal',
       workspaceId: 'wrk_123',
       authCookie: 'cookie-abc',
     });
-    const account = getAccount('personal');
+    const account = getAccount('opencode-go', 'personal');
     expect(account).toBeDefined();
     expect(account?.provider).toBe('opencode-go');
   });
 
   test('getAccount returns undefined for unknown name', () => {
-    const account = getAccount('nonexistent');
+    const account = getAccount('opencode-go', 'nonexistent');
     expect(account).toBeUndefined();
   });
 

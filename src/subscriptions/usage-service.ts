@@ -50,6 +50,18 @@ import type {
 const SUBSCRIPTIONS_COMMAND = 'subscriptions';
 const DEFAULT_REFRESH_INTERVAL_MS = 60_000;
 const DEFAULT_PERIODIC_INTERVAL_MS = 600_000; // 10 minutes
+
+/** Classify an error from a scraper to produce a more descriptive message. */
+function formatScrapeError(reason: unknown): string {
+  if (reason instanceof Error) {
+    if (reason.name === 'AbortError') {
+      return 'Scrape request timed out - the provider API did not respond within 30 seconds.';
+    }
+    return `Scrape failed: ${reason.message}`;
+  }
+  return `Scrape failed: ${String(reason)}`;
+}
+
 export class UsageService {
   private client: PluginInput['client'];
   private lastRefresh = 0;
@@ -117,12 +129,13 @@ export class UsageService {
       return [];
     }
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 10_000);
-
-    try {
-      const results = await Promise.allSettled(
-        accounts.map(async (account) => {
+    const results = await Promise.allSettled(
+      accounts.map(async (account) => {
+        // Each provider gets its own AbortController so one slow response
+        // doesn't abort every provider's request.
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 30_000);
+        try {
           if (account.provider === 'opencode-go') {
             if (!account.authCookie?.trim()) {
               return {
@@ -222,35 +235,35 @@ export class UsageService {
             entry.accountName = account.name;
             return entry as SubscriptionUsageEntry;
           }
-        }),
-      );
-
-      const entries: SubscriptionUsageEntry[] = [];
-      for (let i = 0; i < results.length; i++) {
-        const result = results[i];
-        if (result.status === 'fulfilled') {
-          entries.push(result.value);
-        } else {
-          const account = accounts[i];
-          entries.push({
-            provider: account.provider,
-            accountName: account.name,
-            workspaceId:
-              account.provider === 'opencode-go' ? account.workspaceId : '',
-            fetchedAt: Date.now(),
-            error: `Scrape failed: ${result.reason instanceof Error ? result.reason.message : String(result.reason)}`,
-          } as SubscriptionUsageEntry);
+        } finally {
+          clearTimeout(timeout);
         }
+      }),
+    );
+
+    const entries: SubscriptionUsageEntry[] = [];
+    for (let i = 0; i < results.length; i++) {
+      const result = results[i];
+      if (result.status === 'fulfilled') {
+        entries.push(result.value);
+      } else {
+        const account = accounts[i];
+        entries.push({
+          provider: account.provider,
+          accountName: account.name,
+          workspaceId:
+            account.provider === 'opencode-go' ? account.workspaceId : '',
+          fetchedAt: Date.now(),
+          error: formatScrapeError(result.reason),
+        } as SubscriptionUsageEntry);
       }
-
-      // Persist to tui-state for the TUI sidebar to read
-      recordSubscriptionUsage(entries);
-      this.lastRefresh = Date.now();
-
-      return entries;
-    } finally {
-      clearTimeout(timeout);
     }
+
+    // Persist to tui-state for the TUI sidebar to read
+    recordSubscriptionUsage(entries);
+    this.lastRefresh = Date.now();
+
+    return entries;
   }
 
   /**
@@ -631,16 +644,21 @@ export class UsageService {
 
       case 'remove':
       case 'rm': {
-        const [_, name] = parts;
-        if (!name) {
+        const [_, providerRaw, name] = parts;
+        const provider = resolveProvider(providerRaw);
+        if (!provider || !name) {
           output.parts.push(
-            createInternalAgentTextPart('Usage: /subscriptions remove <name>'),
+            createInternalAgentTextPart(
+              'Usage: /subscriptions remove <provider> <name>\n' +
+                'Providers: opencode-go, neuralwatt, codex\n' +
+                'Example: /subscriptions remove opencode-go personal',
+            ),
           );
           return;
         }
-        const account = getAccount(name);
+        const account = getAccount(provider, name);
         const activeByProvider = this.syncActiveAccounts();
-        const removed = removeAccount(name);
+        const removed = removeAccount(provider, name);
         if (removed && account) {
           const wasActive = activeByProvider[account.provider] === name;
           if (wasActive) {
@@ -659,7 +677,9 @@ export class UsageService {
           this.syncActiveAccounts();
         } else {
           output.parts.push(
-            createInternalAgentTextPart(`Account "${name}" not found.`),
+            createInternalAgentTextPart(
+              `Account "${name}" not found for provider "${provider}".`,
+            ),
           );
         }
         break;
@@ -716,7 +736,7 @@ export class UsageService {
         );
         lines.push('  /subscriptions add-neuralwatt <name> <api-key>');
         lines.push('  /subscriptions add-codex-device <name>');
-        lines.push('  /subscriptions remove <name>');
+        lines.push('  /subscriptions remove <provider> <name>');
         lines.push('  /subscriptions switch <provider> <name>');
         lines.push('  /subscriptions list');
         lines.push('  /subscriptions refresh');
@@ -731,7 +751,7 @@ export class UsageService {
           output.parts.push(
             createInternalAgentTextPart(
               'Usage: /subscriptions switch <provider> <name>\n' +
-                'Providers: opencode-go (go), neuralwatt (nw), codex (cx)\n' +
+                'Providers: opencode-go, neuralwatt, codex\n' +
                 'Example: /subscriptions switch opencode-go personal',
             ),
           );
@@ -849,7 +869,7 @@ export class UsageService {
               '  /subscriptions add-opencode-go <name> <workspace-id> <auth-cookie>   Add an OpenCode Go account\n' +
               '  /subscriptions add-neuralwatt <name> <api-key>                       Add a Neuralwatt account\n' +
               '  /subscriptions add-codex-device <name>                               Add a Codex account (device auth)\n' +
-              '  /subscriptions remove <name>                                         Remove an account\n' +
+              '  /subscriptions remove <provider> <name>                              Remove an account\n' +
               '  /subscriptions switch <provider> <name>                              Switch active account for provider\n' +
               '  /subscriptions list                                                  List all accounts\n' +
               '  /subscriptions refresh                                               Force refresh all',

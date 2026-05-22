@@ -149,7 +149,9 @@ export function saveAccount(account: StoredAccount): void {
     throw new Error(validation.error);
   }
   const file = readAccountsFile();
-  const existing = file.accounts.findIndex((a) => a.name === account.name);
+  const existing = file.accounts.findIndex(
+    (a) => a.provider === account.provider && a.name === account.name,
+  );
   if (existing >= 0) {
     file.accounts[existing] = account;
   } else {
@@ -159,11 +161,16 @@ export function saveAccount(account: StoredAccount): void {
 }
 
 /**
- * Remove an account by name. Returns true if deleted, false if not found.
+ * Remove an account by provider and name. Returns true if deleted, false if not found.
  */
-export function removeAccount(name: string): boolean {
+export function removeAccount(
+  provider: SubscriptionProvider,
+  name: string,
+): boolean {
   const file = readAccountsFile();
-  const index = file.accounts.findIndex((a) => a.name === name);
+  const index = file.accounts.findIndex(
+    (a) => a.provider === provider && a.name === name,
+  );
   if (index < 0) return false;
   file.accounts.splice(index, 1);
   writeAccountsFile(file);
@@ -202,9 +209,14 @@ export function maskCookie(cookie: string): string {
 }
 
 /**
- * Look up a stored account by name.
+ * Look up a stored account by provider and name.
  */
-export function getAccount(name: string): StoredAccount | undefined {
+export function getAccount(
+  provider: SubscriptionProvider,
+  name: string,
+): StoredAccount | undefined {
   const file = readAccountsFile();
-  return file.accounts.find((a) => a.name === name);
+  return file.accounts.find(
+    (a) => a.provider === provider && a.name === name,
+  );
 }

@@ -163,12 +163,15 @@ export async function scrapeQuota(
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
+    const isTimeout = err instanceof Error && err.name === 'AbortError';
     return {
       provider: 'opencode-go',
       accountName: '',
       workspaceId,
       fetchedAt: now,
-      error: `Fetch failed: ${message}`,
+      error: isTimeout
+        ? 'OpenCode Go dashboard request timed out. The service may be slow or unreachable.'
+        : `Fetch failed: ${message}`,
     };
   }
 }
