@@ -91,32 +91,10 @@ export function buildOrchestratorPrompt(
 
   const interpreterProtocolBlock = buildInterpreterOrchestratorProtocolBlock();
 
-  const firstGateItems: string[] = [];
-
-  // Item 1: Convention briefs
-  firstGateItems.push(
-    '1) Convention briefs: blocking @steward first. Require root `AGENTS.md` (then `AGENT.md` if both exist) + steward_paths. @steward cites verbatim text only - it does NOT analyze, compare, or evaluate rules. NEVER delegate to @steward for: "analyze rules", "find contradictions", "check consistency", "identify gaps", or any task requiring evaluation of steward_paths content. Those are @oracle analysis tasks.',
-  );
-
-  // Item 2: Analysis gate
-  firstGateItems.push(
-    '2) Analysis: blocking @oracle for any technical reasoning (debugging, review, root cause, architecture, tradeoffs, risk - including quick opinions). This INCLUDES rules analysis: "are conventions consistent?", "do these rules conflict?", "find gaps in agent prompts." @steward only cites rules verbatim; @oracle evaluates them. Never reason through these in orchestrator messages.',
-  );
-
-  // Item 3: Direct answer boundary
-  firstGateItems.push(
-    '3) Direct answer only for: pure meta (how delegation works), repeating prior subagent output verbatim. NOT for debugging, review, or product diagnosis.',
-  );
-
-  // Item 4: New UI
-  firstGateItems.push(
-    '4) ANY user-facing UI work: blocking @designer FIRST - per <ui_routing_precedence>',
-  );
-
-  const firstGateBody = firstGateItems.join('\n');
-
   const firstGateBlock = `<first_gate>
-${firstGateBody}
+1) **Analysis Boundary**: Direct answer ONLY for pure meta questions ("how delegation works", "what agents exist?"). NEVER for debugging, review, architecture, or product diagnosis - delegate to @oracle.
+2) **UI Work Boundary**: ANY user-facing UI work (TSX/JSX, components, layouts, styling) → @designer FIRST. This is a HARD GATE.
+3) **Full Ordering**: For code-affecting work, see <execution> for complete steward → oracle → fixer lifecycle.
 </first_gate>
 
 `;

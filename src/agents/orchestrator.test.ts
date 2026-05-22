@@ -93,7 +93,7 @@ describe('buildOrchestratorPrompt', () => {
 
   test('first_gate analysis gate references oracle when oracle enabled', () => {
     const prompt = buildOrchestratorPrompt();
-    expect(prompt).toContain('Analysis: blocking @oracle');
+    expect(prompt).toContain('delegate to @oracle');
     expect(prompt).not.toContain('Analysis gate (@oracle / thinker)');
   });
 

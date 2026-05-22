@@ -311,12 +311,12 @@ export const STEWARD_PATH_GLOBS = [
   '.github/instructions/**',
 ] as const;
 
-export const STEWARD_DOCS_EXCLUSION =
+const STEWARD_DOCS_EXCLUSION =
   'Excluded: wholesale `docs/**` (no leading dot) unless the ' +
   'user explicitly referenced a specific file within it. ' +
   '(`AGENTS.md` / `AGENT.md` at repo root are always read per step 1.)';
 
-export const STEWARD_VSCODE_OUT_OF_SCOPE =
+const STEWARD_VSCODE_OUT_OF_SCOPE =
   'Out of scope: `.vscode/**` (workspace noise).';
 
 /** Header inserted before steward-cited rules in downstream delegations. */
@@ -445,11 +445,11 @@ export const FIXER_VARIANT_SCOPE_LINES = [
 
 // --- Oracle ---
 
-export const ORACLE_VARIANT_OMITTED_DEFAULT_RULE =
+const ORACLE_VARIANT_OMITTED_DEFAULT_RULE =
   '- If variant is omitted by the caller, default to medium.';
 
 /** Depth labels: shared between orchestrator routing and oracle specialist. */
-export const ORACLE_VARIANT_DEPTH_LINES = [
+const ORACLE_VARIANT_DEPTH_LINES = [
   'low: minimal rationale - smart model only (narrow follow-up once ' +
     'smart is warranted)',
   'medium: bounded analysis; 1-3 files; clear problem statement (minimum ' +
@@ -459,7 +459,7 @@ export const ORACLE_VARIANT_DEPTH_LINES = [
     'before giving up',
 ] as const;
 
-export const ORACLE_SELF_AWARENESS_NOTE =
+const ORACLE_SELF_AWARENESS_NOTE =
   '- If you receive `variant: low` and your session model is a standard/flash ' +
   'tier (not the smart/pro tier configured by the orchestrator), the depth may ' +
   'be insufficient. Proceed at minimal depth and note the limitation in ' +
@@ -500,50 +500,6 @@ Variant output:
 - medium: keep all sections but limit alternatives to one; omit placeholder bullets-skip a subsection entirely if it would add no real content.
 - high/max: all sections must be detailed and risk-oriented, with clear severity labels for risks.
 </variant_policy>`;
-}
-
-export function formatOrchestratorOracleVariantDepthSection(): string {
-  const lines = ORACLE_VARIANT_DEPTH_LINES.map((l) => `- ${l}`).join('\n');
-  return `VARIANT (depth):\n${lines}`;
-}
-
-export function buildVariantGlossaryBlock(): string {
-  return `<variant_glossary>
-**Oracle variants:**
-- low: minimal rationale (smart model only)
-- medium: bounded analysis (1-3 files)
-- high: multi-file or moderate ambiguity
-- max: security-critical or systemic risk
-
-**Fixer variants:**
-- low: single-file, single-function edit
-- medium: multi-file change within one module
-
-**Note:** For @fixer work exceeding medium scope, split into multiple low/medium sessions.
-</variant_glossary>`;
-}
-
-/**
- * Consolidated variant guide table for the orchestrator prompt.
- * Replaces 6 separate variant guide sections with a single table.
- * Includes shorter labels with detailed glossary below.
- */
-export function buildConsolidatedVariantGuide(): string {
-  return `<variant_guide>
-| Agent | low | medium | high | max |
-|-------|-----|--------|------|-----|
-| @explorer | low: locate | medium: cross-ref | high: exhaustive | not supported |
-| @librarian | low: focused | medium: synthesize | high: deep comparison | max: exhaustive |
-| @oracle | low: minimal rationale | medium: bounded | high: comprehensive | max: critical risk |
-| @designer | low: tweaks | medium: redesign | high: multi-page | max: audit |
-| @fixer | low: single-file | medium: multi-file | not supported | not supported |
-| @steward | low: anchor files | medium: steward paths | high: all paths | ${STEWARD_VARIANT_MAX_NOTE} |
-| @interpreter | low: single image | medium: multi-image | high: breakdown | not supported |
-</variant_guide>
-
-For @fixer work exceeding medium scope, split into multiple low/medium sessions.
-
-${buildVariantGlossaryBlock()}`;
 }
 
 /**

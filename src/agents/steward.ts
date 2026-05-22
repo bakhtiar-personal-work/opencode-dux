@@ -11,8 +11,6 @@ import {
   USER_CHOICE_POLICY_BLOCK,
 } from './prompt-blocks';
 
-export { STEWARD_PATH_GLOBS } from './prompt-blocks';
-
 // Steward intentionally omits REPO_RULES_PRECEDENCE_BLOCK.
 // Steward is a rules SOURCE (cites verbatim), not a rules consumer.
 // If a repo rule told steward to analyze, it would override steward's core invariant.

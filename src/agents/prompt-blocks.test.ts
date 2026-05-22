@@ -4,7 +4,6 @@ import {
   buildStewardOrchestratorProtocolBlock,
   CRITICAL_INVARIANTS,
   DESIGNER_VARIANT_SCOPE_LINES,
-  formatOrchestratorOracleVariantDepthSection,
   INTERPRETER_VARIANT_SCOPE_LINES,
   LIBRARIAN_VARIANT_SCOPE_LINES,
   ORCHESTRATOR_CLARIFICATION_HANDOFF_BLOCK,
@@ -108,13 +107,5 @@ describe('prompt-blocks', () => {
     expect(STEWARD_VARIANT_SCOPE_LINES[0]).toMatch(/^low:/);
     expect(STEWARD_VARIANT_SCOPE_LINES[1]).toMatch(/^medium:/);
     expect(STEWARD_VARIANT_SCOPE_LINES[2]).toMatch(/^high:/);
-  });
-
-  test('oracle variant depth section includes four depth tiers', () => {
-    const section = formatOrchestratorOracleVariantDepthSection();
-    expect(section).toContain('VARIANT (depth):');
-    expect(
-      section.split('\n').filter((l) => l.startsWith('- low:')).length,
-    ).toBe(1);
   });
 });
