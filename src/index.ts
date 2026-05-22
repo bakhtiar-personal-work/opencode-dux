@@ -1,4 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
+import * as fsp from 'node:fs/promises';
+import os from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Plugin } from '@opencode-ai/plugin';
@@ -999,8 +1001,7 @@ const OpenCodeDux: Plugin = async (ctx) => {
       if (!didLogStartupSummary) {
         didLogStartupSummary = true;
 
-        console.log('\u{1F50C} Loading MCP servers...');
-        log('[startup] Loading MCP servers...');
+        log('[startup] Loading MCP servers');
 
         const allMcpKeys = Object.keys(
           (opencodeConfig.mcp as Record<string, unknown>) ?? builtinMcps,
@@ -1014,21 +1015,32 @@ const OpenCodeDux: Plugin = async (ctx) => {
           log(`[startup] MCP servers: ${userMcpKeys.join(', ')}`);
         }
 
-        // Log installed skills (await to ensure it loads before continuing)
+        // Log installed skills — fast directory listing only (full discovery
+        // cache is already being warmed asynchronously by the init fire-forget).
         try {
-          console.log('\u{1F3AF} Loading skills...');
-          log('[startup] Loading skills...');
+          log('[startup] Loading skills');
 
-          const discovery = await getLocalDiscovery(ctx);
-          const skillNames = (discovery.skills || [])
-            .map((s) => s.name)
-            .filter(Boolean);
+          const skillsDir = join(os.homedir(), '.config', 'opencode', 'skills');
+          const skillNames: string[] = [];
+          try {
+            const entries = await fsp.readdir(skillsDir);
+            for (const entry of entries) {
+              try {
+                const st = await fsp.stat(join(skillsDir, entry));
+                if (st.isDirectory()) skillNames.push(entry);
+              } catch {
+                /* skip inaccessible entries */
+              }
+            }
+          } catch {
+            /* skills dir doesn't exist */
+          }
           if (skillNames.length > 0) {
             console.log(`\u{1F3AF} Skills: ${skillNames.join(', ')}`);
             log(`[startup] Skills: ${skillNames.join(', ')}`);
           }
         } catch (err) {
-          log('[startup] Failed to load skills list:', String(err));
+          log('[startup] Failed to list skills directory:', String(err));
         }
 
         const currentVersion = readPluginVersion();
