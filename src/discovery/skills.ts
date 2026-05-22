@@ -622,6 +622,48 @@ function filterExistingSkills(
 }
 
 /**
+ * Score locally-installed skills against task keywords and return
+ * recommendations for those that meet the relevance threshold.
+ */
+function matchLocalSkills(
+  skills: Array<{ name: string; description?: string; tags?: string[] }>,
+  taskKeywords: string[],
+): SkillRecommendation[] {
+  const recommendations: SkillRecommendation[] = [];
+
+  for (const skill of skills) {
+    const name = skill.name;
+    const description = skill.description ?? '';
+    const tags = skill.tags ?? [];
+    const relevanceScore = scoreRelevance(
+      name,
+      description,
+      tags,
+      taskKeywords,
+    );
+
+    if (relevanceScore < 0.01) continue;
+
+    recommendations.push({
+      type: 'skill',
+      name,
+      description: description || 'No description available',
+      install_command: `npx skills add ${name} -g`,
+      relevance_reason: buildRelevanceReason(
+        name,
+        description,
+        tags,
+        taskKeywords,
+      ),
+      relevance_score: relevanceScore,
+      already_installed: true,
+    });
+  }
+
+  return recommendations;
+}
+
+/**
  * Run the full skill discovery flow for a given set of inputs.
  *
  * 1. Builds search queries from keywords
@@ -642,10 +684,17 @@ export async function discoverSkillsOnline(
 
   // Auto-discover installed skills if caller didn't provide existing names
   let existingSkillNames = input.existing_skill_names;
+  // Keep the full local skill objects for scoring
+  let localSkills: Array<{
+    name: string;
+    description?: string;
+    tags?: string[];
+  }> = [];
   if (!existingSkillNames || existingSkillNames.length === 0) {
     try {
       const local = await getLocalDiscovery(ctx);
       existingSkillNames = local.skills.map((s) => s.name);
+      localSkills = local.skills;
     } catch {
       // Best-effort – skip auto-discovery if SDK call fails
       existingSkillNames = [];
@@ -654,6 +703,17 @@ export async function discoverSkillsOnline(
 
   const allRecommendations: SkillRecommendation[] = [];
   const seenNames = new Set<string>();
+
+  // Score local skills first — skip online search if we have enough matches
+  const localMatches = matchLocalSkills(localSkills, input.task_keywords);
+  if (localMatches.length >= maxResults) {
+    localMatches.sort((a, b) => b.relevance_score - a.relevance_score);
+    return {
+      recommendations: localMatches.slice(0, maxResults),
+      from_cache: false,
+      queries_used: [],
+    };
+  }
 
   // Probe the CLI once before the loop
   const cliAvailable = probeSkillsCli();
@@ -747,11 +807,17 @@ export async function discoverSkillsOnline(
     }
   }
 
-  const unique = deduplicateByName(allRecommendations);
+  // Merge local matches with online results, deduplicating against local
+  const localByName = new Set(localMatches.map((r) => r.name.toLowerCase()));
+  const merged = [...localMatches];
+  for (const rec of allRecommendations) {
+    const key = rec.name.toLowerCase();
+    if (localByName.has(key)) continue; // skip online dupes of local items
+    merged.push(rec);
+  }
+  const unique = deduplicateByName(merged);
   unique.sort((a, b) => b.relevance_score - a.relevance_score);
-
-  const filtered = filterExistingSkills(unique, existingSkillNames);
-  const recommendations = filtered.slice(0, maxResults);
+  const recommendations = unique.slice(0, maxResults);
 
   return {
     recommendations,
@@ -785,9 +851,12 @@ export function createDiscoverSkillsTool(ctx: PluginInput): ToolDefinition {
 
   return tool({
     description:
-      'Search online for skills that could be installed to help with a ' +
-      'given task. Skills provide specialized instructions and workflows ' +
-      'for specific tasks (testing, deployment, accessibility audits, etc.). ' +
+      'Discovers skills that could help with a task. ' +
+      'Checks locally installed skills first — if enough relevant skills are ' +
+      'found locally, skips online search entirely. If local results are ' +
+      'insufficient, supplements with online discovery. ' +
+      'Skills provide specialized instructions and workflows for specific tasks ' +
+      '(testing, deployment, accessibility audits, etc.). ' +
       'Use this when a subagent lacks specialized knowledge or workflows ' +
       'and you want to discover what skills are available. ' +
       'If existing_skill_names is not provided, automatically discovers ' +

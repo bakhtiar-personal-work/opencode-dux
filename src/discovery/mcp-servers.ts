@@ -486,6 +486,48 @@ function filterExistingMcps(
 }
 
 /**
+ * Score locally-installed MCP servers against task keywords and return
+ * recommendations for those that meet the relevance threshold.
+ */
+function matchLocalMcps(
+  mcps: Array<{ name: string; description?: string; tags?: string[] }>,
+  taskKeywords: string[],
+): McpRecommendation[] {
+  const recommendations: McpRecommendation[] = [];
+
+  for (const mcp of mcps) {
+    const name = mcp.name;
+    const description = mcp.description ?? '';
+    const tags = mcp.tags ?? [];
+    const relevanceScore = scoreRelevance(
+      name,
+      description,
+      tags,
+      taskKeywords,
+    );
+
+    if (relevanceScore < 0.05) continue;
+
+    recommendations.push({
+      type: 'mcp',
+      name,
+      description: description || 'No description available',
+      install_command: buildMcpInstallCommand(name),
+      relevance_reason: buildRelevanceReason(
+        name,
+        description,
+        tags,
+        taskKeywords,
+      ),
+      relevance_score: relevanceScore,
+      already_installed: true,
+    });
+  }
+
+  return recommendations;
+}
+
+/**
  * Run the full MCP discovery flow for a given set of inputs.
  *
  * 1. Builds search queries from keywords and agent name
@@ -506,10 +548,17 @@ export async function discoverMcpServers(
 
   // Auto-discover installed MCPs if caller didn't provide existing names
   let existingMcpNames = input.existing_mcp_names;
+  // Keep the full local MCP objects for scoring
+  let localMcps: Array<{
+    name: string;
+    description?: string;
+    tags?: string[];
+  }> = [];
   if (!existingMcpNames || existingMcpNames.length === 0) {
     try {
       const local = await getLocalDiscovery(ctx);
       existingMcpNames = local.mcps.map((m) => m.name);
+      localMcps = local.mcps;
     } catch {
       // Best-effort – skip auto-discovery if SDK call fails
       existingMcpNames = [];
@@ -517,6 +566,17 @@ export async function discoverMcpServers(
   }
   const allRecommendations: McpRecommendation[] = [];
   const seenNames = new Set<string>();
+
+  // Score local MCPs first — skip online search if we have enough matches
+  const localMatches = matchLocalMcps(localMcps, input.task_keywords);
+  if (localMatches.length >= maxResults) {
+    localMatches.sort((a, b) => b.relevance_score - a.relevance_score);
+    return {
+      recommendations: localMatches.slice(0, maxResults),
+      from_cache: false,
+      queries_used: [],
+    };
+  }
 
   const concurrencyLimit = 3;
   const queryBatches: string[][] = [];
@@ -569,12 +629,17 @@ export async function discoverMcpServers(
     }
   }
 
-  const unique = deduplicateByName(allRecommendations);
+  // Merge local matches with online results, deduplicating against local
+  const localByName = new Set(localMatches.map((r) => r.name.toLowerCase()));
+  const merged = [...localMatches];
+  for (const rec of allRecommendations) {
+    const key = rec.name.toLowerCase();
+    if (localByName.has(key)) continue; // skip online dupes of local items
+    merged.push(rec);
+  }
+  const unique = deduplicateByName(merged);
   unique.sort((a, b) => b.relevance_score - a.relevance_score);
-
-  const filtered = filterExistingMcps(unique, existingMcpNames);
-
-  const recommendations = filtered.slice(0, maxResults);
+  const recommendations = unique.slice(0, maxResults);
 
   return {
     recommendations,
@@ -608,8 +673,11 @@ export function createDiscoverMcpServersTool(ctx: PluginInput): ToolDefinition {
 
   return tool({
     description:
-      'Search online for popular MCP (Model Context Protocol) servers ' +
-      'that could be installed to help with a given task. ' +
+      'Discovers MCP (Model Context Protocol) servers that could help ' +
+      'with a task. Checks locally installed MCPs first — if enough ' +
+      'relevant servers are found locally, skips online search entirely. ' +
+      'If local results are insufficient, supplements with online discovery ' +
+      'from the npm registry. ' +
       'Use this when a subagent lacks the capabilities it needs and you ' +
       'want to discover what external MCP servers are available. ' +
       'If existing_mcp_names is not provided, automatically discovers ' +
