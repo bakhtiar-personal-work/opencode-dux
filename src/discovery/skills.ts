@@ -93,6 +93,9 @@ export interface SkillRecommendation {
 
   /** Whether the user already has this skill installed. */
   already_installed?: boolean;
+
+  /** Install count from npm registry (e.g., 1400 for "1.4K"). Undefined for local skills. */
+  installCount?: number;
 }
 
 /**
@@ -112,6 +115,15 @@ const CACHE_MAX_ENTRIES = 100;
 
 /** Cache TTL in milliseconds for skill results (24 hours). */
 const SKILL_CACHE_TTL_MS = 24 * 60 * 60 * 1_000;
+
+/** Minimum relevance score for a local skill to be included in results. */
+const LOCAL_SKILL_MIN_RELEVANCE = 0.6;
+
+/** Minimum relevance score for an online skill to be included in results. */
+const ONLINE_SKILL_MIN_RELEVANCE = 0.6;
+
+/** Relevance score threshold for skipping online search (local skills must exceed this). */
+const RELEVANT_LOCAL_THRESHOLD = 0.4;
 
 /** Directory for the discovery cache file. */
 const CACHE_DIR = path.join(os.homedir(), '.config', 'opencode');
@@ -328,26 +340,51 @@ async function runSkillsFindCliAsync(
  * Timeouts are handled with a retry at 30s to accommodate first-time downloads.
  */
 function probeSkillsCli(): SkillsCliProbe {
-  // Step 1: Check npx exists
-  try {
-    execSync('npx --version', {
-      timeout: 5_000,
-      encoding: 'utf-8',
-      windowsHide: true,
-      stdio: ['pipe', 'pipe', 'pipe'],
-    });
-  } catch (err) {
-    const code = (err as NodeJS.ErrnoException).code;
-    if (code === 'ENOENT') {
-      return {
-        status: 'npx_not_installed',
-        error: 'npx command not found on PATH',
-      };
+  // Step 1: Check npx exists (with 5x retry)
+  const maxRetries = 5;
+  const retryDelayMs = 500; // 500ms between retries
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      execSync('npx --version', {
+        timeout: 5_000,
+        encoding: 'utf-8',
+        windowsHide: true,
+        stdio: ['pipe', 'pipe', 'pipe'],
+      });
+      // Success - npx is available
+      break;
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (code === 'ENOENT') {
+        // npx truly not found - no point retrying
+        return {
+          status: 'npx_not_installed',
+          error: 'npx command not found on PATH',
+        };
+      }
+
+      // Other errors (timeout, EBUSY, etc.) - retry
+      if (attempt < maxRetries) {
+        log(
+          `[discovery/skills] npx --version failed (attempt ${attempt}/${maxRetries}), retrying in ${retryDelayMs}ms...`,
+          String(err),
+        );
+        // Sync sleep using Atomics.wait (Node.js 17+)
+        Atomics.wait(
+          new Int32Array(new SharedArrayBuffer(4)),
+          0,
+          0,
+          retryDelayMs,
+        );
+      } else {
+        // All retries exhausted
+        return {
+          status: 'unknown_error',
+          error: `npx --version failed after ${maxRetries} attempts: ${String(err)}`,
+        };
+      }
     }
-    return {
-      status: 'unknown_error',
-      error: `npx --version failed: ${String(err)}`,
-    };
   }
 
   // Step 2: Check skills package (with longer timeout for first fetch)
@@ -365,7 +402,7 @@ function probeSkillsCli(): SkillsCliProbe {
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     if (message.includes('ETIMEDOUT') || message.includes('killed')) {
-      // Retry with even longer timeout — first fetch may need it
+      // Retry with even longer timeout - first fetch may need it
       try {
         execSync('npx skills --version', {
           timeout: fallbackTimeoutMs,
@@ -472,6 +509,30 @@ const SKILL_ENTRY_RE =
 const SKILL_URL_RE = /^└\s+(https?:\/\/\S+)/;
 
 /**
+ * Parse an install count string into a numeric value.
+ *
+ * Supports shorthand suffixes:
+ * - "1.4K" → 1400
+ * - "2K" → 2000
+ * - "500" → 500
+ * - "1.2M" → 1200000
+ *
+ * @param countStr - Raw install count string (e.g., "1.4K", "500")
+ * @returns Parsed number or undefined if input is empty/invalid
+ */
+function parseInstallCount(countStr: string | undefined): number | undefined {
+  if (!countStr) return undefined;
+  const normalized = countStr.toUpperCase();
+  if (normalized.endsWith('K')) {
+    return Math.round(parseFloat(normalized.slice(0, -1)) * 1000);
+  }
+  if (normalized.endsWith('M')) {
+    return Math.round(parseFloat(normalized.slice(0, -1)) * 1000000);
+  }
+  return parseInt(countStr, 10) || undefined;
+}
+
+/**
  * Parse plain-text output from `npx skills find` into skill entries.
  *
  * The `npx skills find` CLI (v1.5.7) does NOT support --json output.
@@ -494,12 +555,14 @@ function parseTextSkills(raw: string): Array<{
   description: string;
   install_command: string;
   source_url?: string;
+  installCount?: number;
 }> {
   const results: Array<{
     name: string;
     description: string;
     install_command: string;
     source_url?: string;
+    installCount?: number;
   }> = [];
 
   const lines = raw
@@ -510,6 +573,7 @@ function parseTextSkills(raw: string): Array<{
   let currentName = '';
   let currentDesc = '';
   let currentUrl = '';
+  let currentInstallCount: number | undefined;
   let started = false;
 
   for (const line of lines) {
@@ -521,14 +585,16 @@ function parseTextSkills(raw: string): Array<{
         results.push({
           name: currentName,
           description: currentDesc || 'No description available',
-          install_command: `npx skills add ${currentName} -g`,
+          install_command: buildSkillInstallCommand(currentName),
           source_url: currentUrl || undefined,
+          installCount: currentInstallCount,
         });
       }
       currentName = entryMatch[1];
       currentDesc = entryMatch[2]
         ? `Skill with ${entryMatch[2]} installs`
         : 'No description available';
+      currentInstallCount = parseInstallCount(entryMatch[2]);
       currentUrl = '';
       started = true;
       continue;
@@ -549,8 +615,9 @@ function parseTextSkills(raw: string): Array<{
     results.push({
       name: currentName,
       description: currentDesc || 'No description available',
-      install_command: `npx skills add ${currentName} -g`,
+      install_command: buildSkillInstallCommand(currentName),
       source_url: currentUrl || undefined,
+      installCount: currentInstallCount,
     });
   }
 
@@ -579,6 +646,24 @@ function extractSkillName(source: string): string {
 }
 
 /**
+ * Build the correct install command for a skill.
+ * Format: npx skills add owner/repo --skill skill-name -g -a opencode -y
+ *
+ * @param source - Full source string like "owner/repo@skill-name"
+ * @returns Install command string
+ */
+function buildSkillInstallCommand(source: string): string {
+  const atIdx = source.lastIndexOf('@');
+  if (atIdx >= 0 && atIdx < source.length - 1) {
+    const repo = source.slice(0, atIdx);
+    const skillName = source.slice(atIdx + 1);
+    return `npx skills add ${repo} --skill ${skillName} -g -a opencode -y`;
+  }
+  // Short name only (local skill) - use default repo
+  return `npx skills add vercel-labs/skills --skill ${source} -g -a opencode -y`;
+}
+
+/**
  * Deduplicate recommendations by case-insensitive name, keeping the one with
  * the higher relevance score.
  */
@@ -597,6 +682,77 @@ function deduplicateByName<T extends { name: string; relevance_score: number }>(
 }
 
 /**
+ * Score relevance of a skill (name + description + tags) against
+ * task keywords. Returns 0 if no keywords provided.
+ *
+ * - Name match:         +0.35 per keyword
+ * - Description match:  +0.20 per keyword
+ * - Tag match:          +0.15 per keyword
+ * - Match ratio bonus:  +0.10 × (matched / total)
+ * - Local bonus:        +0.05 (already installed, most actionable)
+ *
+ * Capped at 1.0.
+ */
+function scoreSkillRelevance(
+  name: string,
+  description: string,
+  tags: string[],
+  keywords: string[],
+): number {
+  if (keywords.length === 0) return 0;
+
+  let score = 0;
+  const nameLower = name.toLowerCase();
+  const descLower = description.toLowerCase();
+  const tagsLower = tags.map((t) => t.toLowerCase());
+  const allText = `${nameLower} ${descLower} ${tagsLower.join(' ')}`;
+
+  for (const kw of keywords) {
+    const kwLower = kw.toLowerCase();
+    if (nameLower.includes(kwLower)) score += 0.35;
+    if (descLower.includes(kwLower)) score += 0.2;
+    if (tagsLower.includes(kwLower)) score += 0.15;
+  }
+
+  // Match ratio bonus: rewards keyword coverage
+  const matchedKeywords = keywords.filter((kw) =>
+    allText.includes(kw.toLowerCase()),
+  ).length;
+  if (keywords.length > 0) {
+    score += (matchedKeywords / keywords.length) * 0.1;
+  }
+
+  // Local install bonus - already installed, more actionable
+  score += 0.05;
+
+  return Math.min(score, 1);
+}
+
+/**
+ * Build a human-readable reason explaining why a skill matched.
+ */
+function buildSkillRelevanceReason(
+  name: string,
+  description: string,
+  tags: string[],
+  keywords: string[],
+): string {
+  const matchedKeywords = keywords.filter(
+    (kw) =>
+      name.toLowerCase().includes(kw.toLowerCase()) ||
+      description.toLowerCase().includes(kw.toLowerCase()) ||
+      tags.some((t) => t.includes(kw.toLowerCase())),
+  );
+
+  const parts: string[] = [];
+  if (matchedKeywords.length > 0) {
+    parts.push(`Matches keywords: ${matchedKeywords.join(', ')}`);
+  }
+  parts.push('already installed locally');
+  return parts.join('; ');
+}
+
+/**
  * Match locally-installed skills against task keywords and return
  * recommendations with high priority scores.
  *
@@ -607,17 +763,52 @@ function matchLocalSkills(
   skills: Array<{ name: string; description?: string; tags?: string[] }>,
   taskKeywords: string[],
 ): SkillRecommendation[] {
-  // Return all local skills with high priority score (0.9-1.0 range)
-  // Local skills are already installed, so they're most actionable
-  return skills.map((skill, index) => ({
-    type: 'skill',
-    name: skill.name,
-    description: skill.description ?? 'No description available',
-    install_command: `npx skills add ${skill.name} -g`,
-    relevance_reason: `Already installed locally - matches keywords: ${taskKeywords.join(', ')}`,
-    relevance_score: 0.95 - index * 0.01, // High priority, slight variation for sorting
-    already_installed: true,
-  }));
+  if (taskKeywords.length === 0) {
+    // No search context - return all with neutral score
+    return skills.map((skill) => ({
+      type: 'skill',
+      name: skill.name,
+      description: skill.description ?? 'No description available',
+      install_command: buildSkillInstallCommand(skill.name),
+      relevance_reason: 'Already installed locally',
+      relevance_score: 0.05,
+      already_installed: true,
+    }));
+  }
+
+  const recommendations: SkillRecommendation[] = [];
+
+  for (const skill of skills) {
+    const name = skill.name;
+    const description = skill.description ?? '';
+    const tags = skill.tags ?? [];
+    const relevanceScore = scoreSkillRelevance(
+      name,
+      description,
+      tags,
+      taskKeywords,
+    );
+
+    // Filter out completely irrelevant skills
+    if (relevanceScore < LOCAL_SKILL_MIN_RELEVANCE) continue;
+
+    recommendations.push({
+      type: 'skill',
+      name,
+      description: description || 'No description available',
+      install_command: buildSkillInstallCommand(name),
+      relevance_reason: buildSkillRelevanceReason(
+        name,
+        description,
+        tags,
+        taskKeywords,
+      ),
+      relevance_score: relevanceScore,
+      already_installed: true,
+    });
+  }
+
+  return recommendations;
 }
 
 /**
@@ -661,12 +852,15 @@ export async function discoverSkillsOnline(
   const allRecommendations: SkillRecommendation[] = [];
   const seenNames = new Set<string>();
 
-  // Score local skills first — skip online search if we have enough matches
+  // Score local skills first - skip online search only if we have enough genuinely relevant matches
   const localMatches = matchLocalSkills(localSkills, input.task_keywords);
-  if (localMatches.length >= maxResults) {
-    localMatches.sort((a, b) => b.relevance_score - a.relevance_score);
+  const relevantLocals = localMatches.filter(
+    (m) => m.relevance_score > RELEVANT_LOCAL_THRESHOLD,
+  );
+  if (relevantLocals.length >= maxResults) {
+    relevantLocals.sort((a, b) => b.relevance_score - a.relevance_score);
     return {
-      recommendations: localMatches.slice(0, maxResults),
+      recommendations: relevantLocals.slice(0, maxResults),
       from_cache: false,
       queries_used: [],
     };
@@ -726,9 +920,11 @@ export async function discoverSkillsOnline(
           type: 'skill',
           name: skillName,
           description,
-          install_command: `npx skills add ${source} -g`,
+          install_command: buildSkillInstallCommand(source),
           relevance_reason: `Found by npx skills find matching keyword`,
-          relevance_score: 0.5 + (1.0 / (index + 1)) * 0.4, // Range: 0.5-0.9, lower than locals
+          relevance_score:
+            ONLINE_SKILL_MIN_RELEVANCE + (1.0 / (index + 1)) * 0.4, // Range: 0.4-0.8, lower than locals
+          installCount: skill.installs,
         });
       }
     } else {
@@ -745,7 +941,9 @@ export async function discoverSkillsOnline(
           install_command: skill.install_command,
           source_url: skill.source_url,
           relevance_reason: `Found by npx skills find matching keyword`,
-          relevance_score: 0.5 + (1.0 / (index + 1)) * 0.4, // Range: 0.5-0.9, lower than locals
+          relevance_score:
+            ONLINE_SKILL_MIN_RELEVANCE + (1.0 / (index + 1)) * 0.4, // Range: 0.4-0.8, lower than locals
+          installCount: skill.installCount,
         });
       }
     }
@@ -765,9 +963,14 @@ export async function discoverSkillsOnline(
   const sortedLocals = localMatches.sort(
     (a, b) => b.relevance_score - a.relevance_score,
   );
-  const sortedOnline = onlineUnique.sort(
-    (a, b) => b.relevance_score - a.relevance_score,
-  );
+  const sortedOnline = onlineUnique.sort((a, b) => {
+    // Primary: install count (descending)
+    const countA = a.installCount ?? 0;
+    const countB = b.installCount ?? 0;
+    if (countB !== countA) return countB - countA;
+    // Tiebreaker: relevance score
+    return b.relevance_score - a.relevance_score;
+  });
   const final = [...sortedLocals, ...sortedOnline].slice(0, maxResults);
 
   return {
@@ -803,7 +1006,7 @@ export function createDiscoverSkillsTool(ctx: PluginInput): ToolDefinition {
   return tool({
     description:
       'Discovers skills that could help with a task. ' +
-      'Checks locally installed skills first — if enough relevant skills are ' +
+      'Checks locally installed skills first - if enough relevant skills are ' +
       'found locally, skips online search entirely. If local results are ' +
       'insufficient, supplements with online discovery. ' +
       'Skills provide specialized instructions and workflows for specific tasks ' +

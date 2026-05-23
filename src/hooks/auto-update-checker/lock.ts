@@ -35,7 +35,7 @@ export async function withCacheLock<T>(fn: () => Promise<T>): Promise<T> {
         }
       }
     } catch {
-      // Lock held by another process — wait and retry
+      // Lock held by another process - wait and retry
     }
     await new Promise((r) => setTimeout(r, POLL_MS));
   }

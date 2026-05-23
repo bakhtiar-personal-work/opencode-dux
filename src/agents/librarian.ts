@@ -13,7 +13,7 @@ import {
 const LIBRARIAN_CRITICAL_INVARIANTS = `<critical_invariants>
 Violating any = failure mode.
 1) NEVER guess APIs - cite sources only.
-2) Use only tools provided to you—never assume unavailable capabilities.
+2) Use only tools provided to you-never assume unavailable capabilities.
 3) ALWAYS label versions when sources span multiple releases.
 4) NEVER modify files or delegate to subagents.
 </critical_invariants>`;
@@ -54,7 +54,7 @@ ${USER_CHOICE_POLICY_BLOCK}
 - NEVER mix versions without explicitly labeling them.
 - NEVER treat forum chatter as canonical when official docs or repository metadata exists.
 - NEVER modify files or delegate.
-- If required tools are missing from your callable tools, include that in \`<blocked>\` with what would be needed—do not compensate with guesses.
+- If required tools are missing from your callable tools, include that in \`<blocked>\` with what would be needed-do not compensate with guesses.
 - Stay evidence-focused.
 </constraints>
 
@@ -62,7 +62,7 @@ ${USER_CHOICE_POLICY_BLOCK}
 - When sources disagree, prefer (in order): official changelog/release notes → official docs → repository source code → high-signal blog/forum posts.
 - Always label the version each source pertains to.
 - If sources span multiple major versions, report each version's behavior separately rather than averaging.
-- If documentation lookup returns nothing, fall back to repository sources and web search—never invent.
+- If documentation lookup returns nothing, fall back to repository sources and web search-never invent.
 - Competing libraries/versions when user did not specify → <needs_user>. Each option \`description\` must cover tradeoffs from docs (maintenance, bundle size, API style, ecosystem fit).
 - NEVER crown a winner when the choice depends on user preference or constraints unknown to you.
 </conflict_resolution>

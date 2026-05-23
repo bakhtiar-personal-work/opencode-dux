@@ -1014,7 +1014,7 @@ const OpenCodeDux: Plugin = async (ctx) => {
           log(`[startup] MCP servers: ${userMcpKeys.join(', ')}`);
         }
 
-        // Log installed skills — fast directory listing only (full discovery
+        // Log installed skills - fast directory listing only (full discovery
         // cache is already being warmed asynchronously by the init fire-forget).
         try {
           log('[startup] Loading skills');

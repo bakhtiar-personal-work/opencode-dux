@@ -475,7 +475,7 @@ export function createDelegateTools(
         return (
           'Session is still running (status: ' +
           (status ?? 'unknown') +
-          '). Move on to other work and check back later — do not retry immediately.'
+          '). Move on to other work and check back later - do not retry immediately.'
         );
       } catch (err) {
         return `Error collecting result: ${err instanceof Error ? err.message : String(err)}`;

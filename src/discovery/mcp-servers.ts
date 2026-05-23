@@ -36,16 +36,17 @@ export interface McpRecommendation {
   /** Human-readable summary of what the MCP server provides. */
   description: string;
   /**
-   * A ready-to-use JSON config block for the user's opencode config,
+   * JSON configuration block to paste into opencode.json `mcpServers` section.
+   * This is NOT a shell command.
    * e.g. `{"mcpServers": {"playwright": {"command": ["npx", "@modelcontextprotocol/server-playwright"]}}}`.
    */
-  install_command: string;
+  config_block: string;
   /** Why this recommendation is relevant to the task. */
   relevance_reason: string;
   /** Relevance score from 0 (irrelevant) to 1 (perfect match). */
   relevance_score: number;
   /** URL to the project's homepage, repository, or package page. */
-  source_url?: string;
+  source_url: string;
 
   /** Whether the user already has this MCP server installed. */
   already_installed?: boolean;
@@ -388,9 +389,9 @@ function buildRelevanceReason(
   );
 
   if (matchedKeywords.length > 0) {
-    return `Matches keywords: ${matchedKeywords.join(', ')}`;
+    return `Matches keywords: ${matchedKeywords.join(', ')}; requires manual opencode.json configuration`;
   }
-  return 'Found in search results for task context';
+  return 'Found in search results for task context; requires manual opencode.json configuration';
 }
 
 /**
@@ -440,7 +441,7 @@ function extractMcpServerName(packageName: string): string {
  * {"mcpServers": {"playwright": {"command": ["npx", "@modelcontextprotocol/server-playwright"]}}}
  * ```
  */
-function buildMcpInstallCommand(packageName: string): string {
+function buildMcpConfigBlock(packageName: string): string {
   const serverName = extractMcpServerName(packageName);
   const config = {
     mcpServers: {
@@ -454,10 +455,16 @@ function buildMcpInstallCommand(packageName: string): string {
 
 /**
  * Derive a source URL from a package's npm metadata.
+ * Always returns a value - falls back to the npm package page.
  */
-function deriveSourceUrl(pkg: NpmSearchObject): string | undefined {
+function deriveSourceUrl(pkg: NpmSearchObject): string {
   const links = pkg.package.links;
-  return links?.homepage ?? links?.repository ?? links?.npm;
+  return (
+    links?.homepage ??
+    links?.repository ??
+    links?.npm ??
+    `https://www.npmjs.com/package/${pkg.package.name}`
+  );
 }
 
 /**
@@ -512,7 +519,7 @@ function matchLocalMcps(
       type: 'mcp',
       name,
       description: description || 'No description available',
-      install_command: buildMcpInstallCommand(name),
+      config_block: buildMcpConfigBlock(name),
       relevance_reason: buildRelevanceReason(
         name,
         description,
@@ -520,6 +527,7 @@ function matchLocalMcps(
         taskKeywords,
       ),
       relevance_score: relevanceScore,
+      source_url: '',
       already_installed: true,
     });
   }
@@ -567,7 +575,7 @@ export async function discoverMcpServers(
   const allRecommendations: McpRecommendation[] = [];
   const seenNames = new Set<string>();
 
-  // Score local MCPs first — skip online search if we have enough matches
+  // Score local MCPs first - skip online search if we have enough matches
   const localMatches = matchLocalMcps(localMcps, input.task_keywords);
   if (localMatches.length >= maxResults) {
     localMatches.sort((a, b) => b.relevance_score - a.relevance_score);
@@ -615,7 +623,7 @@ export async function discoverMcpServers(
           type: 'mcp',
           name: pkgName,
           description,
-          install_command: buildMcpInstallCommand(pkgName),
+          config_block: buildMcpConfigBlock(pkgName),
           relevance_reason: buildRelevanceReason(
             pkgName,
             description,
@@ -659,7 +667,7 @@ const z = tool.schema;
  * 2. Searches the npm registry for verified MCP packages
  * 3. Scores each result by relevance (0-1)
  * 4. Filters out MCP servers the user already has installed
- * 5. Returns the top N recommendations with ready-to-use mcpServers JSON config
+ * 5. Returns the top N recommendations with a config_block for manual setup in opencode.json
  *
  * Results are cached on disk at `~/.config/opencode/discovery-cache.json`
  * with a 24-hour TTL and LRU eviction (max 100 entries).
@@ -674,7 +682,7 @@ export function createDiscoverMcpServersTool(ctx: PluginInput): ToolDefinition {
   return tool({
     description:
       'Discovers MCP (Model Context Protocol) servers that could help ' +
-      'with a task. Checks locally installed MCPs first — if enough ' +
+      'with a task. Checks locally installed MCPs first - if enough ' +
       'relevant servers are found locally, skips online search entirely. ' +
       'If local results are insufficient, supplements with online discovery ' +
       'from the npm registry. ' +
@@ -683,7 +691,8 @@ export function createDiscoverMcpServersTool(ctx: PluginInput): ToolDefinition {
       'If existing_mcp_names is not provided, automatically discovers ' +
       "what's already installed and filters recommendations accordingly. " +
       'Already-installed MCPs are marked with an `already_installed: true` flag. ' +
-      'Returns recommendations with ready-to-use mcpServers config blocks. ' +
+      'Returns recommendations with a config_block (JSON to paste into opencode.json `mcpServers` section). ' +
+      'MCP servers require manual configuration in opencode.json (paste the config_block). ' +
       'Results are cached for 24 hours.',
     args: {
       task_description: z

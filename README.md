@@ -115,7 +115,7 @@ The orchestrator automatically discovers and injects skills and MCPs based on ta
 - **Skills**: Before delegating work, the orchestrator checks if any installed skills could improve the task outcome. If found, skill context is injected into the delegation prompt.
 - **MCPs**: The orchestrator can discover and recommend MCP servers when subagents need new capabilities.
 
-No manual configuration needed — discovery happens automatically for non-trivial tasks.
+No manual configuration needed - discovery happens automatically for non-trivial tasks.
 
 To install new skills: `npx skills add <owner/repo@skill> -g`
 
@@ -133,11 +133,11 @@ Manage API accounts directly from the OpenCode prompt via `/subscriptions`:
 
 ### Supported providers
 
-| Provider        | Provider ID     | Usage tracking                                        | Auth method                |
-| --------------- | --------------- | ----------------------------------------------------- | -------------------------- |
-| **OpenCode Go** | `opencode-go`   | Dashboard scraping (rolling, weekly, monthly windows) | Workspace ID + auth cookie |
-| **Neuralwatt**  | `neuralwatt`    | REST API (credits, kWh, token usage)                  | API key                    |
-| **Codex**       | `codex`         | REST API (5H/7D rate limits, credits)                 | Device code auth (OAuth)   |
+| Provider        | Provider ID   | Usage tracking                                        | Auth method                |
+| --------------- | ------------- | ----------------------------------------------------- | -------------------------- |
+| **OpenCode Go** | `opencode-go` | Dashboard scraping (rolling, weekly, monthly windows) | Workspace ID + auth cookie |
+| **Neuralwatt**  | `neuralwatt`  | REST API (credits, kWh, token usage)                  | API key                    |
+| **Codex**       | `codex`       | REST API (5H/7D rate limits, credits)                 | Device code auth (OAuth)   |
 
 **Note**: Accounts are identified by provider + name combination. You can have accounts with the same name across different providers (e.g., "Main" for Codex, "Main" for Neuralwatt) without collisions. Use `/subscriptions remove <provider> <name>` to remove a specific account.
 

@@ -518,11 +518,11 @@ Variant output:
 export function buildDiscoveryGuidanceBlock(): string {
   return `
 <discovery_guidance>
-You have tools to discover external capabilities — MCP servers (external tools/data) and skills (specialized workflows).
+You have tools to discover external capabilities - MCP servers (external tools/data) and skills (specialized workflows).
 
 DECISION GATE: Should you discover anything?
 
-SKIP discovery entirely — do NOT call discover_skills or discover_mcp_servers — when ALL of:
+SKIP discovery entirely - do NOT call discover_skills or discover_mcp_servers - when ALL of:
   - The task is trivial: typo fix, variable rename, mechanical edit, known-path change
   - The subagent already has all needed capabilities
   - Speed matters and discovery overhead isn't justified

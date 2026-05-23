@@ -311,7 +311,7 @@ async function scanAllSkills(): Promise<DiscoveredSkill[]> {
   const seen = new Set<string>();
   const deduplicated: DiscoveredSkill[] = [];
 
-  // Primary directory first — its entries take precedence
+  // Primary directory first - its entries take precedence
   for (const skill of [...primary, ...secondary]) {
     const key = skill.name.toLowerCase();
     if (seen.has(key)) continue;
