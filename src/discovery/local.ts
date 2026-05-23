@@ -207,30 +207,29 @@ function parseSkillMdHeading(
 }
 
 /**
- * Scan skills from the user's skills directory (~/.config/opencode/skills/).
+ * Scan skills from a given directory path.
  *
  * Reads each subdirectory looking for a SKILL.md file, parses its
  * frontmatter (or heading) to extract the skill name and description,
  * and returns a DiscoveredSkill array. Returns an empty array when the
  * directory does not exist or an error occurs.
  *
+ * @param dirPath - Absolute path to the skills directory to scan
  * @returns Array of discovered skills (empty on failure)
  */
-async function scanInstanceSkills(): Promise<DiscoveredSkill[]> {
-  const skillsDir = path.join(os.homedir(), '.config', 'opencode', 'skills');
-
+async function scanSkillDirectory(dirPath: string): Promise<DiscoveredSkill[]> {
   let entries: string[];
   try {
-    entries = await fsp.readdir(skillsDir);
+    entries = await fsp.readdir(dirPath);
   } catch {
-    // Directory doesn't exist – no user-installed skills
+    // Directory doesn't exist – no skills
     return [];
   }
 
   const skills: DiscoveredSkill[] = [];
 
   for (const entry of entries) {
-    const skillPath = path.join(skillsDir, entry);
+    const skillPath = path.join(dirPath, entry);
     let entryStat: fs.Stats;
     try {
       entryStat = await fsp.stat(skillPath);
@@ -278,6 +277,51 @@ async function scanInstanceSkills(): Promise<DiscoveredSkill[]> {
   return skills;
 }
 
+/**
+ * @deprecated Use scanAllSkills() instead, which scans both
+ *             ~/.config/opencode/skills/ and ~/.agents/skills/ directories.
+ */
+async function scanInstanceSkills(): Promise<DiscoveredSkill[]> {
+  return scanSkillDirectory(
+    path.join(os.homedir(), '.config', 'opencode', 'skills'),
+  );
+}
+
+/**
+ * Scan skills from both the primary skills directory
+ * (~/.config/opencode/skills/) and the secondary agents skills directory
+ * (~/.agents/skills/).
+ *
+ * Runs both scans in parallel via Promise.all. If the same skill name
+ * appears in both directories (case-insensitive match), the entry from the
+ * primary directory takes precedence. Returns a deduplicated array of
+ * DiscoveredSkill.
+ *
+ * @returns Array of discovered skills (empty on failure)
+ */
+async function scanAllSkills(): Promise<DiscoveredSkill[]> {
+  const primaryDir = path.join(os.homedir(), '.config', 'opencode', 'skills');
+  const secondaryDir = path.join(os.homedir(), '.agents', 'skills');
+
+  const [primary, secondary] = await Promise.all([
+    scanSkillDirectory(primaryDir),
+    scanSkillDirectory(secondaryDir),
+  ]);
+
+  const seen = new Set<string>();
+  const deduplicated: DiscoveredSkill[] = [];
+
+  // Primary directory first — its entries take precedence
+  for (const skill of [...primary, ...secondary]) {
+    const key = skill.name.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduplicated.push(skill);
+  }
+
+  return deduplicated;
+}
+
 /** Internal cache entry for a completed scan result. */
 interface CacheEntry {
   result: LocalDiscoveryResult;
@@ -322,7 +366,7 @@ export async function scanLocal(
 
   // Scan skills – failure is non-fatal, results default to empty
   try {
-    skills = await scanInstanceSkills();
+    skills = await scanAllSkills();
   } catch (err) {
     log('[discovery] skill scan failed', String(err));
   }

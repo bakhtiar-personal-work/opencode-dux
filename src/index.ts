@@ -1,5 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
-import * as fsp from 'node:fs/promises';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import os from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -1020,21 +1019,40 @@ const OpenCodeDux: Plugin = async (ctx) => {
         try {
           log('[startup] Loading skills');
 
-          const skillsDir = join(os.homedir(), '.config', 'opencode', 'skills');
-          const skillNames: string[] = [];
-          try {
-            const entries = await fsp.readdir(skillsDir);
-            for (const entry of entries) {
-              try {
-                const st = await fsp.stat(join(skillsDir, entry));
-                if (st.isDirectory()) skillNames.push(entry);
-              } catch {
-                /* skip inaccessible entries */
+          const primarySkillsDir = join(
+            os.homedir(),
+            '.config',
+            'opencode',
+            'skills',
+          );
+          const secondarySkillsDir = join(os.homedir(), '.agents', 'skills');
+
+          const scanDirSync = (dir: string): string[] => {
+            try {
+              const entries = readdirSync(dir, { withFileTypes: true });
+              const dirs: string[] = [];
+              for (const entry of entries) {
+                if (entry.isDirectory()) dirs.push(entry.name);
               }
+              return dirs;
+            } catch {
+              return []; /* dir doesn't exist */
             }
-          } catch {
-            /* skills dir doesn't exist */
+          };
+
+          const primaryNames = scanDirSync(primarySkillsDir);
+          const secondaryNames = scanDirSync(secondarySkillsDir);
+
+          // Deduplicate: primary first, case-insensitive
+          const seen = new Set<string>();
+          const skillNames: string[] = [];
+          for (const name of [...primaryNames, ...secondaryNames]) {
+            const key = name.toLowerCase();
+            if (seen.has(key)) continue;
+            seen.add(key);
+            skillNames.push(name);
           }
+
           if (skillNames.length > 0) {
             console.log(`\u{1F3AF} Skills: ${skillNames.join(', ')}`);
             log(`[startup] Skills: ${skillNames.join(', ')}`);

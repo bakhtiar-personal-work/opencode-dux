@@ -578,8 +578,6 @@ function extractSkillName(source: string): string {
   return source;
 }
 
-
-
 /**
  * Deduplicate recommendations by case-insensitive name, keeping the one with
  * the higher relevance score.
@@ -617,7 +615,7 @@ function matchLocalSkills(
     description: skill.description ?? 'No description available',
     install_command: `npx skills add ${skill.name} -g`,
     relevance_reason: `Already installed locally - matches keywords: ${taskKeywords.join(', ')}`,
-    relevance_score: 0.95 - (index * 0.01), // High priority, slight variation for sorting
+    relevance_score: 0.95 - index * 0.01, // High priority, slight variation for sorting
     already_installed: true,
   }));
 }
@@ -764,8 +762,12 @@ export async function discoverSkillsOnline(
 
   // Two-tier: locals first, then online (no score comparison needed)
   const onlineUnique = deduplicateByName(allRecommendations);
-  const sortedLocals = localMatches.sort((a, b) => b.relevance_score - a.relevance_score);
-  const sortedOnline = onlineUnique.sort((a, b) => b.relevance_score - a.relevance_score);
+  const sortedLocals = localMatches.sort(
+    (a, b) => b.relevance_score - a.relevance_score,
+  );
+  const sortedOnline = onlineUnique.sort(
+    (a, b) => b.relevance_score - a.relevance_score,
+  );
   const final = [...sortedLocals, ...sortedOnline].slice(0, maxResults);
 
   return {
