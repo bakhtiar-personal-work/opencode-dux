@@ -31,29 +31,26 @@ Agent orchestration, management, and operations plugin for OpenCode. Routes task
 
 3. Authenticate: `opencode auth login`
 
-Or run the installer: `bunx opencode-dux install`
-
 ## Auto-Update
 
-The plugin automatically checks for updates when you start a new chat session.
+The plugin checks for updates when OpenCode starts up. If an update is available it downloads in the background.
 
 ### How it works
 
-- **If an update is available**: It downloads and installs in the background
-- **You'll see a notification**: A popup message confirms the update succeeded (or shows if it failed)
-- **Restart OpenCode**: The new version loads on next startup
-
-That's it - no manual steps needed!
+- When the app starts the plugin checks for a newer version
+- If found it downloads the update silently in the background
+- A popup shows whether the update succeeded or failed
+- Restart OpenCode to apply the new version
 
 ### Installation requirement
 
-Auto-update works with both `"opencode-dux"` and `"opencode-dux@latest"`. OpenCode treats them identically.
+Auto-update works with `"opencode-dux"` and `"opencode-dux@latest"`. OpenCode treats them the same.
 
 ```json
 { "plugin": ["opencode-dux"] }
 ```
 
-**Note**: Keep `"opencode-dux"` without version numbers in your config. Adding a version (e.g., `"opencode-dux@1.3.6"`) disables auto-update.
+Keep `"opencode-dux"` without a version in your config. Pinning a version like `"opencode-dux@1.3.6"` turns off auto-update.
 
 ## Agents
 
@@ -72,7 +69,7 @@ Auto-update works with both `"opencode-dux"` and `"opencode-dux@latest"`. OpenCo
 
 Config file: `~/.config/opencode/opencode-dux.jsonc`
 
-Merged from two locations (project overrides user):
+Merged from two locations, project overrides user:
 
 | Location    | Path                                     |
 | ----------- | ---------------------------------------- |
@@ -86,13 +83,13 @@ Merged from two locations (project overrides user):
 | `preset`                             | `string`   | -       | Active preset name                            |
 | `presets`                            | `object`   | `{}`    | Named model configurations per agent          |
 | `agents`                             | `object`   | `{}`    | Per-agent overrides on top of active preset   |
-| `sessionManager.maxSessionsPerAgent` | `number`   | `2`     | Max concurrent sessions per agent type (1–10) |
+| `sessionManager.maxSessionsPerAgent` | `number`   | `2`     | Max concurrent sessions per agent type (1-10) |
 | `sessionManager.readContextMinLines` | `number`   | `10`    | Min lines threshold for read context tool     |
 | `sessionManager.readContextMaxFiles` | `number`   | `8`     | Max files per read context batch              |
-| `todoContinuation.maxContinuations`  | `number`   | `5`     | Max consecutive auto-continuations (1–50)     |
+| `todoContinuation.maxContinuations`  | `number`   | `5`     | Max consecutive auto-continuations (1-50)     |
 | `todoContinuation.autoEnable`        | `boolean`  | `false` | Auto-enable when enough todos exist           |
 | `contextPressure.enabled`            | `boolean`  | `true`  | Warn when context usage is high               |
-| `contextPressure.warnThresholdPct`   | `number`   | `75`    | Trigger at this context usage % (1–99)        |
+| `contextPressure.warnThresholdPct`   | `number`   | `75`    | Trigger at this context usage % (1-99)        |
 | `websearch.provider`                 | `string`   | `"exa"` | `"exa"` or `"tavily"`                         |
 | `setDefaultAgent`                    | `boolean`  | `true`  | Sets default_agent to `orchestrator`          |
 | `autoUpdate`                         | `boolean`  | `true`  | Auto-update when loaded via npm name          |
@@ -103,32 +100,35 @@ Merged from two locations (project overrides user):
 | Field         | Type           | Description                            |
 | ------------- | -------------- | -------------------------------------- |
 | `model`       | `string`       | Model ID (`provider/model`)            |
-| `temperature` | `number` (0–2) | Model temperature                      |
+| `temperature` | `number` (0-2) | Model temperature                      |
 | `variant`     | `string`       | Variant hint (e.g. `"pro"`, `"flash"`) |
 | `options`     | `object`       | Provider-specific model options        |
 | `displayName` | `string`       | Custom agent display name              |
 
 ### Automatic Skill & MCP Discovery
 
-The orchestrator automatically discovers and injects skills and MCPs based on task context:
+The orchestrator discovers skills and MCPs before delegating to subagents:
 
-- **Skills**: Before delegating work, the orchestrator checks if any installed skills could improve the task outcome. If found, skill context is injected into the delegation prompt.
-- **MCPs**: The orchestrator can discover and recommend MCP servers when subagents need new capabilities.
+- **Skills**: Before @oracle, @designer, or @librarian runs on a non-trivial task, the orchestrator calls `discover_skills` and `discover_mcp_servers` in parallel. Results are cached for 24 hours.
+- **Installed capabilities**: Relevant installed skills and MCPs are injected into the delegation prompt with their name, description, relevance, and usage instructions. Subagents can reference them right away.
+- **Missing capabilities**: If a useful capability is found but not yet installed, the orchestrator shows the install command before moving on.
 
-No manual configuration needed - discovery happens automatically for non-trivial tasks.
+Discovery runs automatically for non-trivial tasks.
 
-To install new skills: `npx skills add <owner/repo@skill> -g`
+Install new skills: `npx skills add <owner/repo> --skill <skill-name> -g -a opencode -y`
+
+> **Skill discovery** needs `npx` on your PATH for online searches (runs `npx skills find <keywords>`). Local skill checks work without it. MCP discovery uses the npm registry directly and does not need `npx`. Both check locally installed items first and skip online lookups when enough relevant matches are found.
 
 ## Subscriptions / Account Commands
 
-Manage API accounts directly from the OpenCode prompt via `/subscriptions`:
+Manage API accounts from the OpenCode prompt with `/subscriptions`:
 
 - `/subscriptions list` - View all accounts and their usage
 - `/subscriptions add-opencode-go <name> <workspace-id>` - Add OpenCode Go account
 - `/subscriptions add-neuralwatt <name> <api-key>` - Add Neuralwatt account
 - `/subscriptions add-codex-device <name>` - Add Codex (OpenAI) account via device auth
-- `/subscriptions switch <provider> <name>` - Activate an account for a provider (use full provider names)
-- `/subscriptions remove <provider> <name>` - Delete an account (provider + name to prevent collisions)
+- `/subscriptions switch <provider> <name>` - Activate an account for a provider
+- `/subscriptions remove <provider> <name>` - Delete an account
 - `/subscriptions refresh` - Force refresh usage data
 
 ### Supported providers
@@ -139,23 +139,22 @@ Manage API accounts directly from the OpenCode prompt via `/subscriptions`:
 | **Neuralwatt**  | `neuralwatt`  | REST API (credits, kWh, token usage)                  | API key                    |
 | **Codex**       | `codex`       | REST API (5H/7D rate limits, credits)                 | Device code auth (OAuth)   |
 
-**Note**: Accounts are identified by provider + name combination. You can have accounts with the same name across different providers (e.g., "Main" for Codex, "Main" for Neuralwatt) without collisions. Use `/subscriptions remove <provider> <name>` to remove a specific account.
+Accounts are identified by provider and name. You can have accounts with the same name across different providers (e.g., "Main" for Codex, "Main" for Neuralwatt) without collisions. Remove a specific account with `/subscriptions remove <provider> <name>`.
 
 Usage data appears in the TUI sidebar under **API Usage**.
 
+All account credentials, API keys, tokens, and subscription data are stored locally on your machine. Nothing is sent to any external service or phoned home.
+
 ### Codex device auth
 
-Codex uses your ChatGPT account (not an API key). The device auth flow lets you
-log in from any terminal - no browser on the same machine needed.
+Codex uses your ChatGPT account, not an API key. The device auth flow works from any terminal without needing a browser on the same machine.
 
 1. Run `/subscriptions add-codex-device <name>`
 2. Open the displayed URL in any browser and sign in with your ChatGPT account
 3. Enter the one-time code shown in your terminal
-4. Done - usage tracking starts immediately
+4. Usage tracking starts immediately
 
-Access tokens refresh automatically via the stored refresh token. If the
-refresh token expires (e.g., after a password change), re-run
-`/subscriptions add-codex-device`.
+Access tokens refresh automatically. If the refresh token expires (e.g., after a password change), run `/subscriptions add-codex-device` again.
 
 ## Prompt overrides
 
@@ -177,14 +176,24 @@ Disable any: `{ "disabledMcps": ["grep_app"] }`
 
 ## Skill Discovery
 
-The orchestrator automatically discovers skills via the `find-skills` workflow before delegating work. When a skill would improve a task:
+The orchestrator uses `discover_skills` to find relevant skills before delegating. It checks local installs first, then falls back to online search:
 
-1. Orchestrator runs `npx skills find <keywords>` to discover relevant skills
-2. Checks which skills are installed locally (`~/.config/opencode/skills/`)
-3. Injects installed skill context into delegation prompts
-4. Recommends missing skills to the user with install commands
+- **Local check**: Scans `~/.config/opencode/skills/` and `~/.agents/skills/` for installed skills, scores them by relevance against task keywords
+- **Online search**: If local results are insufficient, runs `npx skills find <keywords>` to search the registry
+- **MCP discovery**: Searches the npm registry for matching MCP packages, scored by relevance against task keywords
 
-Install skills: `npx skills add <owner/repo@skill> -g`
+How the full flow works:
+
+1. Orchestrator calls `discover_skills` and `discover_mcp_servers` with task keywords (blocking, cached 24h)
+2. Checks locally installed skills and MCPs first
+3. If enough relevant local results are found it returns them and skips online search
+4. Otherwise it searches online with `npx skills find <keywords>` for skills or npm registry for MCPs
+5. Installed items are injected into delegation prompts with name, description, relevance, and usage instructions
+6. Useful items that aren't installed yet are recommended to the user with install commands
+
+Install skills: `npx skills add <owner/repo> --skill <skill-name> -g -a opencode -y`
+
+> Skill discovery needs `npx` on your PATH for online searches (runs `npx skills find <keywords>`). Local skill checks and MCP discovery work without it.
 
 ## Development
 

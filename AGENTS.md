@@ -42,7 +42,8 @@ bun run verify:host-smoke  # boot isolated OpenCode host with plugin tarball
 - The plugin factory function can **re-run** after `Instance.dispose()`. Module-level `didLogVerboseInit` / `didLogStartupSummary` flags prevent duplicate startup logs.
 - `src/tools/ast-grep/downloader.ts` downloads binaries to `~/.cache/opencode-dux/` on first use.
 - `src/mcp/index.ts` - builtin MCPs are defined here; any can be disabled via config `disabledMcps`.
-- JSON Schema is **generated** - edits to `opencode-dux.schema.json` are overwritten by `bun run generate-schema`. Edit `src/config/schema.ts` instead.
+- JSON Schema is **generated** — edits to `opencode-dux.schema.json` are overwritten by `bun run generate-schema`. Edit `src/config/schema.ts` instead.
+- When changing agent prompts, discovery logic, install commands, or user-facing behavior in `src/`, check if `README.md` needs updating to reflect the new behavior. Keep docs in sync with code.
 
 ## External dependencies (NOT bundled, kept external at build time)
 
