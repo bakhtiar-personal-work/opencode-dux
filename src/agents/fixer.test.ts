@@ -20,7 +20,6 @@ describe('createFixerAgent', () => {
     expect(prompt).toContain('<file_read_budget>');
     expect(prompt).toContain('<constraints>');
     expect(prompt).toContain('<user_choice_policy>');
-    expect(prompt).toContain('Tradeoffs balanced');
     expect(prompt).toContain('<self_review>');
     expect(prompt).toContain('<build_recovery>');
     expect(prompt).toContain('<verification_hints>');

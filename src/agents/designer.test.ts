@@ -18,7 +18,6 @@ describe('createDesignerAgent', () => {
     expect(prompt).toContain('<role>');
     expect(prompt).toContain('<discovery_first>');
     expect(prompt).toContain('<design_principles>');
-    expect(prompt).toContain('<vision_and_evidence>');
     expect(prompt).toContain('<user_choice_policy>');
     expect(prompt).toContain('<constraints>');
     expect(prompt).toContain('<variant_policy>');
@@ -62,7 +61,6 @@ describe('createDesignerAgent', () => {
       '<role>',
       '<discovery_first>',
       '<design_principles>',
-      '<vision_and_evidence>',
       '<user_choice_policy>',
       '<constraints>',
       '<variant_policy>',

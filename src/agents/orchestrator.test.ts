@@ -54,14 +54,12 @@ describe('buildOrchestratorPrompt', () => {
     const prompt = buildOrchestratorPrompt();
     expect(prompt).toContain('<routing_priority>');
     expect(prompt).toContain('<first_gate>');
-    expect(prompt).toContain('delegate_subagent(agent: "steward"');
-    expect(prompt).toContain('delegate_subagent(agent: "designer"');
+    expect(prompt).toContain('delegate_subagent');
     expect(prompt).toContain('<orchestrator_clarification>');
     expect(prompt).toContain('<needs_user>');
-    expect(prompt).toContain('`question`');
     expect(prompt).toContain('continue_session_id');
     expect(prompt).toContain('Nine invariants');
-    expect(prompt).toContain('NEVER use default (flash) + low');
+    expect(prompt).toContain('NEVER: default + low');
     expect(prompt).toContain('<steward_protocol>');
     expect(prompt).toContain('<interpreter_protocol>');
   });
@@ -74,12 +72,14 @@ describe('buildOrchestratorPrompt', () => {
     expect(prompt).toContain('Report verification before declaring success');
   });
 
-  test('includes planning_gate block', () => {
+  test('includes planning_gate block with analysis-allowed fix', () => {
     const prompt = buildOrchestratorPrompt();
     expect(prompt).toContain('<planning_gate>');
     expect(prompt).toContain('1) ANALYSIS');
     expect(prompt).toContain('4) IMPLEMENT');
     expect(prompt).toContain('Skip this gate ONLY when');
+    // Planning gate must allow analysis before approval
+    expect(prompt).toContain('no approval needed for analysis');
   });
 
   test('context_budget is near the start of the prompt (after <role>)', () => {
@@ -91,7 +91,7 @@ describe('buildOrchestratorPrompt', () => {
     expect(contextBudgetIndex).toBeLessThan(criticalInvariantsIndex);
   });
 
-  test('first_gate analysis gate references oracle when oracle enabled', () => {
+  test('first_gate analysis gate references oracle', () => {
     const prompt = buildOrchestratorPrompt();
     expect(prompt).toContain('delegate to @oracle');
     expect(prompt).not.toContain('Analysis gate (@oracle / thinker)');
@@ -110,7 +110,6 @@ describe('buildOrchestratorPrompt', () => {
 
   test('empty model names do not break prompt', () => {
     const prompt = buildOrchestratorPrompt('', '');
-    // Should still produce valid prompt without template placeholders
     expect(prompt).not.toContain('{{');
   });
 
@@ -120,12 +119,8 @@ describe('buildOrchestratorPrompt', () => {
       undefined,
       new Set(['oracle', 'fixer']),
     );
-    // Included descriptions
-    expect(prompt).toContain(
-      'technical analysis and code review; uses orchestrator',
-    );
+    expect(prompt).toContain('technical analysis and code review');
     expect(prompt).toContain('implementation specialist');
-    // Excluded descriptions - these unique strings only appear in their descriptions
     expect(prompt).not.toContain('codebase search specialist');
     expect(prompt).not.toContain('external docs and API reference specialist');
     expect(prompt).not.toContain('UI/UX specialist for ALL user-facing UI');
@@ -137,12 +132,16 @@ describe('buildOrchestratorPrompt', () => {
     const prompt = buildOrchestratorPrompt();
     expect(prompt).toContain('codebase search specialist');
     expect(prompt).toContain('external docs and API reference specialist');
-    expect(prompt).toContain(
-      'technical analysis and code review; uses orchestrator',
-    );
+    expect(prompt).toContain('technical analysis and code review');
     expect(prompt).toContain('UI/UX specialist for ALL user-facing UI');
     expect(prompt).toContain('implementation specialist');
     expect(prompt).toContain('rules citation from steward_paths');
     expect(prompt).toContain('screenshot / attached-image analyst');
+  });
+
+  test('orchestrator prompt is reasonably sized after compaction', () => {
+    const prompt = buildOrchestratorPrompt('openai/gpt-5', 'openai/gpt-5-pro');
+    // Should be well under the ~10k token old size
+    expect(prompt.length).toBeLessThan(36000);
   });
 });

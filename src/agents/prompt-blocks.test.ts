@@ -2,15 +2,18 @@ import { describe, expect, test } from 'bun:test';
 import {
   buildInterpreterOrchestratorProtocolBlock,
   buildStewardOrchestratorProtocolBlock,
+  CORE_CAPABILITY_AWARENESS_BLOCK,
   CRITICAL_INVARIANTS,
   DESIGNER_VARIANT_SCOPE_LINES,
   INTERPRETER_VARIANT_SCOPE_LINES,
   LIBRARIAN_VARIANT_SCOPE_LINES,
   ORCHESTRATOR_CLARIFICATION_HANDOFF_BLOCK,
   PLANNING_GATE_BLOCK,
+  SELF_REVIEW_BLOCK,
   STEWARD_PATH_GLOBS,
   STEWARD_VARIANT_SCOPE_LINES,
   SUBAGENT_NEEDS_USER_FORMAT,
+  USER_CHOICE_POLICY_BLOCK,
 } from './prompt-blocks';
 
 describe('CRITICAL_INVARIANTS', () => {
@@ -39,10 +42,32 @@ describe('PLANNING_GATE_BLOCK', () => {
     expect(PLANNING_GATE_BLOCK).toContain('4) IMPLEMENT');
     expect(PLANNING_GATE_BLOCK).toContain('Skip this gate ONLY when');
   });
+
+  test('allows analysis delegation before user approval', () => {
+    expect(PLANNING_GATE_BLOCK).toContain('no approval needed for analysis');
+    expect(PLANNING_GATE_BLOCK).toContain('ALWAYS permitted');
+  });
+
+  test('requires approval before implementation but allows discovery', () => {
+    expect(PLANNING_GATE_BLOCK).toContain('Only after explicit user approval');
+    // Discovery is now allowed before approval (capability check, not implementation)
+    expect(PLANNING_GATE_BLOCK).toContain('DO NOT proceed to implementation');
+    expect(PLANNING_GATE_BLOCK).not.toContain(
+      'DO NOT proceed to skill discovery',
+    );
+  });
+
+  test('does not contain blanket no-delegation language', () => {
+    // Must NOT say "never delegate before approval" — only block implementation
+    expect(PLANNING_GATE_BLOCK).not.toContain('NEVER delegate before approval');
+    expect(PLANNING_GATE_BLOCK.toLowerCase()).not.toContain(
+      'never delegate to any subagent before approval',
+    );
+  });
 });
 
 describe('ORCHESTRATOR_CLARIFICATION_HANDOFF_BLOCK', () => {
-  test('defines nine invariants for question workflow', () => {
+  test('defines invariants for question workflow', () => {
     expect(ORCHESTRATOR_CLARIFICATION_HANDOFF_BLOCK).toContain(
       '<orchestrator_clarification>',
     );
@@ -51,26 +76,53 @@ describe('ORCHESTRATOR_CLARIFICATION_HANDOFF_BLOCK', () => {
     );
     expect(ORCHESTRATOR_CLARIFICATION_HANDOFF_BLOCK).toContain('1) Subagent');
     expect(ORCHESTRATOR_CLARIFICATION_HANDOFF_BLOCK).toContain('2) After user');
-    expect(ORCHESTRATOR_CLARIFICATION_HANDOFF_BLOCK).toContain('3) Never');
-    expect(ORCHESTRATOR_CLARIFICATION_HANDOFF_BLOCK).toContain('4) Multiple');
     expect(ORCHESTRATOR_CLARIFICATION_HANDOFF_BLOCK).toContain(
-      '5) User follow-up',
+      '3) Never substitute',
     );
     expect(ORCHESTRATOR_CLARIFICATION_HANDOFF_BLOCK).toContain(
-      '6) Subagent-to-user relay',
-    );
-    expect(ORCHESTRATOR_CLARIFICATION_HANDOFF_BLOCK).toContain(
-      '7) Token discipline',
+      '4) Multiple subagents',
     );
   });
 });
 
 describe('SUBAGENT_NEEDS_USER_FORMAT', () => {
   test('contains QuestionInfo schema instructions', () => {
-    expect(SUBAGENT_NEEDS_USER_FORMAT).toContain('QuestionInfo JSON format');
+    expect(SUBAGENT_NEEDS_USER_FORMAT).toContain('QuestionInfo JSON');
     expect(SUBAGENT_NEEDS_USER_FORMAT).toContain('"question"');
     expect(SUBAGENT_NEEDS_USER_FORMAT).toContain('"header"');
     expect(SUBAGENT_NEEDS_USER_FORMAT).toContain('"options"');
+  });
+});
+
+describe('SELF_REVIEW_BLOCK', () => {
+  test('contains 3-item compact self review', () => {
+    expect(SELF_REVIEW_BLOCK).toContain('<self_review>');
+    expect(SELF_REVIEW_BLOCK).toContain('invariants followed');
+    expect(SELF_REVIEW_BLOCK).toContain('Output matches');
+    expect(SELF_REVIEW_BLOCK).toContain('Facts vs assumptions');
+  });
+
+  test('is materially shorter than the old 5-item version', () => {
+    expect(SELF_REVIEW_BLOCK.length).toBeLessThan(400);
+  });
+});
+
+describe('USER_CHOICE_POLICY_BLOCK', () => {
+  test('contains compact choice policy', () => {
+    expect(USER_CHOICE_POLICY_BLOCK).toContain('<user_choice_policy>');
+    expect(USER_CHOICE_POLICY_BLOCK).toContain('clear winner');
+    expect(USER_CHOICE_POLICY_BLOCK).toContain('Balanced tradeoffs');
+  });
+});
+
+describe('CORE_CAPABILITY_AWARENESS_BLOCK', () => {
+  test('contains both host-injected and orchestrator capability guidance', () => {
+    expect(CORE_CAPABILITY_AWARENESS_BLOCK).toContain('<capabilities_usage>');
+    expect(CORE_CAPABILITY_AWARENESS_BLOCK).toContain('available_skills');
+    expect(CORE_CAPABILITY_AWARENESS_BLOCK).toContain('available_mcps');
+    expect(CORE_CAPABILITY_AWARENESS_BLOCK).toContain('Installed Capabilities');
+    expect(CORE_CAPABILITY_AWARENESS_BLOCK).toContain('Never assume fields');
+    expect(CORE_CAPABILITY_AWARENESS_BLOCK).toContain('callable tool');
   });
 });
 
@@ -87,7 +139,7 @@ describe('prompt-blocks', () => {
 
   test('interpreter protocol mentions delegate_subagent for interpreter', () => {
     const block = buildInterpreterOrchestratorProtocolBlock();
-    expect(block).toContain('delegate_subagent(agent: "interpreter", ...)');
+    expect(block).toContain('@interpreter');
   });
 
   test('librarian and designer variant lines stay aligned with orchestrator use', () => {

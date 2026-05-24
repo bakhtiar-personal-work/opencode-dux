@@ -19,7 +19,6 @@ describe('createOracleAgent', () => {
     expect(prompt).toContain('<capabilities>');
     expect(prompt).toContain('<tool_routing>');
     expect(prompt).toContain('<constraints>');
-    expect(prompt).toContain('<user_choice_policy>');
     expect(prompt).toContain('<variant_policy>');
     expect(prompt).toContain('<output_format>');
   });
@@ -59,25 +58,45 @@ describe('createOracleAgent', () => {
     const prompt = agent.config.prompt ?? '';
     const requiredSections = [
       '<role>',
+      '<critical_invariants>',
       '<capabilities>',
       '<tool_routing>',
+      '<workflow>',
       '<constraints>',
       '<user_choice_policy>',
       '<variant_policy>',
+      '<self_review>',
       '<output_format>',
       '<diagnosis>',
       '<recommendation>',
-      '<tradeoffs>',
-      '<risks>',
       '<confidence>',
       '<action_items>',
       '<blocked>',
-      '<good_example>',
-      '<bad_example>',
+      '<needs_user>',
     ];
     for (const section of requiredSections) {
       expect(prompt).toContain(section);
     }
+  });
+
+  test('prompt enforces strict required vs conditional output sections', () => {
+    const agent = createOracleAgent('test/oracle-model');
+    const prompt = agent.config.prompt ?? '';
+    expect(prompt).toContain('Required sections');
+    expect(prompt).toContain('Conditional sections');
+    expect(prompt).toContain('<risks>: REQUIRED for variant high/max');
+    expect(prompt).toContain(
+      '<plan>: include ONLY when orchestrator delegates',
+    );
+    expect(prompt).toContain(
+      '<blocked>: include ONLY when analysis cannot be completed',
+    );
+  });
+
+  test('variant_policy requires risks for high/max', () => {
+    const agent = createOracleAgent('test/oracle-model');
+    const prompt = agent.config.prompt ?? '';
+    expect(prompt).toContain('REQUIRED with severity labels');
   });
 
   test('prompt does not contain resolver boilerplate', () => {
@@ -85,6 +104,13 @@ describe('createOracleAgent', () => {
     const prompt = agent.config.prompt ?? '';
     expect(prompt).not.toContain('if (customPrompt)');
     expect(prompt).not.toContain('else if (customAppendPrompt)');
+  });
+
+  test('prompt is materially shorter than the old verbose version', () => {
+    const agent = createOracleAgent('test/oracle-model');
+    const prompt = agent.config.prompt ?? '';
+    // Oracle prompt should be well under 10k chars after compaction
+    expect(prompt.length).toBeLessThan(10000);
   });
 });
 
@@ -103,7 +129,7 @@ describe('buildOraclePrompt', () => {
     expect(prompt).not.toContain('smart (pro)');
   });
 
-  test('true output contains all required sections', () => {
+  test('true output contains all essential sections', () => {
     const prompt = buildOraclePrompt(true);
     const requiredSections = [
       '<role>',
@@ -111,18 +137,13 @@ describe('buildOraclePrompt', () => {
       '<tool_routing>',
       '<model_tier>',
       '<constraints>',
-      '<user_choice_policy>',
       '<variant_policy>',
       '<output_format>',
       '<diagnosis>',
       '<recommendation>',
-      '<tradeoffs>',
-      '<risks>',
       '<confidence>',
       '<action_items>',
       '<blocked>',
-      '<good_example>',
-      '<bad_example>',
     ];
     for (const section of requiredSections) {
       expect(prompt).toContain(section);
@@ -136,18 +157,13 @@ describe('buildOraclePrompt', () => {
       '<capabilities>',
       '<tool_routing>',
       '<constraints>',
-      '<user_choice_policy>',
       '<variant_policy>',
       '<output_format>',
       '<diagnosis>',
       '<recommendation>',
-      '<tradeoffs>',
-      '<risks>',
       '<confidence>',
       '<action_items>',
       '<blocked>',
-      '<good_example>',
-      '<bad_example>',
     ];
     for (const section of requiredSections) {
       expect(prompt).toContain(section);
@@ -159,11 +175,8 @@ describe('buildOraclePrompt', () => {
     const promptTrue = buildOraclePrompt(true);
     const promptFalse = buildOraclePrompt(false);
 
-    // Both should have the same block count ordering - the only difference
-    // is the presence of <model_tier> in the true case
     expect(promptTrue.startsWith('<role>')).toBe(true);
     expect(promptFalse.startsWith('<role>')).toBe(true);
-    expect(promptTrue.endsWith('</bad_example>')).toBe(true);
-    expect(promptFalse.endsWith('</bad_example>')).toBe(true);
+    expect(promptTrue.endsWith('</model_tier>')).toBe(true);
   });
 });

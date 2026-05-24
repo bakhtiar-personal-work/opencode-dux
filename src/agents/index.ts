@@ -12,7 +12,7 @@ import { createExplorerAgent } from './explorer';
 import { createFixerAgent } from './fixer';
 import { createInterpreterAgent } from './interpreter';
 import { createLibrarianAgent } from './librarian';
-import { buildOraclePrompt, createOracleAgent } from './oracle';
+import { createOracleAgent } from './oracle';
 import { type AgentDefinition, createOrchestratorAgent } from './orchestrator';
 import { applyDefaultPermissions, applyOverrides } from './overrides';
 import { createStewardAgent } from './steward';
