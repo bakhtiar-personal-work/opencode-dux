@@ -40,6 +40,7 @@ function windowFromApi(
 export async function scrapeCodexQuota(
   accessToken: string,
   signal?: AbortSignal,
+  accountId?: string,
 ): Promise<CodexUsageEntry> {
   const accountName = ''; // filled by caller
 
@@ -48,6 +49,7 @@ export async function scrapeCodexQuota(
       headers: {
         Authorization: `Bearer ${accessToken}`,
         Accept: 'application/json',
+        ...(accountId ? { 'ChatGPT-Account-Id': accountId } : {}),
       },
       signal,
     });
@@ -93,7 +95,7 @@ export async function scrapeCodexQuota(
       credits: {
         hasCredits: data.credits?.has_credits ?? false,
         unlimited: data.credits?.unlimited ?? false,
-        balance: data.credits?.balance ?? 0,
+        balance: Number(data.credits?.balance) || 0,
       },
       planType: data.plan_type ?? undefined,
     };

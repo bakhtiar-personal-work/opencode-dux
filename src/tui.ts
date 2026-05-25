@@ -742,7 +742,15 @@ function renderSubscriptionPanel(
     } else if (entry.provider === 'neuralwatt') {
       renderNeuralwattUsage(entry, rows, theme);
     } else if (entry.provider === 'codex') {
-      renderCodexUsage(entry as CodexUsageEntry, rows, theme);
+      try {
+        renderCodexUsage(entry as CodexUsageEntry, rows, theme);
+      } catch (e) {
+        rows.push(
+          text({ fg: '#E74C3C' }, [
+            '  ⚠️ Error rendering Codex usage',
+          ]),
+        );
+      }
     } else {
       rows.push(
         text({ fg: '#F39C12' }, [
@@ -1671,7 +1679,23 @@ const plugin: TuiPluginModule & { id: string } = {
       slots: {
         sidebar_content() {
           tick();
-          return renderSidebar(snapshot(), api.theme.current);
+          try {
+            return renderSidebar(snapshot(), api.theme.current);
+          } catch (e) {
+            // Return a minimal fallback box so the sidebar is never blank
+            return box(
+              {
+                width: '100%',
+                flexDirection: 'column',
+                border: BORDER,
+                borderColor: api.theme.current.borderActive,
+              },
+              [
+                text({ fg: api.theme.current.accent }, ['opencode-dux']),
+                text({ fg: '#E74C3C' }, ['⚠️ Render error - check plugin logs']),
+              ],
+            );
+          }
         },
       },
     });

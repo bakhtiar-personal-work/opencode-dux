@@ -214,6 +214,7 @@ export class UsageService {
             const entry = await scrapeCodexQuota(
               accessToken,
               controller.signal,
+              account.accountId,
             );
             entry.accountName = account.name;
             return entry as SubscriptionUsageEntry;
