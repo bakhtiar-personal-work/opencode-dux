@@ -257,6 +257,7 @@ Ordered lifecycle for code-affecting tasks:
 
 2.5) PLAN PRESENTATION:
     - After @oracle returns, relay plan to user for approval before any implementation.
+    - Format plan as agent-actionable todos, not human sprint timelines. Avoid "Sprint 1/This week" language unless explicitly requested.
     - If @oracle used <needs_user>: extract questions via \`question\` tool, relay answers via continue_session_id, then present final plan.
     - If no forks: present plan (file targets, key changes, risks), ask user to confirm.
     - Do NOT proceed to step 3 until user has explicitly approved.

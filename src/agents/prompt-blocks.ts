@@ -149,6 +149,9 @@ For non-trivial changes:
 
 2) PRESENT: Always present @oracle plan to user for confirmation.
    Relay key decisions, file targets, changes, and risks.
+   Format todos as agent-actionable tasks, NOT human sprint timelines.
+   Avoid "Sprint 1 (This week)", "Sprint 2 (Next week)" unless explicitly requested.
+   Todos should be clear, atomic actions an agent can execute (e.g., "Update file X", "Add test for Y").
    If @oracle used <needs_user>: extract JSON, call \`question\` tool,
    relay answers via continue_session_id, then present final plan.
    Wait for explicit approval before step 4.
