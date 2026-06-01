@@ -61,6 +61,25 @@ type OpencodeClient = import('@opencode-ai/plugin').PluginInput['client'];
 const VARIANT_OPTIONS = ['low', 'medium', 'high', 'max'] as const;
 const MODE_OPTIONS = ['blocking', 'fire_forget'] as const;
 
+export function resolveDelegatedAgentConfig(
+  config: PluginConfig | undefined,
+  agentName: string,
+  requested: {
+    model?: string;
+    variant?: string;
+  },
+): {
+  model?: string;
+  variant?: string;
+} {
+  const agentOverride = getAgentOverride(config, agentName);
+
+  return {
+    model: requested.model ?? agentOverride?.model,
+    variant: agentOverride?.variant ?? requested.variant,
+  };
+}
+
 export function createDelegateTools(
   ctx: { client: OpencodeClient; directory: string },
   config: PluginConfig | undefined,
@@ -267,14 +286,12 @@ export function createDelegateTools(
         return 'Error: @steward must always run in blocking mode. Its repo rule citations are required input for all downstream agents (@oracle, @fixer, @designer). Use mode: "blocking" (or omit mode).';
       }
 
-      const agentOverride = getAgentOverride(config, agentName);
-      const effectiveVariant = agentOverride?.variant ?? variant;
-
-      let model = args.model;
-      if (!model && config?.agents?.[agentName]?.model) {
-        const rawModel = config.agents[agentName].model;
-        model = typeof rawModel === 'string' ? rawModel : undefined;
-      }
+      const resolvedConfig = resolveDelegatedAgentConfig(config, agentName, {
+        model: args.model,
+        variant,
+      });
+      const effectiveVariant = resolvedConfig.variant;
+      const model = resolvedConfig.model;
 
       if (!model) {
         return `Error: No model configured for agent "${agentName}"`;

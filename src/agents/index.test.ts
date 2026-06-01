@@ -145,6 +145,28 @@ describe('orchestrator agent', () => {
     const orchestrator = agents.find((a) => a.name === 'orchestrator');
     expect(orchestrator?.config.variant).toBe('high');
   });
+
+  test('orchestrator prompt includes configured subagent model roster', async () => {
+    const config: PluginConfig = {
+      agents: {
+        explorer: { model: 'github-copilot/grok-code-fast-1' },
+        oracle: {
+          model: 'openai/gpt-5.5',
+          options: { smart: 'openai/gpt-5.5-pro' },
+        },
+      },
+    };
+    const agents = await createAgents(config);
+    const orchestrator = agents.find((a) => a.name === 'orchestrator');
+
+    expect(orchestrator?.config.prompt).toContain('<subagent_model_roster>');
+    expect(orchestrator?.config.prompt).toContain(
+      '- @explorer: github-copilot/grok-code-fast-1',
+    );
+    expect(orchestrator?.config.prompt).toContain(
+      '- @oracle: default=openai/gpt-5.5; smart=openai/gpt-5.5-pro',
+    );
+  });
 });
 
 describe('skill permissions', () => {

@@ -18,6 +18,8 @@ export interface AgentDefinition {
   config: AgentConfig;
 }
 
+export type SubagentModelRoster = Record<string, string[]>;
+
 export function resolvePrompt(
   base: string,
   customPrompt?: string,
@@ -41,6 +43,7 @@ export function buildOrchestratorPrompt(
   oracleDefaultModel?: string,
   oracleSmartModel?: string,
   enabledSubagentNames?: Set<string>,
+  subagentModelRoster?: SubagentModelRoster,
 ): string {
   const enabledAgents = enabledSubagentNames
     ? Object.entries(AGENT_DESCRIPTIONS)
@@ -48,6 +51,22 @@ export function buildOrchestratorPrompt(
         .map(([, desc]) => desc)
         .join('\n\n')
     : Object.values(AGENT_DESCRIPTIONS).join('\n\n');
+
+  const enabledRosterEntries = Object.entries(subagentModelRoster ?? {}).filter(
+    ([name, models]) =>
+      models.length > 0 &&
+      (!enabledSubagentNames || enabledSubagentNames.has(name)),
+  );
+  const subagentModelRosterBlock =
+    enabledRosterEntries.length > 0
+      ? `<subagent_model_roster>
+${enabledRosterEntries
+  .map(([name, models]) => `- @${name}: ${models.join('; ')}`)
+  .join('\n')}
+</subagent_model_roster>
+
+`
+      : '';
 
   const enabledParallelExamples = PARALLEL_DELEGATION_EXAMPLES.join('\n');
 
@@ -94,7 +113,7 @@ ${firstGateBlock}${PLANNING_GATE_BLOCK}
 ${enabledAgents}
 </agents>
 
-<routing_priority>
+${subagentModelRosterBlock}<routing_priority>
 When instructions conflict: (1) when in doubt about safety, escalate to smart @oracle; (2) specialists per <first_gate> + <agents>; (3) cost -> \`model\` + \`variant\`, not skipped delegation.
 </routing_priority>
 
@@ -360,11 +379,13 @@ export function createOrchestratorAgent(
   oracleDefaultModel?: string,
   oracleSmartModel?: string,
   enabledSubagentNames?: Set<string>,
+  subagentModelRoster?: SubagentModelRoster,
 ): AgentDefinition {
   const basePrompt = buildOrchestratorPrompt(
     oracleDefaultModel,
     oracleSmartModel,
     enabledSubagentNames,
+    subagentModelRoster,
   );
   const prompt = resolvePrompt(basePrompt, customPrompt, customAppendPrompt);
 

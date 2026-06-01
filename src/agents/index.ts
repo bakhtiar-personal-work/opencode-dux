@@ -13,7 +13,11 @@ import { createFixerAgent } from './fixer';
 import { createInterpreterAgent } from './interpreter';
 import { createLibrarianAgent } from './librarian';
 import { createOracleAgent } from './oracle';
-import { type AgentDefinition, createOrchestratorAgent } from './orchestrator';
+import {
+  type AgentDefinition,
+  createOrchestratorAgent,
+  type SubagentModelRoster,
+} from './orchestrator';
 import { applyDefaultPermissions, applyOverrides } from './overrides';
 import { createStewardAgent } from './steward';
 
@@ -50,6 +54,38 @@ function injectDisplayNames(
   }
 
   orchestrator.config.prompt = prompt;
+}
+
+function buildSubagentModelRoster(
+  agents: AgentDefinition[],
+  oracleSmartModel?: string,
+): SubagentModelRoster {
+  const roster: SubagentModelRoster = {};
+
+  for (const agent of agents) {
+    const configuredModels: string[] = [];
+    if (typeof agent.config.model === 'string' && agent.config.model) {
+      if (agent.name === 'oracle') {
+        configuredModels.push(`default=${agent.config.model}`);
+      } else {
+        configuredModels.push(agent.config.model);
+      }
+    }
+
+    if (
+      agent.name === 'oracle' &&
+      typeof oracleSmartModel === 'string' &&
+      oracleSmartModel.length > 0
+    ) {
+      configuredModels.push(`smart=${oracleSmartModel}`);
+    }
+
+    if (configuredModels.length > 0) {
+      roster[agent.name] = configuredModels;
+    }
+  }
+
+  return roster;
 }
 
 // Agent Classification
@@ -154,6 +190,10 @@ export async function createAgents(
     typeof oracleOptions?.smart === 'string' ? oracleOptions.smart : '';
   const oracleSmartModelOrFallback =
     oracleSmartModel.length > 0 ? oracleSmartModel : (oracleDefaultModel ?? '');
+  const subagentModelRoster = buildSubagentModelRoster(
+    builtInSubAgents,
+    oracleSmartModel,
+  );
 
   const orchestrator = createOrchestratorAgent(
     orchestratorModel,
@@ -162,6 +202,7 @@ export async function createAgents(
     oracleDefaultModel as string | undefined,
     oracleSmartModelOrFallback,
     enabledSubagentNames.size > 0 ? enabledSubagentNames : undefined,
+    subagentModelRoster,
   );
   if (orchestratorOverride) {
     applyOverrides(orchestrator, orchestratorOverride);

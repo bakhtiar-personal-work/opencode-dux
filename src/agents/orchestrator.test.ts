@@ -108,6 +108,45 @@ describe('buildOrchestratorPrompt', () => {
     expect(prompt).not.toContain('{{ORACLE_SMART_MODEL_OR_FALLBACK}}');
   });
 
+  test('includes subagent model roster when provided', () => {
+    const prompt = buildOrchestratorPrompt(
+      'openai/gpt-5.5',
+      'openai/gpt-5.5-pro',
+      undefined,
+      {
+        explorer: ['github-copilot/grok-code-fast-1'],
+        oracle: ['default=openai/gpt-5.5', 'smart=openai/gpt-5.5-pro'],
+      },
+    );
+
+    expect(prompt).toContain('<subagent_model_roster>');
+    expect(prompt).toContain(
+      '- @explorer: github-copilot/grok-code-fast-1',
+    );
+    expect(prompt).toContain(
+      '- @oracle: default=openai/gpt-5.5; smart=openai/gpt-5.5-pro',
+    );
+  });
+
+  test('filters subagent model roster to enabled agents', () => {
+    const prompt = buildOrchestratorPrompt(
+      'openai/gpt-5.5',
+      'openai/gpt-5.5-pro',
+      new Set(['oracle']),
+      {
+        explorer: ['github-copilot/grok-code-fast-1'],
+        oracle: ['default=openai/gpt-5.5', 'smart=openai/gpt-5.5-pro'],
+      },
+    );
+
+    expect(prompt).toContain(
+      '- @oracle: default=openai/gpt-5.5; smart=openai/gpt-5.5-pro',
+    );
+    expect(prompt).not.toContain(
+      '- @explorer: github-copilot/grok-code-fast-1',
+    );
+  });
+
   test('empty model names do not break prompt', () => {
     const prompt = buildOrchestratorPrompt('', '');
     expect(prompt).not.toContain('{{');
