@@ -188,7 +188,9 @@ export function updateCodexTokens(
   expiresAt: number,
 ): boolean {
   const file = readAccountsFile();
-  const account = file.accounts.find((a) => a.provider === 'codex' && a.name === name);
+  const account = file.accounts.find(
+    (a) => a.provider === 'codex' && a.name === name,
+  );
   if (!account || account.provider !== 'codex') return false;
   const codex = account as CodexAccount;
   codex.accessToken = accessToken;

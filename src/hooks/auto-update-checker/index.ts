@@ -25,19 +25,20 @@ export function createAutoUpdateCheckerHook(
 ) {
   const { autoUpdate = true } = options;
 
-  let hasChecked = false;
+  let hasTriggered = false;
+  let hasEventChecked = false;
 
   return {
     event: ({ event }: { event: { type: string; properties?: unknown } }) => {
       if (event.type !== 'session.created') return;
-      if (hasChecked) return;
+      if (hasEventChecked) return;
 
       const props = event.properties as
         | { info?: { parentID?: string } }
         | undefined;
       if (props?.info?.parentID) return;
 
-      hasChecked = true;
+      hasEventChecked = true;
 
       setTimeout(async () => {
         const localDevVersion = getLocalDevVersion(ctx.directory);
@@ -53,12 +54,12 @@ export function createAutoUpdateCheckerHook(
       }, 0);
     },
 
-    // NEW: Trigger update check (call with setTimeout to defer)
+    // Trigger update check on plugin load (separate throttle from event)
     trigger: () => {
-      if (hasChecked) return;
-      hasChecked = true;
+      if (hasTriggered) return;
+      hasTriggered = true;
 
-      setTimeout(async () => {
+      (async () => {
         const localDevVersion = getLocalDevVersion(ctx.directory);
 
         if (localDevVersion) {
@@ -69,7 +70,7 @@ export function createAutoUpdateCheckerHook(
         runBackgroundUpdateCheck(ctx, autoUpdate).catch((err) => {
           log('[auto-update-checker] Background update check failed:', err);
         });
-      }, 0);
+      })();
     },
   };
 }
@@ -85,7 +86,19 @@ async function runBackgroundUpdateCheck(
 ): Promise<void> {
   const pluginInfo = findPluginEntry(ctx.directory);
   if (!pluginInfo) {
-    log('[auto-update-checker] Plugin not found in config');
+    log('[auto-update-checker] Could not find plugin entry in config');
+    ctx.client.tui
+      .showToast({
+        body: {
+          title: 'Plugin Update Check',
+          message: 'Plugin entry not found in config. Update check deferred.',
+          variant: 'info',
+          duration: 5000,
+        },
+      })
+      .catch((err) => {
+        log('[auto-update-checker] Failed to show toast:', err);
+      });
     return;
   }
 
@@ -103,6 +116,18 @@ async function runBackgroundUpdateCheck(
       '[auto-update-checker] Failed to fetch latest version for channel:',
       channel,
     );
+    ctx.client.tui
+      .showToast({
+        body: {
+          title: 'Plugin Update Check',
+          message: `Failed to fetch latest version for channel "${channel}". Update check will retry.`,
+          variant: 'error',
+          duration: 5000,
+        },
+      })
+      .catch((err) => {
+        log('[auto-update-checker] Failed to show toast:', err);
+      });
     return;
   }
 

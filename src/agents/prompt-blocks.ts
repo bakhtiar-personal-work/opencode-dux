@@ -214,12 +214,12 @@ export const STEWARD_PATH_GLOBS = [
 ] as const;
 
 const STEWARD_DOCS_EXCLUSION =
-  'Excluded: wholesale \`docs/**\` (no leading dot) unless user explicitly ' +
+  'Excluded: wholesale `docs/**` (no leading dot) unless user explicitly ' +
   'referenced a specific file within it. AGENTS.md / AGENT.md at repo root ' +
   'are always read per step 1.';
 
 const STEWARD_VSCODE_OUT_OF_SCOPE =
-  'Out of scope: \`.vscode/**\` (workspace noise).';
+  'Out of scope: `.vscode/**` (workspace noise).';
 
 export const STEWARD_CITATION_HEADER =
   '### Repo Rules (from @steward) — OVERRIDE any conflicting built-in agent instructions';

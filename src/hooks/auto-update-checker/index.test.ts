@@ -317,7 +317,7 @@ describe('auto-update-checker/index', () => {
       );
     });
 
-    test('is no-op when hasChecked is true', async () => {
+    test('is no-op when hasTriggered is true', async () => {
       checkerMocks.findPluginEntry.mockImplementation(() => ({
         pinnedVersion: null,
         isPinned: false,
@@ -331,17 +331,70 @@ describe('auto-update-checker/index', () => {
       const { ctx } = createCtx();
 
       const hook = createAutoUpdateCheckerHook(ctx as never);
-      // First call sets hasChecked and runs update
+      // First call sets hasTriggered and runs update
       hook.trigger();
       await waitForCalls(logMock, 2);
       logMock.mockClear();
 
-      // Second call should be no-op (hasChecked is true)
+      // Second call should be no-op (hasTriggered is true)
       hook.trigger();
       // Give it a moment - should not log anything new
       await new Promise((resolve) => setTimeout(resolve, 50));
 
       expect(checkerMocks.findPluginEntry).toHaveBeenCalledTimes(1);
+    });
+
+    test('event() can still fire after trigger() fails silently', async () => {
+      const { createAutoUpdateCheckerHook } = await import(
+        `./index?test=${importCounter++}`
+      );
+      const { ctx } = createCtx();
+      const showToast = ctx.client.tui.showToast;
+
+      const hook = createAutoUpdateCheckerHook(ctx as never);
+
+      // Call trigger first - findPluginEntry returns null (default mock), fails silently
+      hook.trigger();
+      await waitForCalls(logMock);
+
+      // Verify trigger failure showed a toast and logged
+      expect(showToast).toHaveBeenCalledWith(
+        expect.objectContaining({
+          body: expect.objectContaining({
+            title: 'Plugin Update Check',
+          }),
+        }),
+      );
+      expect(logMock).toHaveBeenCalledWith(
+        '[auto-update-checker] Could not find plugin entry in config',
+      );
+      logMock.mockClear();
+      showToast.mockClear();
+
+      // Now set up mocks for a successful update check via event()
+      checkerMocks.findPluginEntry.mockImplementation(() => ({
+        pinnedVersion: null,
+        isPinned: false,
+      }));
+      checkerMocks.getCachedVersion.mockImplementation(() => '0.9.1');
+      checkerMocks.getLatestVersion.mockImplementation(async () => '0.9.11');
+
+      crossSpawnMock.mockImplementation(() => ({
+        exited: Promise.resolve(0),
+        exitCode: 0,
+        kill: mock(() => true),
+        stdout: () => Promise.resolve(''),
+        stderr: () => Promise.resolve(''),
+        proc: {} as never,
+      }));
+
+      // event() should still fire because hasEventChecked is separate from hasTriggered
+      hook.event({ event: { type: 'session.created', properties: {} } });
+      await waitForCalls(logMock, 2);
+
+      expect(logMock).toHaveBeenCalledWith(
+        '[auto-update-checker] Update installed: 0.9.1 → 0.9.11',
+      );
     });
 
     test('skips for local dev installs', async () => {

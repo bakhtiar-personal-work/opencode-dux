@@ -745,11 +745,7 @@ function renderSubscriptionPanel(
       try {
         renderCodexUsage(entry as CodexUsageEntry, rows, theme);
       } catch (e) {
-        rows.push(
-          text({ fg: '#E74C3C' }, [
-            '  ⚠️ Error rendering Codex usage',
-          ]),
-        );
+        rows.push(text({ fg: '#E74C3C' }, ['  ⚠️ Error rendering Codex usage']));
       }
     } else {
       rows.push(

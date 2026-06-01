@@ -120,9 +120,7 @@ describe('buildOrchestratorPrompt', () => {
     );
 
     expect(prompt).toContain('<subagent_model_roster>');
-    expect(prompt).toContain(
-      '- @explorer: github-copilot/grok-code-fast-1',
-    );
+    expect(prompt).toContain('- @explorer: github-copilot/grok-code-fast-1');
     expect(prompt).toContain(
       '- @oracle: default=openai/gpt-5.5; smart=openai/gpt-5.5-pro',
     );
