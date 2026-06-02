@@ -123,6 +123,40 @@ describe('auto-update-checker/index', () => {
     expect(getAutoUpdateInstallDir()).toBe('/tmp/opencode');
   });
 
+  test('prefers npm-cli from the active runtime when available', async () => {
+    const { resolveNpmInstallCommand } = await import(
+      `./index?test=${importCounter++}`
+    );
+
+    const command = resolveNpmInstallCommand(
+      'win32',
+      'C:\\Program Files\\nodejs\\node.exe',
+      (candidate) =>
+        candidate ===
+        'C:\\Program Files\\nodejs\\node_modules\\npm\\bin\\npm-cli.js',
+    );
+
+    expect(command).toEqual([
+      'C:\\Program Files\\nodejs\\node.exe',
+      'C:\\Program Files\\nodejs\\node_modules\\npm\\bin\\npm-cli.js',
+      'install',
+    ]);
+  });
+
+  test('falls back to npm.cmd on Windows when npm-cli cannot be resolved', async () => {
+    const { resolveNpmInstallCommand } = await import(
+      `./index?test=${importCounter++}`
+    );
+
+    const command = resolveNpmInstallCommand(
+      'win32',
+      'C:\\Program Files\\nodejs\\node.exe',
+      () => false,
+    );
+
+    expect(command).toEqual(['npm.cmd', 'install']);
+  });
+
   test('skips background update for local dev installs without logs', async () => {
     checkerMocks.getLocalDevVersion.mockImplementation(() => '0.9.11-dev');
 
@@ -179,7 +213,7 @@ describe('auto-update-checker/index', () => {
       'opencode-dux',
     );
     expect(crossSpawnMock).toHaveBeenCalledWith(
-      ['npm', 'install'],
+      expect.arrayContaining(['install']),
       expect.objectContaining({ cwd: '/tmp/opencode' }),
     );
     expect(logMock).toHaveBeenCalledWith(
@@ -286,7 +320,7 @@ describe('auto-update-checker/index', () => {
       }),
     );
     expect(crossSpawnMock).toHaveBeenCalledWith(
-      ['npm', 'install'],
+      expect.arrayContaining(['install']),
       expect.objectContaining({ cwd: '/tmp/opencode' }),
     );
     expect(logMock).toHaveBeenCalledWith(

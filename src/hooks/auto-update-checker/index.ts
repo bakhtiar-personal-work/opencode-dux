@@ -1,4 +1,6 @@
 import type { PluginInput } from '@opencode-ai/plugin';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { crossSpawn } from '../../utils/compat';
 import { log } from '../../utils/logger';
 import { writeVersionCache } from '../../version-store';
@@ -247,6 +249,30 @@ export function getAutoUpdateInstallDir(): string {
   return resolveInstallContext()?.installDir ?? CACHE_DIR;
 }
 
+function getNpmCliCandidates(execPath: string): string[] {
+  const execDir = path.dirname(execPath);
+
+  return [
+    path.join(execDir, 'node_modules', 'npm', 'bin', 'npm-cli.js'),
+    path.join(execDir, '..', 'lib', 'node_modules', 'npm', 'bin', 'npm-cli.js'),
+    path.join(execDir, '..', 'node_modules', 'npm', 'bin', 'npm-cli.js'),
+  ];
+}
+
+export function resolveNpmInstallCommand(
+  platform: NodeJS.Platform = process.platform,
+  execPath: string = process.execPath,
+  pathExists: (candidate: string) => boolean = fs.existsSync,
+): string[] {
+  for (const npmCliPath of getNpmCliCandidates(execPath)) {
+    if (pathExists(npmCliPath)) {
+      return [execPath, npmCliPath, 'install'];
+    }
+  }
+
+  return [platform === 'win32' ? 'npm.cmd' : 'npm', 'install'];
+}
+
 /**
  * Spawns a background process to run 'npm install'.
  * Includes a 60-second timeout to prevent stalling OpenCode.
@@ -255,7 +281,8 @@ export function getAutoUpdateInstallDir(): string {
  */
 async function runNpmInstallSafe(installDir: string): Promise<boolean> {
   try {
-    const proc = crossSpawn(['npm', 'install'], {
+    const npmInstallCommand = resolveNpmInstallCommand();
+    const proc = crossSpawn(npmInstallCommand, {
       cwd: installDir,
       stdout: 'pipe',
       stderr: 'pipe',
@@ -265,6 +292,7 @@ async function runNpmInstallSafe(installDir: string): Promise<boolean> {
       '[auto-update-checker] Running npm install in background for directory:',
       installDir,
     );
+    log('[auto-update-checker] npm install command:', npmInstallCommand);
     const timeoutPromise = new Promise<'timeout'>((resolve) =>
       setTimeout(() => resolve('timeout'), 60_000),
     );
