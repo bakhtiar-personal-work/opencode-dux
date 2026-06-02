@@ -32,7 +32,7 @@ export const AGENT_DESCRIPTIONS: Record<string, string> = {
 </agent>`,
   steward: `<agent name="@steward">
 - Role: rules citation from steward_paths - verbatim excerpts only; does NOT analyze, evaluate, or compare rules
-- Delegate when: repo conventions needed before oracle/fixer (see <first_gate> 1)
+- Delegate when: repo conventions needed before oracle/fixer
 - Do not use when: pure symbol search (@explorer); rules analysis (@oracle).
 </agent>`,
   interpreter: `<agent name="@interpreter">

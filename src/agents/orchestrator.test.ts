@@ -95,11 +95,75 @@ describe('buildOrchestratorPrompt', () => {
 
   test('first_gate analysis gate references oracle', () => {
     const prompt = buildOrchestratorPrompt();
-    expect(prompt).toContain('delegate to @oracle');
-    expect(prompt).toContain(
-      'Do NOT send a fix request straight to @fixer unless the change is purely mechanical',
-    );
+    expect(prompt).toContain('ORACLE GATE');
+    expect(prompt).toContain('Direct @fixer here is incorrect');
     expect(prompt).not.toContain('Analysis gate (@oracle / thinker)');
+  });
+
+  test('first_gate designer gate references designer with hard gate language', () => {
+    const prompt = buildOrchestratorPrompt();
+    expect(prompt).toContain('DESIGNER GATE');
+    expect(prompt).toContain('@designer FIRST, blocking');
+  });
+
+  test('first_gate fixer exception references mechanical_edit_exception', () => {
+    const prompt = buildOrchestratorPrompt();
+    expect(prompt).toContain('FIXER EXCEPTION');
+    expect(prompt).toContain('<mechanical_edit_exception>');
+  });
+
+  test('prompt contains routing enforcement block with citations requirement', () => {
+    const prompt = buildOrchestratorPrompt();
+    expect(prompt).toContain('<routing_enforcement>');
+    expect(prompt).toContain('MUST be able to cite one of');
+    expect(prompt).toContain('NEVER delegate @fixer for: debugging, architecture');
+  });
+
+  test('prompt contains good routing examples showing correct first specialist', () => {
+    const prompt = buildOrchestratorPrompt();
+    expect(prompt).toContain('"Fix why retry counter drifts" -> @oracle');
+    expect(prompt).toContain('"Restyle settings modal" -> @designer');
+    expect(prompt).toContain('"Rename getCwd to getCurrentWorkingDirectory in known file" -> @fixer');
+  });
+
+  test('prompt contains bad routing examples showing INCORRECT patterns', () => {
+    const prompt = buildOrchestratorPrompt();
+    expect(prompt).toContain('INCORRECT - DO NOT DO');
+    expect(prompt).toContain('"Fix why retry counter drifts" -> @fixer');
+    expect(prompt).toContain('"Design new plugin architecture" -> @fixer');
+    expect(prompt).toContain('"Restyle settings modal" -> @fixer');
+  });
+
+  test('prompt does NOT contain stale <first_gate> item references', () => {
+    const prompt = buildOrchestratorPrompt();
+    expect(prompt).not.toContain('Run <first_gate> item 1');
+    expect(prompt).not.toContain('<first_gate> 2');
+  });
+
+  test('prompt contains mechanical_edit_exception block with all criteria', () => {
+    const prompt = buildOrchestratorPrompt();
+    expect(prompt).toContain('<mechanical_edit_exception>');
+    expect(prompt).toContain('Direct @fixer-first routing is allowed ONLY if ALL are true');
+    expect(prompt).toContain('When unsure, treat as non-mechanical and route to @oracle');
+  });
+
+  test('execution step 2 references mechanical_edit_exception not user-provided bypass', () => {
+    const prompt = buildOrchestratorPrompt();
+    expect(prompt).toContain('and only if <mechanical_edit_exception> fully applies');
+    expect(prompt).not.toContain('or user-provided exact implementation');
+  });
+
+  test('execution mechanical edits paragraph references mechanical_edit_exception', () => {
+    const prompt = buildOrchestratorPrompt();
+    expect(prompt).toContain('@fixer low only when <mechanical_edit_exception> fully applies');
+    expect(prompt).toContain('User-provided exact implementation alone does NOT make a task mechanical');
+  });
+
+  test('constraints include strengthened routing prohibitions', () => {
+    const prompt = buildOrchestratorPrompt();
+    expect(prompt).toContain('NEVER route planning, architecture, debugging, or regressions directly to @fixer');
+    expect(prompt).toContain('NEVER route UI work directly to @fixer');
+    expect(prompt).toContain('If a task could be mechanical or diagnostic, treat it as diagnostic');
   });
 
   test('fix routing makes oracle the reasoning step before fixer', () => {

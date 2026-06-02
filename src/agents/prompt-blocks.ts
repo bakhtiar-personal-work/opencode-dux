@@ -160,12 +160,28 @@ If ANY check fails: do NOT implement. Flag for human review.
 </production_safety_gate>
 
 <procedural_invariants>
-4) Run <first_gate> item 1 (steward/explorer briefs) before code work.
+4) Lifecycle: steward → discovery → required first specialist (@designer for UI, otherwise @oracle) → approved plan → @fixer.
 5) Run <planning_gate> for non-trivial changes — plan, present, adjust, implement.
 6) Report verification before declaring success.
 </procedural_invariants>`;
 
-// --- Planning Gate (fixed contradiction) ---
+// --- Mechanical Edit Exception ---
+
+export const MECHANICAL_EDIT_EXCEPTION_BLOCK = `<mechanical_edit_exception>
+Direct @fixer-first routing is allowed ONLY if ALL are true:
+- Exact file path is known
+- Change is obvious (typo, variable rename, simple copy-paste)
+- No diagnosis or root-cause analysis needed
+- No tradeoff evaluation required
+- No UI/UX changes involved
+- No architecture or design decisions
+- No multi-step reasoning required
+
+If ANY condition is false or uncertain, the task is NOT mechanical.
+When unsure, treat as non-mechanical and route to @oracle.
+</mechanical_edit_exception>`;
+
+// --- Planning Gate ---
 
 export const PLANNING_GATE_BLOCK = `<planning_gate>
 For non-trivial changes:
@@ -209,6 +225,9 @@ Skip this gate ONLY when:
 - Pure meta questions
 - Mechanical edits (typo, obvious single-line fix, known path, no diagnosis needed)
 - Tasks where user message already specifies exact implementation and no design or architecture choice remains
+- These skip criteria NEVER override the UI hard gate or the oracle diagnosis gate.
+- User-provided exact implementation alone does NOT make a task mechanical.
+- When unsure, treat as non-mechanical.
 </planning_gate>`;
 
 // --- Oracle plan handoff ---
@@ -266,10 +285,9 @@ export function formatStewardAgentStewardPathsBody(): string {
 
 export function buildStewardOrchestratorProtocolBlock(): string {
   return `<steward_protocol>
-- Same triggers as <first_gate> item 1: one blocking steward delegation before
-  @oracle / @fixer / @designer when work touches code, tests, reviews, or repo
-  workflow. Pure "where is X" may use @explorer first, but steward before any
-  @fixer or mixed implementation.
+- Steward brief runs before @oracle / @fixer / @designer when work touches code,
+  tests, reviews, or repo workflow. Pure "where is X" may use @explorer first,
+  but steward before any @fixer or mixed implementation.
 - ALWAYS blocking, NEVER fire_forget. Steward citations are mandatory input for
   all downstream delegations.
 - Steward prompt: state convention-domain (e.g., "test conventions") — NOT the

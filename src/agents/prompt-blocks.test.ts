@@ -7,6 +7,7 @@ import {
   DESIGNER_VARIANT_SCOPE_LINES,
   INTERPRETER_VARIANT_SCOPE_LINES,
   LIBRARIAN_VARIANT_SCOPE_LINES,
+  MECHANICAL_EDIT_EXCEPTION_BLOCK,
   ORCHESTRATOR_CLARIFICATION_HANDOFF_BLOCK,
   PLANNING_GATE_BLOCK,
   SELF_REVIEW_BLOCK,
@@ -25,11 +26,38 @@ describe('CRITICAL_INVARIANTS', () => {
       'ALWAYS delegate analysis to @oracle',
     );
     expect(CRITICAL_INVARIANTS).toContain('ALWAYS pass explicit');
-    expect(CRITICAL_INVARIANTS).toContain('Run <first_gate> item 1');
-    expect(CRITICAL_INVARIANTS).toContain('Run <planning_gate>');
+    expect(CRITICAL_INVARIANTS).toContain('@designer for UI, otherwise @oracle');
+    expect(CRITICAL_INVARIANTS).toContain('<planning_gate>');
     expect(CRITICAL_INVARIANTS).toContain(
       'Report verification before declaring success',
     );
+  });
+});
+
+describe('MECHANICAL_EDIT_EXCEPTION_BLOCK', () => {
+  test('defines exact criteria for direct @fixer routing', () => {
+    expect(MECHANICAL_EDIT_EXCEPTION_BLOCK).toContain(
+      '<mechanical_edit_exception>',
+    );
+    expect(MECHANICAL_EDIT_EXCEPTION_BLOCK).toContain(
+      'Direct @fixer-first routing is allowed ONLY if ALL are true',
+    );
+    expect(MECHANICAL_EDIT_EXCEPTION_BLOCK).toContain(
+      'If ANY condition is false or uncertain, the task is NOT mechanical.',
+    );
+    expect(MECHANICAL_EDIT_EXCEPTION_BLOCK).toContain(
+      'When unsure, treat as non-mechanical and route to @oracle.',
+    );
+  });
+
+  test('includes all seven criteria conditions', () => {
+    expect(MECHANICAL_EDIT_EXCEPTION_BLOCK).toContain('Exact file path is known');
+    expect(MECHANICAL_EDIT_EXCEPTION_BLOCK).toContain('Change is obvious');
+    expect(MECHANICAL_EDIT_EXCEPTION_BLOCK).toContain('No diagnosis or root-cause analysis needed');
+    expect(MECHANICAL_EDIT_EXCEPTION_BLOCK).toContain('No tradeoff evaluation required');
+    expect(MECHANICAL_EDIT_EXCEPTION_BLOCK).toContain('No UI/UX changes involved');
+    expect(MECHANICAL_EDIT_EXCEPTION_BLOCK).toContain('No architecture or design decisions');
+    expect(MECHANICAL_EDIT_EXCEPTION_BLOCK).toContain('No multi-step reasoning required');
   });
 });
 
@@ -62,6 +90,16 @@ describe('PLANNING_GATE_BLOCK', () => {
     expect(PLANNING_GATE_BLOCK).not.toContain(
       'DO NOT proceed to skill discovery',
     );
+  });
+
+  test('planning gate skip criteria say they do not override UI/oracle gates', () => {
+    expect(PLANNING_GATE_BLOCK).toContain(
+      'NEVER override the UI hard gate or the oracle diagnosis gate',
+    );
+    expect(PLANNING_GATE_BLOCK).toContain(
+      'User-provided exact implementation alone does NOT make a task mechanical',
+    );
+    expect(PLANNING_GATE_BLOCK).toContain('When unsure, treat as non-mechanical');
   });
 
   test('does not contain blanket no-delegation language', () => {
@@ -134,6 +172,13 @@ describe('CORE_CAPABILITY_AWARENESS_BLOCK', () => {
 });
 
 describe('prompt-blocks', () => {
+  test('steward protocol no longer references <first_gate> item 1', () => {
+    const block = buildStewardOrchestratorProtocolBlock();
+    expect(block).not.toContain('same triggers as');
+    expect(block).not.toContain('<first_gate>');
+    expect(block).toContain('Steward brief runs before');
+  });
+
   test('steward protocol lists every configured glob', () => {
     const block = buildStewardOrchestratorProtocolBlock();
     for (const g of STEWARD_PATH_GLOBS) {
