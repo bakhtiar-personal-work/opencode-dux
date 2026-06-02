@@ -58,6 +58,8 @@ interface ChatMessage {
 
 const RESUMABLE_SESSIONS_START = '<resumable_sessions>';
 const RESUMABLE_SESSIONS_END = '</resumable_sessions>';
+const HANDOFF_ARTIFACTS_START = '<handoff_artifacts>';
+const HANDOFF_ARTIFACTS_END = '</handoff_artifacts>';
 
 function isAgentName(value: unknown): value is AgentName {
   return typeof value === 'string' && AGENT_NAME_SET.has(value as AgentName);
@@ -116,6 +118,7 @@ export function createTaskSessionManagerHook(
     readContextMinLines?: number;
     readContextMaxFiles?: number;
     shouldManageSession: (sessionID: string) => boolean;
+    artifactRecallProvider?: (sessionID: string) => string | undefined;
   },
 ) {
   const sessionManager = new SessionManager(options.maxSessionsPerAgent, {
@@ -371,7 +374,10 @@ export function createTaskSessionManagerHook(
         }
 
         const reminder = sessionManager.formatForPrompt(message.info.sessionID);
-        if (!reminder) return;
+        const artifactReminder = options.artifactRecallProvider?.(
+          message.info.sessionID,
+        );
+        if (!reminder && !artifactReminder) return;
 
         const textPart = message.parts.find(
           (part) => part.type === 'text' && typeof part.text === 'string',
@@ -379,14 +385,27 @@ export function createTaskSessionManagerHook(
         if (!textPart) return;
         if (textPart.text?.includes(SLIM_INTERNAL_INITIATOR_MARKER)) return;
         if (textPart.text?.includes(RESUMABLE_SESSIONS_START)) return;
+        if (textPart.text?.includes(HANDOFF_ARTIFACTS_START)) return;
 
-        textPart.text = [
-          textPart.text ?? '',
-          '',
-          RESUMABLE_SESSIONS_START,
-          reminder,
-          RESUMABLE_SESSIONS_END,
-        ].join('\n');
+        const segments = [textPart.text ?? ''];
+        if (reminder) {
+          segments.push(
+            '',
+            RESUMABLE_SESSIONS_START,
+            reminder,
+            RESUMABLE_SESSIONS_END,
+          );
+        }
+        if (artifactReminder) {
+          segments.push(
+            '',
+            HANDOFF_ARTIFACTS_START,
+            artifactReminder,
+            HANDOFF_ARTIFACTS_END,
+          );
+        }
+
+        textPart.text = segments.join('\n');
         return;
       }
     },

@@ -3,6 +3,7 @@ import { resolvePrompt } from './orchestrator';
 import {
   EXPLORER_VARIANT_SCOPE_LINES,
   formatBlockedOutputBlock,
+  HANDOFF_ARTIFACTS_BLOCK,
   NEEDS_USER_OUTPUT_FORMAT_BLOCK,
   REPO_RULES_PRECEDENCE_BLOCK,
   SELF_REVIEW_BLOCK,
@@ -32,6 +33,8 @@ ${EXPLORER_CRITICAL_INVARIANTS}
 </capabilities>
 
 ${REPO_RULES_PRECEDENCE_BLOCK}
+
+${HANDOFF_ARTIFACTS_BLOCK}
 
 <tool_routing>
 | Need | Tool | Example |

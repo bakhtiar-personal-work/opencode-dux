@@ -17,6 +17,7 @@ describe('createOracleAgent', () => {
     const prompt = agent.config.prompt ?? '';
     expect(prompt).toContain('<role>');
     expect(prompt).toContain('<capabilities>');
+    expect(prompt).toContain('<handoff_artifacts>');
     expect(prompt).toContain('<tool_routing>');
     expect(prompt).toContain('<constraints>');
     expect(prompt).toContain('<variant_policy>');

@@ -17,7 +17,7 @@ export const AGENT_DESCRIPTIONS: Record<string, string> = {
 </agent>`,
   oracle: `<agent name="@oracle">
 - Role: technical analysis and code review; uses orchestrator \`model\` + \`variant\` matrix
-- Delegate when: debugging, architecture, tradeoffs, risk, any review depth
+- Delegate when: debugging, bug fixes that need diagnosis, architecture, tradeoffs, risk, any review depth
 - Do not use when: pure local discovery (@explorer) or docs-only (@librarian)
 </agent>`,
   designer: `<agent name="@designer">
@@ -28,7 +28,7 @@ export const AGENT_DESCRIPTIONS: Record<string, string> = {
   fixer: `<agent name="@fixer">
 - Role: implementation specialist
 - Delegate when: edits, tests, scoped commands-after gates in <first_gate> when applicable
-- Do not use when: strategy/conventions/UI design still unresolved-delegate upward first
+- Do not use when: diagnosis, strategy, conventions, or UI design are still unresolved-delegate upward first
 </agent>`,
   steward: `<agent name="@steward">
 - Role: rules citation from steward_paths - verbatim excerpts only; does NOT analyze, evaluate, or compare rules

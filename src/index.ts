@@ -76,6 +76,7 @@ import {
 } from './tui-state';
 import {
   createDisplayNameMentionRewriter,
+  HandoffArtifactStore,
   resolveRuntimeAgentName,
 } from './utils';
 import { initLogger, log } from './utils/logger';
@@ -386,6 +387,7 @@ const OpenCodeDux: Plugin = async (ctx) => {
   let usageService: UsageService | null;
   let webfetch: ReturnType<typeof createWebfetchTool>;
   let delegateTools: Record<string, unknown>;
+  let handoffArtifactStore: HandoffArtifactStore;
   let discoverMcpTool:
     | ReturnType<typeof createDiscoverMcpServersTool>
     | undefined;
@@ -471,9 +473,16 @@ const OpenCodeDux: Plugin = async (ctx) => {
     }
 
     depthTracker = new SubagentDepthTracker();
+    handoffArtifactStore = new HandoffArtifactStore(ctx.directory);
+    handoffArtifactStore.pruneExpired();
 
     // Initialize delegate tools for orchestrator variant-based subagent spawning
-    delegateTools = createDelegateTools(ctx, config, depthTracker);
+    delegateTools = createDelegateTools(
+      ctx,
+      config,
+      depthTracker,
+      handoffArtifactStore,
+    );
 
     builtinMcps = createBuiltinMcps(undefined, config.websearch);
 
@@ -637,6 +646,8 @@ const OpenCodeDux: Plugin = async (ctx) => {
       readContextMaxFiles: config.sessionManager?.readContextMaxFiles ?? 8,
       shouldManageSession: (sessionID) =>
         sessionAgentMap.get(sessionID) === 'orchestrator',
+      artifactRecallProvider: (sessionID) =>
+        handoffArtifactStore.formatForPrompt(sessionID),
     });
     contextPressureReminderHook = createContextPressureReminderHook({
       enabled: config.contextPressure?.enabled ?? true,

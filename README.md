@@ -65,6 +65,11 @@ Keep `"opencode-dux"` without a version in your config. Pinning a version like `
 | **Steward**      | Repository rules     | Manages `.docs/`, `.opencode/`, `.cursor/rules`, etc. |
 | **Interpreter**  | Image analysis       | Vision-capable model for attached screenshots         |
 
+Routing notes:
+
+- Bug fixes go to `@oracle` first when they need diagnosis, root-cause analysis, tradeoff evaluation, or multi-file reasoning. `@fixer` implements the approved plan.
+- Only purely mechanical edits such as typos, obvious single-line fixes, or user-specified exact changes may bypass `@oracle` and go straight to `@fixer`.
+
 ## Configuration
 
 Config file: `~/.config/opencode/opencode-dux.jsonc`
@@ -114,6 +119,21 @@ The orchestrator discovers skills and MCPs before delegating to subagents:
 - **Missing capabilities**: If a useful capability is found but not yet installed, the orchestrator shows the install command before moving on.
 
 Discovery runs automatically for non-trivial tasks.
+
+### Handoff Artifacts
+
+Delegated subagent runs now persist handoff artifacts in the workspace:
+
+- Root: `.opencode-dux/`
+- Child session artifacts: `.opencode-dux/<agent>/<sessionId>_<yyyymmdd-hhmmss>_<slug>.md`
+- Orchestrator index: `.opencode-dux/orchestrator/<orchestratorSessionId>.md`
+
+Behavior:
+
+- Blocking `delegate_subagent` results return a compact envelope with artifact paths instead of always echoing the full raw child output.
+- Only orchestration-critical sections stay inline: `needs_user`, `blocked`, oracle `plan`, designer `design_plan` + `implementation_notes`, fixer `summary` + `verification`.
+- Resumed child sessions via `continue_session_id` append additional turns into the same artifact file.
+- Artifacts are retained for 7 days and then pruned from `.opencode-dux/` by the plugin.
 
 Install new skills: `npx skills add <owner/repo> --skill <skill-name> -g -a opencode -y`
 

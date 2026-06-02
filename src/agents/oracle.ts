@@ -3,6 +3,7 @@ import { resolvePrompt } from './orchestrator';
 import {
   CORE_CAPABILITY_AWARENESS_BLOCK,
   formatOracleAgentVariantPolicyXml,
+  HANDOFF_ARTIFACTS_BLOCK,
   ORACLE_MODEL_TIER_BLOCK,
   ORACLE_PLAN_HANDOFF_BLOCK,
   REPO_RULES_PRECEDENCE_BLOCK,
@@ -29,6 +30,8 @@ ${ORACLE_CRITICAL_INVARIANTS}
 ${REPO_RULES_PRECEDENCE_BLOCK}
 
 ${CORE_CAPABILITY_AWARENESS_BLOCK}
+
+${HANDOFF_ARTIFACTS_BLOCK}
 
 <capabilities>
 - root-cause debugging

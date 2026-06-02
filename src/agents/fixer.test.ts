@@ -16,6 +16,7 @@ describe('createFixerAgent', () => {
     const agent = createFixerAgent('test/fixer-model');
     const prompt = agent.config.prompt ?? '';
     expect(prompt).toContain('<role>');
+    expect(prompt).toContain('<handoff_artifacts>');
     expect(prompt).toContain('<workflow>');
     expect(prompt).toContain('<file_read_budget>');
     expect(prompt).toContain('<constraints>');
@@ -74,5 +75,14 @@ describe('createFixerAgent', () => {
     const prompt = agent.config.prompt ?? '';
     expect(prompt).not.toContain('if (customPrompt)');
     expect(prompt).not.toContain('else if (customAppendPrompt)');
+  });
+
+  test('prompt keeps diagnosis work out of fixer', () => {
+    const agent = createFixerAgent('test/fixer-model');
+    const prompt = agent.config.prompt ?? '';
+    expect(prompt).toContain(
+      'NEVER act as the primary diagnosis or strategy agent',
+    );
+    expect(prompt).toContain('route through @oracle');
   });
 });

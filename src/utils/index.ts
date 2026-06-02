@@ -1,4 +1,5 @@
 export * from './agent-variant';
+export * from './handoff-artifacts';
 export * from './internal-initiator';
 export { getLogDir, initLogger, log, resetLogger } from './logger';
 export * from './polling';

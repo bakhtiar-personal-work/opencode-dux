@@ -16,6 +16,7 @@ describe('createDesignerAgent', () => {
     const agent = createDesignerAgent('test/designer-model');
     const prompt = agent.config.prompt ?? '';
     expect(prompt).toContain('<role>');
+    expect(prompt).toContain('<handoff_artifacts>');
     expect(prompt).toContain('<discovery_first>');
     expect(prompt).toContain('<design_principles>');
     expect(prompt).toContain('<user_choice_policy>');

@@ -2,6 +2,7 @@ import type { AgentDefinition } from './orchestrator';
 import { resolvePrompt } from './orchestrator';
 import {
   formatBlockedOutputBlock,
+  HANDOFF_ARTIFACTS_BLOCK,
   INTERPRETER_VARIANT_SCOPE_LINES,
   NEEDS_USER_OUTPUT_FORMAT_BLOCK,
   REPO_RULES_PRECEDENCE_BLOCK,
@@ -25,6 +26,8 @@ You are Interpreter, a visual-context specialist. Translate screenshots, diagram
 ${INTERPRETER_CRITICAL_INVARIANTS}
 
 ${REPO_RULES_PRECEDENCE_BLOCK}
+
+${HANDOFF_ARTIFACTS_BLOCK}
 
 <capabilities>
 - Describe visible layout, components, errors, and diagrams

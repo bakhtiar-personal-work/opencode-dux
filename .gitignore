@@ -41,6 +41,7 @@ local
 .sisyphus/
 .hive/
 .opencode/
+.opencode-dux/
 .claude/
 .ignore
 opencode

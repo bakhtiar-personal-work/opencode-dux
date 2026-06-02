@@ -3,6 +3,7 @@ import { resolvePrompt } from './orchestrator';
 import {
   formatBlockedOutputBlock,
   formatStewardAgentStewardPathsBody,
+  HANDOFF_ARTIFACTS_BLOCK,
   NEEDS_USER_OUTPUT_FORMAT_BLOCK,
   SELF_REVIEW_BLOCK,
   STEWARD_VARIANT_MAX_NOTE,
@@ -27,6 +28,8 @@ You are Steward: a rules citation agent. You locate, read, and cite verbatim exc
 </role>
 
 ${STEWARD_CRITICAL_INVARIANTS}
+
+${HANDOFF_ARTIFACTS_BLOCK}
 
 <capabilities>
 - Locate and read agent convention files (AGENTS.md, AGENT.md, CLAUDE.md, etc.)

@@ -48,6 +48,13 @@ describe('PLANNING_GATE_BLOCK', () => {
     expect(PLANNING_GATE_BLOCK).toContain('ALWAYS permitted');
   });
 
+  test('narrows the mechanical-edit skip to no-diagnosis cases', () => {
+    expect(PLANNING_GATE_BLOCK).toContain('no diagnosis needed');
+    expect(PLANNING_GATE_BLOCK).toContain(
+      'no design or architecture choice remains',
+    );
+  });
+
   test('requires approval before implementation but allows discovery', () => {
     expect(PLANNING_GATE_BLOCK).toContain('Only after explicit user approval');
     // Discovery is now allowed before approval (capability check, not implementation)

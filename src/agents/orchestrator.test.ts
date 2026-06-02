@@ -54,6 +54,7 @@ describe('buildOrchestratorPrompt', () => {
     const prompt = buildOrchestratorPrompt();
     expect(prompt).toContain('<routing_priority>');
     expect(prompt).toContain('<first_gate>');
+    expect(prompt).toContain('<handoff_artifacts_routing>');
     expect(prompt).toContain('delegate_subagent');
     expect(prompt).toContain('<orchestrator_clarification>');
     expect(prompt).toContain('<needs_user>');
@@ -80,6 +81,7 @@ describe('buildOrchestratorPrompt', () => {
     expect(prompt).toContain('Skip this gate ONLY when');
     // Planning gate must allow analysis before approval
     expect(prompt).toContain('no approval needed for analysis');
+    expect(prompt).toContain('no diagnosis needed');
   });
 
   test('context_budget is near the start of the prompt (after <role>)', () => {
@@ -94,7 +96,20 @@ describe('buildOrchestratorPrompt', () => {
   test('first_gate analysis gate references oracle', () => {
     const prompt = buildOrchestratorPrompt();
     expect(prompt).toContain('delegate to @oracle');
+    expect(prompt).toContain(
+      'Do NOT send a fix request straight to @fixer unless the change is purely mechanical',
+    );
     expect(prompt).not.toContain('Analysis gate (@oracle / thinker)');
+  });
+
+  test('fix routing makes oracle the reasoning step before fixer', () => {
+    const prompt = buildOrchestratorPrompt();
+    expect(prompt).toContain(
+      'Fix request with any ambiguity, diagnosis, regression, or root-cause work: @oracle first',
+    );
+    expect(prompt).toContain(
+      "@fixer receives oracle's plan/artifact and implements; it is not the primary reasoning agent.",
+    );
   });
 
   test('injects oracle model names when provided', () => {

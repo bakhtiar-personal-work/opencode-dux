@@ -110,6 +110,33 @@ How to use them:
 - Never assume fields or capabilities that aren't present.
 </capabilities_usage>`;
 
+export const HANDOFF_ARTIFACTS_BLOCK = `<handoff_artifacts>
+Artifact files may be passed into your prompt as paths under \`.opencode-dux/\`.
+
+How to handle them:
+- Treat referenced artifact files as canonical prior subagent findings and handoffs.
+- HARD REQUIREMENT: when referenced artifact paths are provided, you MUST read the relevant artifact files before proceeding.
+- Do NOT continue based only on the inline summary when a handoff artifact path is available.
+- Read referenced artifacts before asking for more context or re-running the same discovery.
+- Reuse artifact evidence instead of requesting pasted summaries.
+- If an artifact path is referenced but missing or unreadable, report that exact path in <blocked>.
+</handoff_artifacts>`;
+
+export const ORCHESTRATOR_HANDOFF_ARTIFACTS_BLOCK = `<handoff_artifacts_routing>
+Subagent handoffs are stored under \`.opencode-dux/\`:
+- Child artifacts: \`.opencode-dux/<agent>/<sessionId>_<yyyymmdd-hhmmss>_<slug>.md\`
+- Per-orchestrator index: \`.opencode-dux/orchestrator/<orchestratorSessionId>.md\`
+
+Routing rules:
+- HARD REQUIREMENT: pass prior artifact paths forward in downstream delegations whenever earlier subagents already produced them.
+- Pass artifact paths forward instead of repasting full prior subagent output.
+- Reuse the same child artifact path when continuing the same child session.
+- Pass @oracle / @designer artifact paths into @fixer for implementation.
+- Pass @explorer / @librarian / @steward artifact paths into @oracle when they supplied context.
+- When multiple child sessions of the same agent exist, consult the orchestrator index path to choose the right artifact.
+- Never inline an entire artifact body into a delegation prompt unless the user explicitly asks for verbatim relay.
+</handoff_artifacts_routing>`;
+
 // --- Orchestrator invariants ---
 
 export const CRITICAL_INVARIANTS = `<critical_invariants>
@@ -180,8 +207,8 @@ Session discipline:
 
 Skip this gate ONLY when:
 - Pure meta questions
-- Mechanical edits (typo, single-line fix, known path)
-- Tasks where user message already specifies exact implementation
+- Mechanical edits (typo, obvious single-line fix, known path, no diagnosis needed)
+- Tasks where user message already specifies exact implementation and no design or architecture choice remains
 </planning_gate>`;
 
 // --- Oracle plan handoff ---

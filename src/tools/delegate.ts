@@ -1,12 +1,17 @@
 import type { ToolDefinition } from '@opencode-ai/plugin';
 import { tool } from '@opencode-ai/plugin';
-import type { PluginConfig } from '../config';
+import type { AgentName, PluginConfig } from '../config';
 import { ALL_AGENT_NAMES } from '../config/constants';
 import { getAgentOverride } from '../config/utils';
 import {
   recordDelegatedSubagentSession,
   recordSessionDone,
 } from '../tui-state';
+import {
+  extractArtifactPathsFromPrompt,
+  HandoffArtifactStore,
+  summarizeArtifactOutput,
+} from '../utils/handoff-artifacts';
 import {
   extractAssistantTextAfterPrompt,
   extractLatestUserImageParts,
@@ -57,9 +62,108 @@ export function subagentOutputRequestsUserHandoff(text: string): boolean {
 }
 
 type OpencodeClient = import('@opencode-ai/plugin').PluginInput['client'];
+type SubagentRuntimeName = Exclude<AgentName, 'orchestrator'>;
 
 const VARIANT_OPTIONS = ['low', 'medium', 'high', 'max'] as const;
 const MODE_OPTIONS = ['blocking', 'fire_forget'] as const;
+const INLINE_SECTION_TAGS_BY_AGENT = {
+  oracle: ['plan'],
+  designer: ['design_plan', 'implementation_notes'],
+  fixer: ['summary', 'verification'],
+} as const;
+
+function extractXmlSection(text: string, tagName: string): string | undefined {
+  const match = text.match(
+    new RegExp(`<${tagName}>([\\s\\S]*?)<\\/${tagName}>`, 'i'),
+  );
+  return match?.[0];
+}
+
+function collectInlineSections(agentName: string, text: string): string[] {
+  const sections: string[] = [];
+  for (const tagName of ['needs_user', 'blocked']) {
+    const section = extractXmlSection(text, tagName);
+    if (section) {
+      sections.push(section);
+    }
+  }
+
+  const extraTags =
+    INLINE_SECTION_TAGS_BY_AGENT[
+      agentName as keyof typeof INLINE_SECTION_TAGS_BY_AGENT
+    ] ?? [];
+  for (const tagName of extraTags) {
+    const section = extractXmlSection(text, tagName);
+    if (section) {
+      sections.push(section);
+    }
+  }
+
+  return sections;
+}
+
+function determineArtifactStatus(
+  text: string,
+  mode: 'blocking' | 'fire_forget',
+): 'completed' | 'blocked' | 'needs_user' | 'collected' {
+  if (text.includes('<needs_user>')) {
+    return 'needs_user';
+  }
+  if (text.includes('<blocked>')) {
+    return 'blocked';
+  }
+  return mode === 'fire_forget' ? 'collected' : 'completed';
+}
+
+function buildSummaryLine(
+  agentName: string,
+  status: 'completed' | 'blocked' | 'needs_user' | 'collected' | 'open',
+  text: string,
+): string {
+  if (status === 'needs_user') {
+    return `${agentName} needs user clarification.`;
+  }
+  if (status === 'blocked') {
+    return `${agentName} is blocked and recorded the blocker in the artifact.`;
+  }
+  if (status === 'open') {
+    return `${agentName} launched in the background.`;
+  }
+  const preview = summarizeArtifactOutput(text);
+  return preview || `${agentName} completed and saved an artifact.`;
+}
+
+function buildCompactEnvelope(input: {
+  agentName: string;
+  variant?: string;
+  childSessionId: string;
+  artifactPath: string;
+  indexPath: string;
+  summaryLine: string;
+  inlineSections: string[];
+  continueSessionId?: string;
+}): string {
+  const lines = [
+    `**${input.agentName}** (variant: ${input.variant ?? 'default'})`,
+    `- Session ID: ${input.childSessionId}`,
+    `- Artifact: ${input.artifactPath}`,
+    `- Orchestrator index: ${input.indexPath}`,
+    `- Summary: ${input.summaryLine}`,
+  ];
+
+  if (input.inlineSections.length > 0) {
+    lines.push('', ...input.inlineSections);
+  }
+
+  if (input.continueSessionId) {
+    lines.push(
+      '',
+      `<delegate_session_continue session_id="${input.continueSessionId}" agent="${input.agentName}" />`,
+    );
+  }
+
+  return lines.join('\n');
+}
 
 export function resolveDelegatedAgentConfig(
   config: PluginConfig | undefined,
@@ -84,6 +188,7 @@ export function createDelegateTools(
   ctx: { client: OpencodeClient; directory: string },
   config: PluginConfig | undefined,
   depthTracker: SubagentDepthTracker | undefined,
+  artifactStore: HandoffArtifactStore,
 ): Record<string, ToolDefinition> {
   const directory = ctx.directory;
 
@@ -118,7 +223,7 @@ export function createDelegateTools(
     promptParts?: PromptBodyPart[];
     /** Resume an open child session after a needs_user handoff; skips create */
     continueSessionId?: string;
-  }): Promise<{ text: string; openSessionId?: string }> {
+  }): Promise<{ text: string; sessionId: string; openSessionId?: string }> {
     const modelRef = parseModelReference(options.model);
     if (!modelRef) {
       throw new Error(`Invalid model format: ${options.model}`);
@@ -210,11 +315,11 @@ export function createDelegateTools(
       const text = extraction.text;
       if (subagentOutputRequestsUserHandoff(text)) {
         keepChildSessionOpen = true;
-        return { text, openSessionId: sessionId };
+        return { text, sessionId, openSessionId: sessionId };
       }
 
       recordSessionDone(sessionId);
-      return { text };
+      return { text, sessionId };
     } finally {
       if (sessionId && !keepChildSessionOpen) {
         try {
@@ -272,7 +377,7 @@ export function createDelegateTools(
     },
     execute: async (args, context) => {
       const parentSessionId = context.sessionID;
-      const agentName = args.agent;
+      const agentName = args.agent as SubagentRuntimeName;
       const variant = args.variant;
       const mode = args.mode ?? 'blocking';
       const continueSessionId = args.continue_session_id?.trim() || undefined;
@@ -296,6 +401,17 @@ export function createDelegateTools(
       if (!model) {
         return `Error: No model configured for agent "${agentName}"`;
       }
+
+      const referencedArtifactPaths = extractArtifactPathsFromPrompt(args.prompt);
+      const upstreamArtifactContext = artifactStore.formatForDelegation(
+        parentSessionId,
+        continueSessionId
+          ? { excludeChildSessionId: continueSessionId }
+          : undefined,
+      );
+      const effectivePrompt = upstreamArtifactContext
+        ? `${upstreamArtifactContext}\n\n${args.prompt}`
+        : args.prompt;
 
       let frameImageParts: PromptBodyPart[] = [];
       if (agentName === 'interpreter' && !continueSessionId) {
@@ -352,6 +468,23 @@ export function createDelegateTools(
           }
 
           const sessionId = session.data.id;
+          const seededArtifact = artifactStore.seedArtifact({
+            agent: agentName,
+            childSessionId: sessionId,
+            parentSessionId,
+            model,
+            variant: effectiveVariant,
+            mode: 'fire_forget',
+            purpose: args.prompt,
+            promptText: effectivePrompt,
+            referencedArtifactPaths: [
+              ...referencedArtifactPaths,
+              ...artifactStore
+                .listSessionArtifacts(parentSessionId)
+                .map((artifact) => artifact.artifactPath),
+            ],
+          });
+          artifactStore.markStatus(sessionId, 'open');
 
           // Record in session tree directly
           recordSessionTree(
@@ -370,7 +503,7 @@ export function createDelegateTools(
             agent: agentName,
             model: modelRef,
             tools: { task: false },
-            parts: partsForPrompt(args.prompt),
+            parts: partsForPrompt(effectivePrompt),
           };
 
           if (effectiveVariant) {
@@ -380,12 +513,20 @@ export function createDelegateTools(
           ctx.client.session
             .prompt({
               path: { id: sessionId },
-              body: promptBody,
-              query: { directory },
-            })
+            body: promptBody,
+            query: { directory },
+          })
             .catch(() => {});
 
-          return `Launched ${agentName} (variant: ${effectiveVariant ?? 'default'}, mode: fire_forget).\nSession ID: ${sessionId}\nCollect with delegate_collect(session_id: "${sessionId}")`;
+          return buildCompactEnvelope({
+            agentName,
+            variant: effectiveVariant,
+            childSessionId: sessionId,
+            artifactPath: seededArtifact.artifactPath,
+            indexPath: seededArtifact.indexPath,
+            summaryLine: `${buildSummaryLine(agentName, 'open', '')} Collect with delegate_collect(session_id: "${sessionId}")`,
+            inlineSections: [],
+          });
         } catch (err) {
           return `Error launching ${agentName}: ${err instanceof Error ? err.message : String(err)}`;
         }
@@ -400,18 +541,49 @@ export function createDelegateTools(
           agent: agentName,
           model,
           variant: effectiveVariant,
-          promptText: args.prompt,
+          promptText: effectivePrompt,
           timeout: 0, // no timeout - let subagents run freely
           promptParts: frameImageParts.length > 0 ? frameImageParts : undefined,
           continueSessionId,
         });
+        const seededArtifact = artifactStore.seedArtifact({
+          agent: agentName,
+          childSessionId: runResult.sessionId,
+          parentSessionId,
+          model,
+          variant: effectiveVariant,
+          mode: 'blocking',
+          purpose: args.prompt,
+          promptText: effectivePrompt,
+          referencedArtifactPaths: [
+            ...referencedArtifactPaths,
+            ...artifactStore
+              .listSessionArtifacts(parentSessionId, {
+                excludeChildSessionId: runResult.sessionId,
+              })
+              .map((artifact) => artifact.artifactPath),
+          ],
+        });
+        const inlineSections = collectInlineSections(agentName, runResult.text);
+        const status = determineArtifactStatus(runResult.text, 'blocking');
+        const artifactResult =
+          artifactStore.appendTurn({
+            childSessionId: runResult.sessionId,
+            outputText: runResult.text,
+            inlineSections,
+            status,
+          }) ?? seededArtifact;
 
-        let output = `**${agentName}** (variant: ${effectiveVariant ?? 'default'}):\n\n`;
-        output += runResult.text;
-        if (runResult.openSessionId) {
-          output += `\n\n<delegate_session_continue session_id="${runResult.openSessionId}" agent="${agentName}" />`;
-        }
-        return output;
+        return buildCompactEnvelope({
+          agentName,
+          variant: effectiveVariant,
+          childSessionId: runResult.sessionId,
+          artifactPath: artifactResult.artifactPath,
+          indexPath: artifactResult.indexPath,
+          summaryLine: buildSummaryLine(agentName, status, runResult.text),
+          inlineSections,
+          continueSessionId: runResult.openSessionId,
+        });
       } catch (err) {
         return `Error running ${agentName} (variant: ${effectiveVariant ?? 'default'}): ${
           err instanceof Error ? err.message : String(err)
@@ -439,7 +611,7 @@ export function createDelegateTools(
         .describe('Session ID from delegate_subagent fire_forget'),
     },
     execute: async (args) => {
-      // Check if already collected (dedup)
+      const existingArtifact = artifactStore.getSessionInfo(args.session_id);
       if (alreadyCollected.has(args.session_id)) {
         return 'Session was already collected. Result is available in previous turns.';
       }
@@ -465,28 +637,60 @@ export function createDelegateTools(
           | undefined;
 
         if (status === 'idle' || status === 'completed' || status === 'error') {
-          alreadyCollected.add(args.session_id);
-          recordSessionDone(args.session_id);
-
           const extraction = await extractSessionResult(
             ctx.client,
             args.session_id,
             { includeReasoning: false, directory },
           );
 
-          ctx.client.session
-            .abort({ path: { id: args.session_id } })
-            .catch(() => {});
-
-          if (depthTracker) {
-            depthTracker.cleanup(args.session_id);
-          }
-
           if (extraction.empty) {
             return 'Session completed but produced no output.';
           }
+          const artifactStatus = determineArtifactStatus(
+            extraction.text,
+            'fire_forget',
+          );
+          const agentName = existingArtifact?.agent ?? 'fixer';
+          const inlineSections = collectInlineSections(agentName, extraction.text);
+          const artifactResult =
+            artifactStore.appendTurn({
+              childSessionId: args.session_id,
+              outputText: extraction.text,
+              inlineSections,
+              status: artifactStatus,
+            }) ?? artifactStore.markStatus(args.session_id, artifactStatus);
 
-          return extraction.text;
+          if (!artifactResult) {
+            return extraction.text;
+          }
+
+          if (artifactStatus !== 'needs_user') {
+            alreadyCollected.add(args.session_id);
+            recordSessionDone(args.session_id);
+            ctx.client.session
+              .abort({ path: { id: args.session_id } })
+              .catch(() => {});
+
+            if (depthTracker) {
+              depthTracker.cleanup(args.session_id);
+            }
+          }
+
+          return buildCompactEnvelope({
+            agentName,
+            childSessionId: args.session_id,
+            artifactPath: artifactResult.artifactPath,
+            indexPath: artifactResult.indexPath,
+            variant: existingArtifact?.variant,
+            summaryLine: buildSummaryLine(
+              agentName,
+              artifactStatus,
+              extraction.text,
+            ),
+            inlineSections,
+            continueSessionId:
+              artifactStatus === 'needs_user' ? args.session_id : undefined,
+          });
         }
 
         return (

@@ -7,6 +7,7 @@ import {
   CRITICAL_INVARIANTS,
   FIXER_ORCHESTRATOR_DELEGATION_VARIANT_RULE,
   ORCHESTRATOR_CLARIFICATION_HANDOFF_BLOCK,
+  ORCHESTRATOR_HANDOFF_ARTIFACTS_BLOCK,
   PLANNING_GATE_BLOCK,
   STEWARD_CITATION_HEADER,
 } from './prompt-blocks';
@@ -85,7 +86,7 @@ ${enabledRosterEntries
   const interpreterProtocolBlock = buildInterpreterOrchestratorProtocolBlock();
 
   const firstGateBlock = `<first_gate>
-1) Analysis: direct answer ONLY for pure meta questions. For debugging, review, architecture, or product diagnosis — delegate to @oracle.
+1) Analysis: direct answer ONLY for pure meta questions. For debugging, bug fixes that need diagnosis, regressions, review, architecture, or product diagnosis — delegate to @oracle. Do NOT send a fix request straight to @fixer unless the change is purely mechanical and needs no real reasoning.
 2) UI: ANY user-facing UI work (TSX/JSX, components, layouts, styling) -> @designer FIRST. Hard gate.
 3) Capability discovery: for non-trivial tasks, proactively call discover_skills + discover_mcp_servers BEFORE delegating to specialists (see <early_discovery>). This ensures subagents start with the best tools available.
 4) Full ordering: for code-affecting work see <execution> — steward → discovery → oracle → fixer lifecycle.
@@ -128,6 +129,7 @@ ${FIXER_ORCHESTRATOR_DELEGATION_VARIANT_RULE}
 - NEVER issue @steward and another blocking agent in the same turn — steward MUST complete first.
 - NEVER delegate any subagent while discover_skills or discover_mcp_servers is in flight. Discovery ALWAYS runs blocking — wait for results before spawning @oracle, @designer, @librarian, @explorer, or @fixer.
 - NEVER parallel @explorers on overlapping scope — different directories only, named explicitly.
+- NEVER use @fixer as the first thinking step for a bug, regression, or unclear fix. @fixer implements after @oracle unless the edit is purely mechanical.
 - NEVER proceed to @fixer before user has explicitly confirmed the plan.
 </constraints>
 
@@ -136,6 +138,7 @@ ${FIXER_ORCHESTRATOR_DELEGATION_VARIANT_RULE}
 - Pure meta only (how delegation works; repeat prior subagent text verbatim): answer directly.
 - Images present: per <interpreter_protocol>.
 - UI work detected: route to @designer FIRST per <ui_routing_precedence>.
+- Fix request with any ambiguity, diagnosis, regression, or root-cause work: @oracle first per <oracle_model_and_variant_selection>. Only route directly to @fixer for mechanical no-reasoning edits.
 - Locate files/symbols/tests/config: @explorer. External docs/API/releases: @librarian.
 - Rules & AGENTS.md / AGENT.md: <first_gate> 1 + <steward_protocol> (cite: @steward; analyze: @oracle).
 - Analysis (non-UI only): <first_gate> 2 + <oracle_model_and_variant_selection>.
@@ -265,6 +268,8 @@ After 2 recovery attempts per delegation (retrieve + re-delegate), stop and esca
 
 ${buildDiscoveryGuidanceBlock()}
 
+${ORCHESTRATOR_HANDOFF_ARTIFACTS_BLOCK}
+
 ${stewardProtocolBlock}${interpreterProtocolBlock}<execution>
 Ordered lifecycle for code-affecting tasks:
 
@@ -272,7 +277,7 @@ Ordered lifecycle for code-affecting tasks:
 
 1.5) CAPABILITY DISCOVERY (BLOCKING): For non-trivial tasks, call discover_skills + discover_mcp_servers in parallel — both blocking, single turn. Wait for ALL results before proceeding. No subagent delegation until discovery completes. Note relevant installed capabilities in the delegation context so subagents can use them. If high-relevance uninstalled capabilities exist, ask user to install before proceeding.
 
-2) ANALYSIS: Blocking @oracle for any code-affecting task. Skip when task qualifies under <planning_gate> skip criteria (pure meta, mechanical edits, user-provided exact implementation). For all other tasks, @oracle analyzes the approach.
+2) ANALYSIS: Blocking @oracle for any code-affecting task that needs diagnosis, tradeoffs, or implementation reasoning. This includes bug fixes, regressions, refactors, and unclear requests. Skip only when task qualifies under <planning_gate> skip criteria for mechanical no-reasoning edits or user-provided exact implementation.
 
 2.5) PLAN PRESENTATION:
     - After @oracle returns, relay plan to user for approval before any implementation.
@@ -285,8 +290,8 @@ Ordered lifecycle for code-affecting tasks:
     - Before delegating @fixer, verify @oracle plan includes: concrete file paths, specific changes, verification gates.
     - If plan is missing any of the three, re-delegate @oracle (same session): "Make plan concrete enough for @fixer."
     - UI work: @designer (review mode) -> @oracle (optional, complex concerns only) -> @fixer. @fixer implements from <implementation_notes> only.
-    - Non-UI existing code: @oracle -> @fixer.
-    - Mechanical edits: @fixer low. Skip <planning_gate> and @oracle analysis; apply steward brief only if touching convention-governed areas.
+    - Non-UI existing code: @oracle -> @fixer. @fixer receives oracle's plan/artifact and implements; it is not the primary reasoning agent.
+    - Mechanical edits: @fixer low only when the change is obvious and requires no debugging, root-cause analysis, design choice, or multi-step reasoning. Skip <planning_gate> and @oracle analysis only in that narrow case; apply steward brief only if touching convention-governed areas.
 
 4) PARALLEL FIXER: Split by directory or concern. If fixers touch overlapping interfaces, serialize. Reuse sessions for iterative work on same scope.
 

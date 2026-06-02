@@ -5,6 +5,7 @@ function createHook(options?: {
   shouldManageSession?: (sessionID: string) => boolean;
   readContextMinLines?: number;
   readContextMaxFiles?: number;
+  artifactRecallProvider?: (sessionID: string) => string | undefined;
 }) {
   const hook = createTaskSessionManagerHook(
     {
@@ -17,6 +18,7 @@ function createHook(options?: {
       readContextMinLines: options?.readContextMinLines,
       readContextMaxFiles: options?.readContextMaxFiles,
       shouldManageSession: options?.shouldManageSession ?? (() => true),
+      artifactRecallProvider: options?.artifactRecallProvider,
     },
   );
 
@@ -80,6 +82,24 @@ describe('task-session-manager hook', () => {
   test('does not expose a system transform for resumable sessions', async () => {
     const { hook } = createHook();
     expect('experimental.chat.system.transform' in hook).toBe(false);
+  });
+
+  test('injects handoff artifact recall block when available', async () => {
+    const { hook } = createHook({
+      artifactRecallProvider: (sessionID) =>
+        sessionID === 'parent-1'
+          ? '### Handoff Artifacts\n- oracle | child-1 | completed | auth fix | .opencode-dux/oracle/child-1.md'
+          : undefined,
+    });
+
+    const messages = createMessages('parent-1', 'do something');
+    await hook['experimental.chat.messages.transform']({}, messages);
+
+    const prompt = messages.messages[0].parts[0].text;
+    expect(prompt).toContain('<handoff_artifacts>');
+    expect(prompt).toContain('### Handoff Artifacts');
+    expect(prompt).toContain('.opencode-dux/oracle/child-1.md');
+    expect(prompt).toContain('</handoff_artifacts>');
   });
 
   test('resolves remembered aliases to real task ids before execution', async () => {
