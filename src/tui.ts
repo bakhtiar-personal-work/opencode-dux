@@ -84,7 +84,7 @@ const ORCH_ROOT_MODEL_DISPLAY_MAX = 28;
 /**
  * Orchestrating panel - every nested subagent under the root (recursive).
  */
-const ORCH_CHILD_MODEL_DISPLAY_MAX = 22;
+const ORCH_CHILD_MODEL_DISPLAY_MAX = 18;
 
 const ORCH_DEFAULT_TITLE_LABEL = 'New session';
 
