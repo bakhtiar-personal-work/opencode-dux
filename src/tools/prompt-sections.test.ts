@@ -28,6 +28,10 @@ describe('createOrchestratorPromptSectionTool', () => {
     expect(result).toContain('section: oracle_model_and_variant_selection');
     expect(result).toContain('openai/gpt-5.5');
     expect(result).toContain('openai/gpt-5.5-pro');
+    expect(result).toContain('MANDATORY FETCH RULE:');
+    expect(result).toContain(
+      'Orchestrator must fetch this section immediately before every NEW @oracle delegation or escalation.',
+    );
   });
 
   test('section enum stays aligned with registry-backed content', async () => {

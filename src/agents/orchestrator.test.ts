@@ -304,6 +304,23 @@ describe('buildOrchestratorPrompt', () => {
     expect(prompt).not.toContain('Scenario -> model+variant:');
   });
 
+  test('requires oracle lookup before every oracle delegation and forbids orchestrator analysis prose', () => {
+    const prompt = buildOrchestratorPrompt();
+
+    expect(prompt).toContain(
+      'If the next specialist is @oracle, fetch `oracle_model_and_variant_selection` immediately before choosing `model`/`variant` or writing any diagnosis, tradeoff, risk, or plan language.',
+    );
+    expect(prompt).toContain(
+      'Before every NEW @oracle delegation or escalation, call `get_orchestrator_prompt_section(section: "oracle_model_and_variant_selection")`.',
+    );
+    expect(prompt).toContain(
+      'Do not draft diagnosis, root cause, tradeoffs, risk analysis, or plans in orchestrator prose.',
+    );
+    expect(prompt).toContain(
+      'NEVER produce your own diagnosis, root-cause theory, tradeoff analysis, risk assessment, or implementation plan for code-affecting work.',
+    );
+  });
+
   test('includes subagent model roster when provided', () => {
     const prompt = buildOrchestratorPrompt(
       'openai/gpt-5.5',

@@ -117,7 +117,7 @@ The orchestrator discovers skills and MCPs before delegating to subagents:
 - **Skills**: Before @oracle, @designer, or @librarian runs on a non-trivial task, the orchestrator calls `discover_skills` and `discover_mcp_servers` in parallel. Results are cached for 24 hours.
 - **Installed capabilities**: Relevant installed skills and MCPs are injected into the delegation prompt with their name, description, relevance, and usage instructions. Subagents can reference them right away.
 - **Missing capabilities**: If a useful capability is found but not yet installed, the orchestrator shows the install command before moving on.
-- **Prompt policy lookup**: The orchestrator keeps its routing control surface inline, but fetches detailed policy blocks through the internal built-in tool `get_orchestrator_prompt_section(section: "...")`. When the inline prompt says to fetch a named section, that lookup is mandatory before acting on that policy.
+- **Prompt policy lookup**: The orchestrator keeps its routing control surface inline, but fetches detailed policy blocks through the internal built-in tool `get_orchestrator_prompt_section(section: "...")`. When the inline prompt says to fetch a named section, that lookup is mandatory before acting on that policy. In particular, every new `@oracle` delegation or escalation must fetch `oracle_model_and_variant_selection` first; the orchestrator should not write its own diagnosis or implementation plan.
 
 Discovery runs automatically for non-trivial tasks.
 

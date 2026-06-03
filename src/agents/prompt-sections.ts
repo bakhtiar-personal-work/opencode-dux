@@ -195,6 +195,10 @@ ${modelPoolLines}
 <oracle_model_and_variant_selection>
 Only @oracle does analysis. VARIANT = depth; MODEL = tier.
 
+MANDATORY FETCH RULE:
+- Orchestrator must fetch this section immediately before every NEW @oracle delegation or escalation.
+- Orchestrator may emit only brief routing status before delegation; it must not write its own diagnosis, tradeoff analysis, risk assessment, or implementation plan.
+
 MODEL:
 - default (flash): low-cost oracle for standard debugging and scoped reviews — variants medium/high/max only (never low).
 - smart (pro): novel architecture, unclear root cause, security/concurrency, or after flash was wrong/low-confidence — variants low through max.
