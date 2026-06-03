@@ -144,8 +144,9 @@ Install new skills: `npx skills add <owner/repo> --skill <skill-name> -g -a open
 Manage API accounts from the OpenCode prompt with `/subscriptions`:
 
 - `/subscriptions list` - View all accounts and their usage
-- `/subscriptions add-opencode-go <name> <workspace-id>` - Add OpenCode Go account
+- `/subscriptions add-opencode-go <name> <workspace-id> <auth-cookie>` - Add OpenCode Go account
 - `/subscriptions add-neuralwatt <name> <api-key>` - Add Neuralwatt account
+- `/subscriptions add-deepseek <name> <api-key>` - Add DeepSeek account
 - `/subscriptions add-codex-device <name>` - Add Codex (OpenAI) account via device auth
 - `/subscriptions switch <provider> <name>` - Activate an account for a provider
 - `/subscriptions remove <provider> <name>` - Delete an account
@@ -157,6 +158,7 @@ Manage API accounts from the OpenCode prompt with `/subscriptions`:
 | --------------- | ------------- | ----------------------------------------------------- | -------------------------- |
 | **OpenCode Go** | `opencode-go` | Dashboard scraping (rolling, weekly, monthly windows) | Workspace ID + auth cookie |
 | **Neuralwatt**  | `neuralwatt`  | REST API (credits, kWh, token usage)                  | API key                    |
+| **DeepSeek**    | `deepseek`    | Official REST API (`/user/balance`)                   | API key                    |
 | **Codex**       | `codex`       | REST API (5H/7D rate limits, credits)                 | Device code auth (OAuth)   |
 
 Accounts are identified by provider and name. You can have accounts with the same name across different providers (e.g., "Main" for Codex, "Main" for Neuralwatt) without collisions. Remove a specific account with `/subscriptions remove <provider> <name>`.

@@ -9,6 +9,7 @@ import { AGENT_SIDEBAR_DESCRIPTIONS } from './agents/descriptions';
 import { tuiProviderLabel } from './subscriptions/provider';
 import type {
   CodexUsageEntry,
+  DeepSeekUsageEntry,
   NeuralwattUsage,
   NeuralwattUsageEntry,
 } from './subscriptions/types';
@@ -325,6 +326,21 @@ function formatUsageTime(iso: string): string {
 function neuralwattTokensFormatted(tokens: number): string {
   if (!Number.isFinite(tokens)) return '0';
   return Math.trunc(tokens).toLocaleString('en-US');
+}
+
+function formatBalanceAmount(value: string, currency: string): string {
+  const amount = Number(value);
+  if (Number.isFinite(amount)) {
+    try {
+      return new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency,
+      }).format(amount);
+    } catch {
+      return `${currency} ${amount.toFixed(2)}`;
+    }
+  }
+  return `${currency} ${value}`;
 }
 
 function pushNeuralwattMonthlyTokensRow(
@@ -677,6 +693,53 @@ function renderCodexUsage(
   }
 }
 
+function renderDeepSeekUsage(
+  entry: DeepSeekUsageEntry,
+  rows: Child[],
+  theme: { text: unknown; textMuted: unknown; accent: unknown },
+): void {
+  if (!entry.is_available) {
+    rows.push(
+      box({ width: '100%', flexDirection: 'row' }, [
+        text({ fg: '#E74C3C' }, ['  Status: insufficient balance']),
+      ]),
+    );
+  }
+
+  if (entry.balance_infos.length === 0) {
+    rows.push(
+      box({ width: '100%', flexDirection: 'row' }, [
+        text({ fg: theme.textMuted }, ['  💰 No balance data']),
+      ]),
+    );
+    return;
+  }
+
+  for (const balanceInfo of entry.balance_infos) {
+    rows.push(
+      box({ width: '100%', flexDirection: 'row' }, [
+        text({ fg: theme.text }, [
+          `💰 ${formatBalanceAmount(balanceInfo.total_balance, balanceInfo.currency)} total`,
+        ]),
+      ]),
+    );
+    rows.push(
+      box({ width: '100%', flexDirection: 'row' }, [
+        text({ fg: theme.textMuted }, [
+          `   Top-up ${formatBalanceAmount(balanceInfo.topped_up_balance, balanceInfo.currency)}`,
+        ]),
+      ]),
+    );
+    rows.push(
+      box({ width: '100%', flexDirection: 'row' }, [
+        text({ fg: theme.textMuted }, [
+          `   Grant ${formatBalanceAmount(balanceInfo.granted_balance, balanceInfo.currency)}`,
+        ]),
+      ]),
+    );
+  }
+}
+
 function renderSubscriptionPanel(
   snapshot: TuiSnapshot,
   theme: {
@@ -741,10 +804,12 @@ function renderSubscriptionPanel(
       renderOpenCodeGoBars(entry, rows, theme);
     } else if (entry.provider === 'neuralwatt') {
       renderNeuralwattUsage(entry, rows, theme);
+    } else if (entry.provider === 'deepseek') {
+      renderDeepSeekUsage(entry as DeepSeekUsageEntry, rows, theme);
     } else if (entry.provider === 'codex') {
       try {
         renderCodexUsage(entry as CodexUsageEntry, rows, theme);
-      } catch (e) {
+      } catch (_e) {
         rows.push(text({ fg: '#E74C3C' }, ['  ⚠️ Error rendering Codex usage']));
       }
     } else {
@@ -1677,7 +1742,7 @@ const plugin: TuiPluginModule & { id: string } = {
           tick();
           try {
             return renderSidebar(snapshot(), api.theme.current);
-          } catch (e) {
+          } catch (_e) {
             // Return a minimal fallback box so the sidebar is never blank
             return box(
               {

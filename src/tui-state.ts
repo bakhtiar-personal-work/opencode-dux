@@ -620,7 +620,12 @@ function parseSnapshot(value: string): TuiSnapshot | null {
       Record<SubscriptionProvider, string>
     > = {};
     if (parsed.activeSubscriptionByProvider) {
-      for (const provider of ['opencode-go', 'neuralwatt', 'codex'] as const) {
+      for (const provider of [
+        'opencode-go',
+        'neuralwatt',
+        'deepseek',
+        'codex',
+      ] as const) {
         const name = parsed.activeSubscriptionByProvider[provider];
         if (typeof name === 'string' && name.length > 0) {
           activeSubscriptionByProvider[provider] = name;

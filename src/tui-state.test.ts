@@ -70,6 +70,20 @@ describe('subscriptionUsage', () => {
         subscription: null,
         fetchedAt: Date.now(),
       },
+      {
+        provider: 'deepseek',
+        accountName: 'personal',
+        fetchedAt: Date.now(),
+        is_available: true,
+        balance_infos: [
+          {
+            currency: 'USD',
+            total_balance: '12.34',
+            granted_balance: '2.34',
+            topped_up_balance: '10.00',
+          },
+        ],
+      },
     ]);
 
     const snapshot = readTuiSnapshot();
@@ -78,6 +92,9 @@ describe('subscriptionUsage', () => {
     );
     expect(snapshot.subscriptionUsage).toHaveProperty(
       subscriptionUsageKey('neuralwatt', 'personal'),
+    );
+    expect(snapshot.subscriptionUsage).toHaveProperty(
+      subscriptionUsageKey('deepseek', 'personal'),
     );
   });
 
@@ -213,7 +230,7 @@ describe('activeSubscriptionByProvider', () => {
   });
 
   test('recordActiveSubscriptionForProvider survives other snapshot updates', () => {
-    recordActiveSubscriptionForProvider('opencode-go', 'personal');
+    recordActiveSubscriptionForProvider('deepseek', 'personal');
     // Write some other data - shouldn't affect active provider selection
     recordSessionNode({
       sessionID: 'sess-x',
@@ -221,7 +238,7 @@ describe('activeSubscriptionByProvider', () => {
       agent: 'explorer',
       status: 'busy',
     });
-    expect(readTuiSnapshot().activeSubscriptionByProvider['opencode-go']).toBe(
+    expect(readTuiSnapshot().activeSubscriptionByProvider.deepseek).toBe(
       'personal',
     );
   });
