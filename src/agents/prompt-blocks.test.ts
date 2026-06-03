@@ -5,6 +5,7 @@ import {
   CORE_CAPABILITY_AWARENESS_BLOCK,
   CRITICAL_INVARIANTS,
   DESIGNER_VARIANT_SCOPE_LINES,
+  FIRST_GATE_BLOCK,
   INTERPRETER_VARIANT_SCOPE_LINES,
   LIBRARIAN_VARIANT_SCOPE_LINES,
   MECHANICAL_EDIT_EXCEPTION_BLOCK,
@@ -26,7 +27,9 @@ describe('CRITICAL_INVARIANTS', () => {
       'ALWAYS delegate analysis to @oracle',
     );
     expect(CRITICAL_INVARIANTS).toContain('ALWAYS pass explicit');
-    expect(CRITICAL_INVARIANTS).toContain('@designer for UI, otherwise @oracle');
+    expect(CRITICAL_INVARIANTS).toContain(
+      '@designer for UI, otherwise @oracle',
+    );
     expect(CRITICAL_INVARIANTS).toContain('<planning_gate>');
     expect(CRITICAL_INVARIANTS).toContain(
       'Report verification before declaring success',
@@ -51,13 +54,36 @@ describe('MECHANICAL_EDIT_EXCEPTION_BLOCK', () => {
   });
 
   test('includes all seven criteria conditions', () => {
-    expect(MECHANICAL_EDIT_EXCEPTION_BLOCK).toContain('Exact file path is known');
+    expect(MECHANICAL_EDIT_EXCEPTION_BLOCK).toContain(
+      'Exact file path is known',
+    );
     expect(MECHANICAL_EDIT_EXCEPTION_BLOCK).toContain('Change is obvious');
-    expect(MECHANICAL_EDIT_EXCEPTION_BLOCK).toContain('No diagnosis or root-cause analysis needed');
-    expect(MECHANICAL_EDIT_EXCEPTION_BLOCK).toContain('No tradeoff evaluation required');
-    expect(MECHANICAL_EDIT_EXCEPTION_BLOCK).toContain('No UI/UX changes involved');
-    expect(MECHANICAL_EDIT_EXCEPTION_BLOCK).toContain('No architecture or design decisions');
-    expect(MECHANICAL_EDIT_EXCEPTION_BLOCK).toContain('No multi-step reasoning required');
+    expect(MECHANICAL_EDIT_EXCEPTION_BLOCK).toContain(
+      'No diagnosis or root-cause analysis needed',
+    );
+    expect(MECHANICAL_EDIT_EXCEPTION_BLOCK).toContain(
+      'No tradeoff evaluation required',
+    );
+    expect(MECHANICAL_EDIT_EXCEPTION_BLOCK).toContain(
+      'No UI/UX changes involved',
+    );
+    expect(MECHANICAL_EDIT_EXCEPTION_BLOCK).toContain(
+      'No architecture or design decisions',
+    );
+    expect(MECHANICAL_EDIT_EXCEPTION_BLOCK).toContain(
+      'No multi-step reasoning required',
+    );
+  });
+});
+
+describe('FIRST_GATE_BLOCK', () => {
+  test('centralizes first-pass routing gates for the orchestrator prompt', () => {
+    expect(FIRST_GATE_BLOCK).toContain('<first_gate>');
+    expect(FIRST_GATE_BLOCK).toContain('0) STEWARDSHIP GATE');
+    expect(FIRST_GATE_BLOCK).toContain('ORACLE GATE');
+    expect(FIRST_GATE_BLOCK).toContain('DESIGNER GATE');
+    expect(FIRST_GATE_BLOCK).toContain('CAPABILITY DISCOVERY');
+    expect(FIRST_GATE_BLOCK).toContain('LIFECYCLE: For code-affecting work');
   });
 });
 
@@ -99,7 +125,9 @@ describe('PLANNING_GATE_BLOCK', () => {
     expect(PLANNING_GATE_BLOCK).toContain(
       'User-provided exact implementation alone does NOT make a task mechanical',
     );
-    expect(PLANNING_GATE_BLOCK).toContain('When unsure, treat as non-mechanical');
+    expect(PLANNING_GATE_BLOCK).toContain(
+      'When unsure, treat as non-mechanical',
+    );
   });
 
   test('does not contain blanket no-delegation language', () => {
@@ -172,6 +200,32 @@ describe('CORE_CAPABILITY_AWARENESS_BLOCK', () => {
 });
 
 describe('prompt-blocks', () => {
+  test('steward protocol includes STEWARDSHIP REQUIRED block with enforcement language', () => {
+    const block = buildStewardOrchestratorProtocolBlock();
+    expect(block).toContain('STEWARDSHIP REQUIRED (MUST RUN FIRST):');
+    expect(block).toContain('MUST call');
+    expect(block).toContain('@steward in blocking mode FIRST');
+    expect(block).toContain('Do NOT call @oracle, @designer, or @fixer');
+  });
+
+  test('stewardship required includes skip conditions', () => {
+    const block = buildStewardOrchestratorProtocolBlock();
+    expect(block).toContain('Pure meta questions');
+    expect(block).toContain('Pure file/location discovery');
+    expect(block).toContain('Exact-path mechanical edits');
+  });
+
+  test('stewardship required includes ALWAYS BLOCKING language', () => {
+    const block = buildStewardOrchestratorProtocolBlock();
+    expect(block).toContain('STEWARDSHIP IS ALWAYS BLOCKING:');
+    expect(block).toContain('NEVER delegate @steward with mode: "fire_forget"');
+    expect(block).toContain('Steward citations are MANDATORY input');
+    expect(block).toContain(
+      'Copy steward citations verbatim into ALL downstream prompts',
+    );
+    expect(block).toContain('### Repo Rules (from @steward)');
+  });
+
   test('steward protocol no longer references <first_gate> item 1', () => {
     const block = buildStewardOrchestratorProtocolBlock();
     expect(block).not.toContain('same triggers as');

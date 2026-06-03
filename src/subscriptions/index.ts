@@ -18,6 +18,7 @@ export {
   validateAccountName,
 } from './accounts-store';
 export { scrapeCodexQuota } from './codex-scraper';
+export { scrapeDeepSeekBalance } from './deepseek-scraper';
 export { scrapeNeuralwattQuota } from './neuralwatt-scraper';
 export { scrapeQuota } from './opencode-go-scraper';
 export {
@@ -27,6 +28,7 @@ export {
 } from './provider';
 export type {
   CodexUsageEntry,
+  DeepSeekUsageEntry,
   NeuralwattUsageEntry,
   OpenCodeGoUsageEntry,
   SubscriptionUsageEntry,

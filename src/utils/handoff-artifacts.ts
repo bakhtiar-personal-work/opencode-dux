@@ -40,6 +40,8 @@ interface ChildArtifactRecord {
   updatedAtIso: string;
   turns: ArtifactTurnRecord[];
   latestStatus: HandoffArtifactStatus;
+  branchRevisionId?: string;
+  promptSequence?: number;
 }
 
 interface OrchestratorIndexEntry {
@@ -53,6 +55,8 @@ interface OrchestratorIndexEntry {
   createdAtIso: string;
   updatedAtIso: string;
   latestStatus: HandoffArtifactStatus;
+  branchRevisionId?: string;
+  promptSequence?: number;
 }
 
 interface OrchestratorIndexRecord {
@@ -78,6 +82,8 @@ export interface ArtifactSeedInput {
   purpose: string;
   promptText: string;
   referencedArtifactPaths?: string[];
+  branchRevisionId?: string;
+  promptSequence?: number;
 }
 
 export interface ArtifactTurnInput {
@@ -101,6 +107,27 @@ export interface ArtifactSessionInfo extends ArtifactRecordResult {
   variant?: string;
   latestStatus: HandoffArtifactStatus;
   parentSessionId: string;
+  branchRevisionId?: string;
+  promptSequence?: number;
+}
+
+export interface RelevanceSelectionOptions {
+  /** Active branch revision ID. Only artifacts matching this branch (or unversioned legacy artifacts) are included. */
+  branchRevisionId?: string;
+  /** Exclude artifacts created after this prompt sequence number. */
+  promptSequenceCutoff?: number;
+  /** Artifact paths explicitly referenced in the current prompt — these are always included if available. */
+  explicitPaths?: string[];
+  /** Target subagent name — prerequisite-agent artifacts are preferred. */
+  targetAgent?: string;
+  /** Child session ID for continuation — when set, 'open' status artifacts are not excluded. */
+  continueChildSessionId?: string;
+  /** Maximum number of artifacts to return (default 5). */
+  cap?: number;
+  /** Context hint: "prompt" for chat recall (cap 3), "delegation" for subagent handoff (cap 5). */
+  context?: 'prompt' | 'delegation';
+  /** Exclude artifacts that match this child session ID (for continuation scenarios). */
+  excludeChildSessionId?: string;
 }
 
 interface DelegationContextOptions {
@@ -280,6 +307,13 @@ export class HandoffArtifactStore {
   private readonly childRecords = new Map<string, ChildArtifactRecord>();
   private readonly orchestratorIndexes = new Map<string, OrchestratorIndexRecord>();
 
+  /** Current prompt sequence number (orchestrator turn count). */
+  private promptSequence: number = 0;
+  /** Current branch revision ID — incremented when a user rewind is detected. */
+  private branchRevisionId: string = 'v0';
+  /** Last observed user message count — used for rewind detection. */
+  private lastUserMessageCount: number = 0;
+
   constructor(
     workspaceRoot: string,
     options: HandoffArtifactStoreOptions = {},
@@ -288,6 +322,45 @@ export class HandoffArtifactStore {
     this.rootDir = path.join(workspaceRoot, ARTIFACT_ROOT_DIRNAME);
     this.now = options.now ?? (() => new Date());
     this.retentionMs = options.retentionMs ?? DEFAULT_RETENTION_MS;
+  }
+
+  setTimeline(promptSequence: number, branchRevisionId?: string): void {
+    this.promptSequence = promptSequence;
+    if (branchRevisionId !== undefined) {
+      this.branchRevisionId = branchRevisionId;
+    }
+  }
+
+  getTimeline(): { promptSequence: number; branchRevisionId: string } {
+    return { promptSequence: this.promptSequence, branchRevisionId: this.branchRevisionId };
+  }
+
+  /**
+   * Detect whether the user has reverted to an earlier point in the conversation
+   * by comparing the current user message count with the previously observed count.
+   * When a rewind is detected, the branch revision ID is automatically incremented.
+   * Returns true if a new branch revision was created.
+   */
+  detectRewind(userMessageCount: number): boolean {
+    if (userMessageCount < this.lastUserMessageCount) {
+      // User reverted — increment branch revision
+      const parts = this.branchRevisionId.match(/^v(\d+)$/);
+      const nextNum = parts ? parseInt(parts[1], 10) + 1 : 1;
+      this.branchRevisionId = `v${nextNum}`;
+      this.lastUserMessageCount = userMessageCount;
+      return true;
+    }
+    this.lastUserMessageCount = userMessageCount;
+    return false;
+  }
+
+  /**
+   * Increment the prompt sequence by 1 and return the new value.
+   * Call this before each orchestrator turn.
+   */
+  incrementSequence(): number {
+    this.promptSequence += 1;
+    return this.promptSequence;
   }
 
   getRootDir(): string {
@@ -373,6 +446,8 @@ export class HandoffArtifactStore {
       updatedAtIso: formatIso(now),
       turns: [],
       latestStatus: 'open',
+      branchRevisionId: input.branchRevisionId,
+      promptSequence: input.promptSequence,
     };
 
     this.childRecords.set(input.childSessionId, record);
@@ -419,17 +494,17 @@ export class HandoffArtifactStore {
   }
 
   formatForPrompt(parentSessionId: string): string | undefined {
-    const index = this.orchestratorIndexes.get(parentSessionId);
-    if (!index || index.entries.size === 0) {
+    const artifacts = this.selectRelevantArtifacts(parentSessionId, {
+      context: 'prompt',
+    });
+    if (artifacts.length === 0) {
       return undefined;
     }
 
-    const lines = [...index.entries.values()]
-      .sort((a, b) => b.updatedAtIso.localeCompare(a.updatedAtIso))
-      .map(
-        (entry) =>
-          `- ${entry.agent} | ${entry.childSessionId} | ${entry.latestStatus} | ${entry.purpose} | ${entry.artifactRelativePath}`,
-      );
+    const lines = artifacts.map(
+      (entry) =>
+        `- ${entry.agent} | ${entry.sessionId} | ${entry.latestStatus} | ${entry.purpose} | ${entry.artifactPath}`,
+    );
 
     return [
       '### Handoff Artifacts',
@@ -455,6 +530,8 @@ export class HandoffArtifactStore {
       variant: record.variant,
       latestStatus: record.latestStatus,
       parentSessionId: record.parentSessionId,
+      branchRevisionId: record.branchRevisionId,
+      promptSequence: record.promptSequence,
     };
   }
 
@@ -479,15 +556,137 @@ export class HandoffArtifactStore {
         variant: record.variant,
         latestStatus: record.latestStatus,
         parentSessionId: record.parentSessionId,
+        branchRevisionId: record.branchRevisionId,
+        promptSequence: record.promptSequence,
       }));
     return artifacts;
   }
 
+  /**
+   * Agent dependency map: for a given target agent, which agents'
+   * artifacts are considered prerequisite context.
+   */
+  private static readonly PREREQUISITE_AGENTS: Record<string, string[]> = {
+    fixer: ['oracle', 'designer', 'steward'],
+    oracle: ['steward', 'explorer', 'librarian'],
+    designer: ['steward', 'explorer'],
+    steward: [],
+    explorer: [],
+    librarian: [],
+    interpreter: [],
+  };
+
+  /**
+   * Select relevant artifacts for prompt recall or delegation, applying
+   * branch-awareness, prompt-sequence cutoff, preference for explicit paths,
+   * prerequisite-agent ordering, and result capping.
+   */
+  selectRelevantArtifacts(
+    parentSessionId: string,
+    options: RelevanceSelectionOptions = {},
+  ): ArtifactSessionInfo[] {
+    const cap = options.cap ?? (options.context === 'prompt' ? 3 : 5);
+    // Only apply timeline defaults when the store has actually been advanced
+    const branchRevId = options.branchRevisionId ?? (this.promptSequence > 0 ? this.branchRevisionId : undefined);
+    const cutoffPSeq = options.promptSequenceCutoff ?? (this.promptSequence > 0 ? this.promptSequence : undefined);
+
+    // Get all artifacts for this parent
+    let artifacts = [...this.childRecords.values()]
+      .filter((r) => r.parentSessionId === parentSessionId);
+
+    // Filter by branch revision (unversioned legacy artifacts are always included)
+    if (branchRevId != null) {
+      artifacts = artifacts.filter(
+        (r) => !r.branchRevisionId || r.branchRevisionId === branchRevId,
+      );
+    }
+
+    // Filter by prompt sequence cutoff (unversioned legacy artifacts are always included)
+    if (cutoffPSeq != null) {
+      artifacts = artifacts.filter(
+        (r) => r.promptSequence == null || r.promptSequence <= cutoffPSeq,
+      );
+    }
+
+    // Exclude 'open' status by default unless continuing the same child session
+    if (!options.continueChildSessionId) {
+      artifacts = artifacts.filter((r) => r.latestStatus !== 'open');
+    }
+
+    // Exclude a specific child session ID (for continuation to avoid self-reference)
+    if (options.excludeChildSessionId) {
+      artifacts = artifacts.filter(
+        (r) => r.childSessionId !== options.excludeChildSessionId,
+      );
+    }
+
+    // Separate explicit paths from the prompt
+    const explicitSet = new Set(options.explicitPaths ?? []);
+    const explicit: ChildArtifactRecord[] = [];
+    const remaining: ChildArtifactRecord[] = [];
+
+    for (const r of artifacts) {
+      if (explicitSet.has(r.relativePath)) {
+        explicit.push(r);
+      } else {
+        remaining.push(r);
+      }
+    }
+
+    // Sort by updatedAtIso descending
+    const sortDesc = (a: ChildArtifactRecord, b: ChildArtifactRecord): number =>
+      b.updatedAtIso.localeCompare(a.updatedAtIso);
+    explicit.sort(sortDesc);
+    remaining.sort(sortDesc);
+
+    // Prefer prerequisite-agent artifacts for the target agent
+    const prerequisites =
+      options.targetAgent
+        ? HandoffArtifactStore.PREREQUISITE_AGENTS[options.targetAgent] ?? []
+        : [];
+
+    const preferred: ChildArtifactRecord[] = [];
+    const rest: ChildArtifactRecord[] = [];
+
+    for (const r of remaining) {
+      if (prerequisites.includes(r.agent)) {
+        preferred.push(r);
+      } else {
+        rest.push(r);
+      }
+    }
+
+    preferred.sort(sortDesc);
+    rest.sort(sortDesc);
+
+    // Combine: explicit first, then preferred, then rest
+    const combined = [...explicit, ...preferred, ...rest];
+    const capped = combined.slice(0, cap);
+
+    return capped.map((r) => ({
+      ...this.toResult(r),
+      agent: r.agent,
+      variant: r.variant,
+      latestStatus: r.latestStatus,
+      parentSessionId: r.parentSessionId,
+      branchRevisionId: r.branchRevisionId,
+      promptSequence: r.promptSequence,
+    }));
+  }
+
   formatForDelegation(
     parentSessionId: string,
-    options: DelegationContextOptions = {},
+    options: DelegationContextOptions & {
+      targetAgent?: string;
+      explicitPaths?: string[];
+    } = {},
   ): string | undefined {
-    const artifacts = this.listSessionArtifacts(parentSessionId, options);
+    const artifacts = this.selectRelevantArtifacts(parentSessionId, {
+      context: 'delegation',
+      targetAgent: options.targetAgent,
+      explicitPaths: options.explicitPaths,
+      excludeChildSessionId: options.excludeChildSessionId,
+    });
     if (artifacts.length === 0) {
       return undefined;
     }
@@ -567,6 +766,8 @@ export class HandoffArtifactStore {
       createdAtIso: record.createdAtIso,
       updatedAtIso: record.updatedAtIso,
       latestStatus: record.latestStatus,
+      branchRevisionId: record.branchRevisionId,
+      promptSequence: record.promptSequence,
     });
     index.updatedAtIso = record.updatedAtIso;
     writeFileAtomic(index.absolutePath, renderOrchestratorIndex(index));

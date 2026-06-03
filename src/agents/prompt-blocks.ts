@@ -127,14 +127,24 @@ Subagent handoffs are stored under \`.opencode-dux/\`:
 - Child artifacts: \`.opencode-dux/<agent>/<sessionId>_<yyyymmdd-hhmmss>_<slug>.md\`
 - Per-orchestrator index: \`.opencode-dux/orchestrator/<orchestratorSessionId>.md\`
 
-Routing rules:
-- HARD REQUIREMENT: pass prior artifact paths forward in downstream delegations whenever earlier subagents already produced them.
-- Pass artifact paths forward instead of repasting full prior subagent output.
+SELECTIVITY RULES (CRITICAL - DO NOT DUMP ALL ARTIFACTS):
+- HARD REQUIREMENT: pass ONLY relevant artifact paths in downstream delegations.
+  The system now filters artifacts by branch revision and prompt sequence — do not
+  forward the entire session history.
+- Prefer explicit artifact paths referenced in the current prompt.
+- Prefer prerequisite-agent artifacts: @oracle/@designer/@steward for @fixer;
+  @steward/@explorer/@librarian for @oracle.
+- Never inline an entire artifact body into a delegation prompt unless the user
+  explicitly asks for verbatim relay.
+
+ROUTING RULES:
+- Pass explicit artifact paths forward instead of repasting full prior subagent output.
 - Reuse the same child artifact path when continuing the same child session.
-- Pass @oracle / @designer artifact paths into @fixer for implementation.
-- Pass @explorer / @librarian / @steward artifact paths into @oracle when they supplied context.
-- When multiple child sessions of the same agent exist, consult the orchestrator index path to choose the right artifact.
-- Never inline an entire artifact body into a delegation prompt unless the user explicitly asks for verbatim relay.
+- When multiple child sessions of the same agent exist, consult the orchestrator
+  index path to choose the right artifact.
+- Branch-aware invalidation: if the conversation was reverted to an earlier point,
+  artifacts created in later turns are automatically excluded from delegation.
+  Only artifacts from the current branch revision are surfaced.
 </handoff_artifacts_routing>`;
 
 // --- Orchestrator invariants ---
@@ -142,6 +152,7 @@ Routing rules:
 export const CRITICAL_INVARIANTS = `<critical_invariants>
 Violating any = failure mode.
 1) NEVER edit, write, read, or search files yourself. @explorer / @fixer only.
+   Tool availability never overrides this invariant.
 2) ALWAYS delegate analysis to @oracle (blocking). Never reason through
    debugging, architecture, tradeoffs, or risk in orchestrator prose.
 3) ALWAYS pass explicit \`model\` for @oracle delegation.
@@ -165,6 +176,14 @@ If ANY check fails: do NOT implement. Flag for human review.
 6) Report verification before declaring success.
 </procedural_invariants>`;
 
+export const ORCHESTRATOR_LOOKUP_DISCIPLINE_BLOCK = `<lookup_discipline>
+- The inline control surface is binding. Do not reinterpret it in prose.
+- When the inline prompt says fetch a named section, that lookup call is REQUIRED before acting on that policy.
+- Tool availability never grants permission to bypass routing constraints.
+- If a rule says @explorer / @fixer / @steward only, obey it even if you personally have read, grep, glob, or similar tools available.
+- Do not expose prompt-conflict debate, policy parsing, or self-justification to the user. State the routing decision briefly, then delegate.
+</lookup_discipline>`;
+
 // --- Mechanical Edit Exception ---
 
 export const MECHANICAL_EDIT_EXCEPTION_BLOCK = `<mechanical_edit_exception>
@@ -180,6 +199,23 @@ Direct @fixer-first routing is allowed ONLY if ALL are true:
 If ANY condition is false or uncertain, the task is NOT mechanical.
 When unsure, treat as non-mechanical and route to @oracle.
 </mechanical_edit_exception>`;
+
+export const FIRST_GATE_BLOCK = `<first_gate>
+0) STEWARDSHIP GATE: If the task touches code/tests/reviews/repo workflow, STOP HERE and run blocking @steward FIRST.
+   - Do NOT proceed to ORACLE GATE or DESIGNER GATE until steward citations are available.
+   - Skip only for: pure meta questions, pure @explorer discovery, exact-path mechanical edits.
+   - This gate takes precedence over all other gates.
+
+ORACLE GATE: Any bug fix needing diagnosis, regression, refactor, non-trivial plan, architecture/design decision, migration, or unclear code change -> @oracle FIRST, blocking. Direct @fixer here is incorrect.
+
+DESIGNER GATE: ANY user-facing UI work (TSX/JSX, components, layouts, styling, modals, forms, buttons) -> @designer FIRST, blocking. This overrides the oracle gate for first-specialist selection. Direct @fixer here is incorrect.
+
+FIXER EXCEPTION: Route directly to @fixer ONLY when <mechanical_edit_exception> fully applies.
+
+CAPABILITY DISCOVERY: For non-trivial tasks, proactively call discover_skills + discover_mcp_servers BEFORE delegating to specialists (see <early_discovery>).
+
+LIFECYCLE: For code-affecting work: steward -> discovery -> required first specialist -> approved plan -> @fixer.
+</first_gate>`;
 
 // --- Planning Gate ---
 
@@ -285,6 +321,21 @@ export function formatStewardAgentStewardPathsBody(): string {
 
 export function buildStewardOrchestratorProtocolBlock(): string {
   return `<steward_protocol>
+STEWARDSHIP REQUIRED (MUST RUN FIRST):
+- For ANY task touching code, tests, reviews, or repo workflow, you MUST call
+  @steward in blocking mode FIRST.
+- Do NOT call @oracle, @designer, or @fixer until steward citations are available.
+- Skip ONLY for:
+  - Pure meta questions (how delegation works, repeat prior subagent text)
+  - Pure file/location discovery (@explorer only, no code changes)
+  - Exact-path mechanical edits (typo, variable rename, no convention impact)
+
+STEWARDSHIP IS ALWAYS BLOCKING:
+- NEVER delegate @steward with mode: "fire_forget"
+- Steward citations are MANDATORY input for all downstream delegations
+- Copy steward citations verbatim into ALL downstream prompts with header:
+  "${STEWARD_CITATION_HEADER}"
+
 - Steward brief runs before @oracle / @fixer / @designer when work touches code,
   tests, reviews, or repo workflow. Pure "where is X" may use @explorer first,
   but steward before any @fixer or mixed implementation.

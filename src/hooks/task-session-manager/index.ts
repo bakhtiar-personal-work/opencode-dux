@@ -119,6 +119,12 @@ export function createTaskSessionManagerHook(
     readContextMaxFiles?: number;
     shouldManageSession: (sessionID: string) => boolean;
     artifactRecallProvider?: (sessionID: string) => string | undefined;
+    /**
+     * Called before the prompt transform, with the count of user messages
+     * in the current conversation. Use for rewind detection and prompt
+     * sequence tracking.
+     */
+    timelineBeforePrompt?: (userMessageCount: number) => void;
   },
 ) {
   const sessionManager = new SessionManager(options.maxSessionsPerAgent, {
@@ -371,6 +377,14 @@ export function createTaskSessionManagerHook(
           !options.shouldManageSession(message.info.sessionID)
         ) {
           return;
+        }
+
+        // Update timeline before any artifact operations
+        if (options.timelineBeforePrompt) {
+          const userMessageCount = output.messages.filter(
+            (m) => m.info.role === 'user',
+          ).length;
+          options.timelineBeforePrompt(userMessageCount);
         }
 
         const reminder = sessionManager.formatForPrompt(message.info.sessionID);

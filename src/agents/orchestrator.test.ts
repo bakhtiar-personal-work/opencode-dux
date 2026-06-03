@@ -39,6 +39,20 @@ describe('resolvePrompt', () => {
 });
 
 describe('buildOrchestratorPrompt', () => {
+  test('starts with prompt_map so routing categories are indexed up front', () => {
+    const prompt = buildOrchestratorPrompt();
+    expect(prompt.startsWith('<prompt_map>')).toBe(true);
+    expect(prompt).toContain(
+      '- first_gate: first-pass routing gates and precedence for initial specialist selection (inline in this prompt)',
+    );
+    expect(prompt).toContain(
+      '- agents: currently available subagents and delegate-when guidance; only use agents listed there (inline in this prompt)',
+    );
+    expect(prompt).toContain(
+      'get_orchestrator_prompt_section(section: "planning_gate")',
+    );
+  });
+
   test('includes all agent descriptions when no agents disabled', () => {
     const prompt = buildOrchestratorPrompt();
     expect(prompt).toContain('@explorer');
@@ -50,19 +64,21 @@ describe('buildOrchestratorPrompt', () => {
     expect(prompt).toContain('@interpreter');
   });
 
-  test('includes routing priority, question tool, oracle matrix, steward/interpreter', () => {
+  test('includes routing priority, lookup tool, and clarification workflow', () => {
     const prompt = buildOrchestratorPrompt();
+    expect(prompt).toContain('<prompt_lookup>');
+    expect(prompt).toContain('<lookup_discipline>');
     expect(prompt).toContain('<routing_priority>');
     expect(prompt).toContain('<first_gate>');
     expect(prompt).toContain('<handoff_artifacts_routing>');
     expect(prompt).toContain('delegate_subagent');
+    expect(prompt).toContain('delegate_subagents');
+    expect(prompt).toContain('delegate_collect');
+    expect(prompt).toContain('get_orchestrator_prompt_section');
     expect(prompt).toContain('<orchestrator_clarification>');
     expect(prompt).toContain('<needs_user>');
     expect(prompt).toContain('continue_session_id');
     expect(prompt).toContain('Nine invariants');
-    expect(prompt).toContain('NEVER: default + low');
-    expect(prompt).toContain('<steward_protocol>');
-    expect(prompt).toContain('<interpreter_protocol>');
   });
 
   test('includes critical_invariants and procedural_invariants blocks', () => {
@@ -70,18 +86,37 @@ describe('buildOrchestratorPrompt', () => {
     expect(prompt).toContain('<critical_invariants>');
     expect(prompt).toContain('<procedural_invariants>');
     expect(prompt).toContain('NEVER edit, write, read');
+    expect(prompt).toContain(
+      'Tool availability never overrides this invariant',
+    );
     expect(prompt).toContain('Report verification before declaring success');
   });
 
-  test('includes planning_gate block with analysis-allowed fix', () => {
+  test('lookup discipline makes fetched sections mandatory and forbids self-justified bypasses', () => {
     const prompt = buildOrchestratorPrompt();
-    expect(prompt).toContain('<planning_gate>');
-    expect(prompt).toContain('1) ANALYSIS');
-    expect(prompt).toContain('4) IMPLEMENT');
-    expect(prompt).toContain('Skip this gate ONLY when');
-    // Planning gate must allow analysis before approval
-    expect(prompt).toContain('no approval needed for analysis');
-    expect(prompt).toContain('no diagnosis needed');
+    expect(prompt).toContain(
+      'When the inline prompt says Fetch `section_name`, that lookup call is REQUIRED before you act on that step.',
+    );
+    expect(prompt).toContain(
+      'Tool availability never grants permission to bypass routing constraints.',
+    );
+    expect(prompt).toContain(
+      'If a rule says @explorer / @fixer / @steward only, obey it even if you personally have read, grep, glob, or similar tools available.',
+    );
+  });
+
+  test('references planning_gate lookup without inlining the full block', () => {
+    const prompt = buildOrchestratorPrompt();
+    expect(prompt).toContain(
+      'get_orchestrator_prompt_section(section: "planning_gate")',
+    );
+    expect(prompt).toContain(
+      'Fetch `planning_gate` for the exact approval protocol and plan-adjustment loop.',
+    );
+    expect(prompt).not.toContain('1) ANALYSIS: After steward brief');
+    expect(prompt).not.toContain(
+      '4) IMPLEMENT: Only after explicit user approval',
+    );
   });
 
   test('context_budget is near the start of the prompt (after <role>)', () => {
@@ -91,6 +126,92 @@ describe('buildOrchestratorPrompt', () => {
     const criticalInvariantsIndex = prompt.indexOf('<critical_invariants>');
     expect(contextBudgetIndex).toBeGreaterThan(roleIndex);
     expect(contextBudgetIndex).toBeLessThan(criticalInvariantsIndex);
+  });
+
+  test('first_gate includes STEWARDSHIP GATE as gate 0 before ORACLE GATE', () => {
+    const prompt = buildOrchestratorPrompt();
+    expect(prompt).toContain('0) STEWARDSHIP GATE');
+    expect(prompt).toContain('run blocking @steward FIRST');
+    expect(prompt).toContain('Do NOT proceed to ORACLE GATE or DESIGNER GATE');
+    expect(prompt).toContain('This gate takes precedence over all other gates');
+    // STEWARDSHIP GATE must appear before ORACLE GATE
+    const stewardGateIndex = prompt.indexOf('0) STEWARDSHIP GATE');
+    const oracleGateIndex = prompt.indexOf('ORACLE GATE');
+    expect(stewardGateIndex).toBeLessThan(oracleGateIndex);
+  });
+
+  test('prompt keeps a direct inline steward-first routing instruction', () => {
+    const prompt = buildOrchestratorPrompt();
+    expect(prompt).toContain('run blocking @steward FIRST');
+    expect(prompt).toContain('Fetch `steward_protocol` for the full protocol');
+  });
+
+  test('prompt contains streaming/output requirements', () => {
+    const prompt = buildOrchestratorPrompt();
+    expect(prompt).toContain('Use `output_format` and `communication`');
+    expect(prompt).not.toContain(
+      'Output your reasoning and delegation decisions BEFORE waiting for subagent results.',
+    );
+  });
+
+  test('execution section contains terse OUTPUT ROUTING STATUS as step 1', () => {
+    const prompt = buildOrchestratorPrompt();
+    expect(prompt).toContain('1) OUTPUT ROUTING STATUS');
+    expect(prompt).toContain(
+      'Before any delegation, output only a brief routing status update',
+    );
+    expect(prompt).toContain(
+      'Do NOT narrate internal debate, quote prompt rules back to the user, or explain alternative routes you rejected.',
+    );
+    expect(prompt).not.toContain('0) OUTPUT REASONING');
+  });
+
+  test('execution section uses clean sequential numbering', () => {
+    const prompt = buildOrchestratorPrompt();
+    expect(prompt).toContain('1) OUTPUT ROUTING STATUS');
+    expect(prompt).toContain('2) STEWARD BRIEF');
+    expect(prompt).toContain('3) CAPABILITY DISCOVERY (BLOCKING)');
+    expect(prompt).toContain('4) REQUIRED FIRST SPECIALIST');
+    expect(prompt).toContain('5) PLAN PRESENTATION');
+    expect(prompt).toContain('6) IMPLEMENTATION');
+    expect(prompt).toContain('7) PARALLEL WORK');
+    expect(prompt).toContain('8) VERIFICATION AND REPORTING');
+    expect(prompt).not.toContain('1.5) CAPABILITY DISCOVERY');
+    expect(prompt).not.toContain('2.5) PLAN PRESENTATION');
+  });
+
+  test('parallel delegation guidance uses fire_forget and keeps final validation with orchestrator', () => {
+    const prompt = buildOrchestratorPrompt();
+    expect(prompt).toContain(
+      'For actual parallel fan-out that must all finish before the next step, use `delegate_subagents(..., mode: "blocking")`.',
+    );
+    expect(prompt).toContain(
+      'For actual parallel fan-out that can continue in the background, use `delegate_subagent` or `delegate_subagents` with `mode: "fire_forget"`.',
+    );
+    expect(prompt).toContain('delegate_subagents');
+    expect(prompt).toContain(
+      'After all fire_forget fixers are collected, run the integrated validation pass yourself.',
+    );
+  });
+
+  test('forbids separate blocking delegate_subagent calls for intended concurrent work', () => {
+    const prompt = buildOrchestratorPrompt();
+    expect(prompt).toContain(
+      'Separate blocking calls are host-sequenced; use one `delegate_subagents` call instead.',
+    );
+    expect(prompt).toContain(
+      'When you need multiple independent read-only searches or analyses and all must finish before synthesis, batch them in one blocking `delegate_subagents` call.',
+    );
+    expect(prompt).toContain(
+      'The default behavior already waits once for completion; use `wait: false` only for a deliberate non-blocking probe.',
+    );
+  });
+
+  test('explorer overlap rule allows independent read-only searches on the same files', () => {
+    const prompt = buildOrchestratorPrompt();
+    expect(prompt).toContain(
+      'Read-only @explorer searches may overlap on the same files when the questions are independent.',
+    );
   });
 
   test('first_gate analysis gate references oracle', () => {
@@ -112,26 +233,23 @@ describe('buildOrchestratorPrompt', () => {
     expect(prompt).toContain('<mechanical_edit_exception>');
   });
 
-  test('prompt contains routing enforcement block with citations requirement', () => {
+  test('prompt references routing enforcement lookup instead of inlining it', () => {
     const prompt = buildOrchestratorPrompt();
-    expect(prompt).toContain('<routing_enforcement>');
-    expect(prompt).toContain('MUST be able to cite one of');
-    expect(prompt).toContain('NEVER delegate @fixer for: debugging, architecture');
+    expect(prompt).toContain(
+      'fetch `routing_enforcement` unless the task is obviously within the full mechanical edit exception',
+    );
+    expect(prompt).toContain('Fetch `routing_enforcement` before @fixer');
+    expect(prompt).not.toContain('Good routing examples:');
   });
 
-  test('prompt contains good routing examples showing correct first specialist', () => {
+  test('prompt keeps direct routing summary for first specialist selection', () => {
     const prompt = buildOrchestratorPrompt();
-    expect(prompt).toContain('"Fix why retry counter drifts" -> @oracle');
-    expect(prompt).toContain('"Restyle settings modal" -> @designer');
-    expect(prompt).toContain('"Rename getCwd to getCurrentWorkingDirectory in known file" -> @fixer');
-  });
-
-  test('prompt contains bad routing examples showing INCORRECT patterns', () => {
-    const prompt = buildOrchestratorPrompt();
-    expect(prompt).toContain('INCORRECT - DO NOT DO');
-    expect(prompt).toContain('"Fix why retry counter drifts" -> @fixer');
-    expect(prompt).toContain('"Design new plugin architecture" -> @fixer');
-    expect(prompt).toContain('"Restyle settings modal" -> @fixer');
+    expect(prompt).toContain(
+      'Fix request with any ambiguity, diagnosis, regression, or root-cause work: @oracle first',
+    );
+    expect(prompt).toContain(
+      'UI work detected: route to @designer FIRST per DESIGNER GATE in <first_gate>.',
+    );
   });
 
   test('prompt does NOT contain stale <first_gate> item references', () => {
@@ -140,30 +258,31 @@ describe('buildOrchestratorPrompt', () => {
     expect(prompt).not.toContain('<first_gate> 2');
   });
 
-  test('prompt contains mechanical_edit_exception block with all criteria', () => {
+  test('prompt references mechanical_edit_exception lookup instead of inlining criteria', () => {
     const prompt = buildOrchestratorPrompt();
-    expect(prompt).toContain('<mechanical_edit_exception>');
-    expect(prompt).toContain('Direct @fixer-first routing is allowed ONLY if ALL are true');
-    expect(prompt).toContain('When unsure, treat as non-mechanical and route to @oracle');
+    expect(prompt).toContain('Fetch `mechanical_edit_exception`');
+    expect(prompt).not.toContain(
+      'Direct @fixer-first routing is allowed ONLY if ALL are true',
+    );
   });
 
-  test('execution step 2 references mechanical_edit_exception not user-provided bypass', () => {
+  test('execution references the mechanical edit exception through lookup guidance', () => {
     const prompt = buildOrchestratorPrompt();
-    expect(prompt).toContain('and only if <mechanical_edit_exception> fully applies');
-    expect(prompt).not.toContain('or user-provided exact implementation');
-  });
-
-  test('execution mechanical edits paragraph references mechanical_edit_exception', () => {
-    const prompt = buildOrchestratorPrompt();
-    expect(prompt).toContain('@fixer low only when <mechanical_edit_exception> fully applies');
-    expect(prompt).toContain('User-provided exact implementation alone does NOT make a task mechanical');
+    expect(prompt).toContain('or the full mechanical edit exception');
+    expect(prompt).toContain(
+      'Fetch `mechanical_edit_exception` or `interpreter_protocol`',
+    );
   });
 
   test('constraints include strengthened routing prohibitions', () => {
     const prompt = buildOrchestratorPrompt();
-    expect(prompt).toContain('NEVER route planning, architecture, debugging, or regressions directly to @fixer');
+    expect(prompt).toContain(
+      'NEVER route planning, architecture, debugging, or regressions directly to @fixer',
+    );
     expect(prompt).toContain('NEVER route UI work directly to @fixer');
-    expect(prompt).toContain('If a task could be mechanical or diagnostic, treat it as diagnostic');
+    expect(prompt).toContain(
+      'If a task could be mechanical or diagnostic, treat it as diagnostic',
+    );
   });
 
   test('fix routing makes oracle the reasoning step before fixer', () => {
@@ -171,20 +290,18 @@ describe('buildOrchestratorPrompt', () => {
     expect(prompt).toContain(
       'Fix request with any ambiguity, diagnosis, regression, or root-cause work: @oracle first',
     );
-    expect(prompt).toContain(
-      "@fixer receives oracle's plan/artifact and implements; it is not the primary reasoning agent.",
-    );
+    expect(prompt).toContain('Fetch `routing_enforcement` before @fixer');
   });
 
-  test('injects oracle model names when provided', () => {
+  test('does not inline oracle model matrix even when models are provided', () => {
     const prompt = buildOrchestratorPrompt(
       'openai/gpt-5.5',
       'openai/gpt-5.5-pro',
     );
-    expect(prompt).toContain('openai/gpt-5.5-pro');
-    expect(prompt).toContain('openai/gpt-5.5');
-    expect(prompt).not.toContain('{{ORACLE_DEFAULT_MODEL}}');
-    expect(prompt).not.toContain('{{ORACLE_SMART_MODEL_OR_FALLBACK}}');
+    expect(prompt).toContain(
+      'get_orchestrator_prompt_section(section: "oracle_model_and_variant_selection")',
+    );
+    expect(prompt).not.toContain('Scenario -> model+variant:');
   });
 
   test('includes subagent model roster when provided', () => {
@@ -259,5 +376,25 @@ describe('buildOrchestratorPrompt', () => {
     const prompt = buildOrchestratorPrompt('openai/gpt-5', 'openai/gpt-5-pro');
     // Should be well under the ~10k token old size
     expect(prompt.length).toBeLessThan(36000);
+  });
+
+  test('does not inline detailed policy blocks that moved behind the lookup tool', () => {
+    const prompt = buildOrchestratorPrompt();
+    expect(prompt).not.toContain('STEWARDSHIP REQUIRED (MUST RUN FIRST):');
+    expect(prompt).not.toContain(
+      'User message includes images and task is not explicitly UI redesign/polish:',
+    );
+    expect(prompt).not.toContain(
+      'BEFORE delegating to any specialist subagent (@oracle, @designer, @librarian)',
+    );
+    expect(prompt).not.toContain('Preserve session context: use `session_id`');
+    expect(prompt).not.toContain(
+      "Prioritize evidence from delegated agents' <verification> output",
+    );
+    expect(prompt).not.toContain('Scenario -> model+variant:');
+    expect(prompt).not.toContain('When reporting final results to the user:');
+    expect(prompt).not.toContain(
+      'Lead with the answer, not the process (unless user asked for process).',
+    );
   });
 });

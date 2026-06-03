@@ -100,6 +100,11 @@ describe('usage-service', () => {
           name: 'nw-main',
           apiKey: 'nw-key',
         },
+        {
+          provider: 'deepseek',
+          name: 'ds-main',
+          apiKey: 'ds-key',
+        },
       ],
     });
 
@@ -110,6 +115,7 @@ describe('usage-service', () => {
         {
           'opencode-go': { type: 'api', key: 'go-key' },
           neuralwatt: { type: 'api', key: 'nw-key' },
+          deepseek: { type: 'api', key: 'ds-key' },
         },
         null,
         2,
@@ -122,11 +128,13 @@ describe('usage-service', () => {
 
     expect(active['opencode-go']).toBe('go-main');
     expect(active.neuralwatt).toBe('nw-main');
+    expect(active.deepseek).toBe('ds-main');
     const snapshot = readTuiSnapshot();
     expect(snapshot.activeSubscriptionByProvider['opencode-go']).toBe(
       'go-main',
     );
     expect(snapshot.activeSubscriptionByProvider.neuralwatt).toBe('nw-main');
+    expect(snapshot.activeSubscriptionByProvider.deepseek).toBe('ds-main');
   });
 
   test('failed account-file read does not poison next non-forced refresh', async () => {
@@ -198,5 +206,32 @@ describe('usage-service', () => {
       path: { id: 'neuralwatt' },
       body: { type: 'api', key: 'nw-main-key' },
     });
+  });
+
+  test('creates explicit sidebar error for faulty DeepSeek credentials', async () => {
+    writeSubscriptions({
+      version: 2,
+      accounts: [
+        {
+          provider: 'deepseek',
+          name: 'broken-deepseek',
+          apiKey: '',
+        },
+      ],
+    });
+
+    const service = createUsageService();
+    const entries = await service.refresh(true);
+    service.dispose();
+
+    expect(entries).toHaveLength(1);
+    expect(entries[0]?.accountName).toBe('broken-deepseek');
+    expect(entries[0]?.error).toContain('Missing DeepSeek API key');
+
+    const snapshot = readTuiSnapshot();
+    const usage = Object.values(snapshot.subscriptionUsage);
+    expect(usage).toHaveLength(1);
+    expect(usage[0]?.accountName).toBe('broken-deepseek');
+    expect(usage[0]?.error).toContain('Missing DeepSeek API key');
   });
 });

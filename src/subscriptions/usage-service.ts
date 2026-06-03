@@ -36,11 +36,13 @@ import {
   refreshCodexToken,
 } from './codex-device-auth';
 import { scrapeCodexQuota } from './codex-scraper';
+import { scrapeDeepSeekBalance } from './deepseek-scraper';
 import { scrapeNeuralwattQuota } from './neuralwatt-scraper';
 import { scrapeQuota } from './opencode-go-scraper';
 import { PROVIDERS, resolveProvider } from './provider';
 import type {
   CodexAccount,
+  DeepSeekAccount,
   NeuralwattAccount,
   OpenCodeGoAccount,
   SubscriptionProvider,
@@ -51,6 +53,19 @@ const SUBSCRIPTIONS_COMMAND = 'subscriptions';
 const DEFAULT_REFRESH_INTERVAL_MS = 60_000;
 const DEFAULT_PERIODIC_INTERVAL_MS = 600_000; // 10 minutes
 
+type OAuthAuthEntry = {
+  type: 'oauth';
+  access?: string;
+};
+
+type OAuthAuthBody = {
+  type: 'oauth';
+  access: string;
+  refresh: string;
+  expires: number;
+  accountId: string;
+};
+
 /** Classify an error from a scraper to produce a more descriptive message. */
 function formatScrapeError(reason: unknown): string {
   if (reason instanceof Error) {
@@ -60,6 +75,12 @@ function formatScrapeError(reason: unknown): string {
     return `Scrape failed: ${reason.message}`;
   }
   return `Scrape failed: ${String(reason)}`;
+}
+
+function getApiKeyFromStoredAccount(
+  account: OpenCodeGoAccount | NeuralwattAccount | DeepSeekAccount,
+): string {
+  return account.apiKey ?? '';
 }
 
 export class UsageService {
@@ -218,6 +239,24 @@ export class UsageService {
             );
             entry.accountName = account.name;
             return entry as SubscriptionUsageEntry;
+          } else if (account.provider === 'deepseek') {
+            if (!account.apiKey?.trim()) {
+              return {
+                provider: 'deepseek',
+                accountName: account.name,
+                fetchedAt: Date.now(),
+                is_available: false,
+                balance_infos: [],
+                error:
+                  'Missing DeepSeek API key. Re-add with /subscriptions add-deepseek.',
+              } as SubscriptionUsageEntry;
+            }
+            const entry = await scrapeDeepSeekBalance(
+              account.apiKey,
+              controller.signal,
+            );
+            entry.accountName = account.name;
+            return entry as SubscriptionUsageEntry;
           } else {
             // neuralwatt
             if (!account.apiKey?.trim()) {
@@ -312,7 +351,7 @@ export class UsageService {
       const entry = auth[provider];
       const key =
         entry?.type === 'oauth'
-          ? ((entry as any).access ?? '')
+          ? ((entry as OAuthAuthEntry).access ?? '')
           : (entry?.key ?? '');
       const match =
         typeof key === 'string' && key.length > 0
@@ -520,6 +559,59 @@ export class UsageService {
         break;
       }
 
+      case 'add-deepseek': {
+        const [_, name, ...keyParts] = parts;
+        const apiKey = keyParts.join(' ');
+        if (!name || !apiKey) {
+          output.parts.push(
+            createInternalAgentTextPart(
+              'Usage: /subscriptions add-deepseek <name> <api-key>\n' +
+                'Example: /subscriptions add-deepseek my-deepseek sk-...',
+            ),
+          );
+          return;
+        }
+        const nameValidation = validateAccountName(name);
+        if (!nameValidation.valid) {
+          output.parts.push(
+            createInternalAgentTextPart(
+              `❌ Invalid account name: ${nameValidation.error}`,
+            ),
+          );
+          return;
+        }
+        const account: StoredAccount = {
+          provider: 'deepseek',
+          name,
+          apiKey,
+        };
+        saveAccount(account);
+        // Auto-activate if no active account for this provider
+        {
+          const activeByProvider = this.syncActiveAccounts();
+          const pKey: string = account.provider;
+          if (!activeByProvider[pKey as SubscriptionProvider]) {
+            try {
+              const key = getApiKeyFromStoredAccount(account);
+              if (key) {
+                await this.client.auth.set({
+                  path: { id: pKey },
+                  body: { type: 'api', key },
+                });
+                this.syncActiveAccounts();
+              }
+            } catch {
+              // Non-fatal: account is saved but not activated
+            }
+          }
+        }
+        this.refresh(true).catch(() => {});
+        output.parts.push(
+          createInternalAgentTextPart(`✅ Added DeepSeek account "${name}".`),
+        );
+        break;
+      }
+
       case 'add-codex-device': {
         const [_, name] = parts;
         if (!name) {
@@ -576,15 +668,16 @@ export class UsageService {
                       const codexAcct = account as unknown as CodexAccount;
                       const key = codexAcct.accessToken ?? '';
                       if (key) {
+                        const oauthBody: OAuthAuthBody = {
+                          type: 'oauth',
+                          access: key,
+                          refresh: codexAcct.refreshToken ?? '',
+                          expires: codexAcct.expiresAt ?? 0,
+                          accountId: codexAcct.accountId ?? '',
+                        };
                         await this.client.auth.set({
                           path: { id: pKey },
-                          body: {
-                            type: 'oauth',
-                            access: key,
-                            refresh: codexAcct.refreshToken ?? '',
-                            expires: codexAcct.expiresAt ?? 0,
-                            accountId: codexAcct.accountId ?? '',
-                          } as any,
+                          body: oauthBody,
                         });
                       }
                     } else {
@@ -651,7 +744,7 @@ export class UsageService {
           output.parts.push(
             createInternalAgentTextPart(
               'Usage: /subscriptions remove <provider> <name>\n' +
-                'Providers: opencode-go, neuralwatt, codex\n' +
+                'Providers: opencode-go, neuralwatt, deepseek, codex\n' +
                 'Example: /subscriptions remove opencode-go personal',
             ),
           );
@@ -693,7 +786,7 @@ export class UsageService {
         if (accounts.length === 0) {
           output.parts.push(
             createInternalAgentTextPart(
-              'No accounts configured. Use /subscriptions add-opencode-go, /subscriptions add-neuralwatt, or /subscriptions add-codex-device to add one.',
+              'No accounts configured. Use /subscriptions add-opencode-go, /subscriptions add-neuralwatt, /subscriptions add-deepseek, or /subscriptions add-codex-device to add one.',
             ),
           );
           return;
@@ -705,9 +798,11 @@ export class UsageService {
           const providerLabel =
             acct.provider === 'opencode-go'
               ? 'OpenCode Go'
-              : acct.provider === 'codex'
-                ? 'Codex'
-                : 'Neuralwatt';
+              : acct.provider === 'deepseek'
+                ? 'DeepSeek'
+                : acct.provider === 'codex'
+                  ? 'Codex'
+                  : 'Neuralwatt';
           lines.push(`${star}${acct.name} (${providerLabel})`);
           if (acct.provider === 'opencode-go') {
             lines.push(`    workspace: ${acct.workspaceId}`);
@@ -736,6 +831,7 @@ export class UsageService {
           '  /subscriptions add-opencode-go <name> <workspace-id> <auth-cookie>',
         );
         lines.push('  /subscriptions add-neuralwatt <name> <api-key>');
+        lines.push('  /subscriptions add-deepseek <name> <api-key>');
         lines.push('  /subscriptions add-codex-device <name>');
         lines.push('  /subscriptions remove <provider> <name>');
         lines.push('  /subscriptions switch <provider> <name>');
@@ -752,7 +848,7 @@ export class UsageService {
           output.parts.push(
             createInternalAgentTextPart(
               'Usage: /subscriptions switch <provider> <name>\n' +
-                'Providers: opencode-go, neuralwatt, codex\n' +
+                'Providers: opencode-go, neuralwatt, deepseek, codex\n' +
                 'Example: /subscriptions switch opencode-go personal',
             ),
           );
@@ -783,7 +879,11 @@ export class UsageService {
           if (!account.apiKey) {
             output.parts.push(
               createInternalAgentTextPart(
-                `Account "${name}" has no API key set. Re-add with /subscriptions add-opencode-go <name> <workspace-id> <cookie>.`,
+                account.provider === 'opencode-go'
+                  ? `Account "${name}" has no API key set. Re-add with /subscriptions add-opencode-go <name> <workspace-id> <cookie>.`
+                  : account.provider === 'deepseek'
+                    ? `Account "${name}" has no API key set. Re-add with /subscriptions add-deepseek <name> <api-key>.`
+                    : `Account "${name}" has no API key set. Re-add with /subscriptions add-neuralwatt <name> <api-key>.`,
               ),
             );
             return;
@@ -810,15 +910,16 @@ export class UsageService {
                 saveAccount({ ...codexAccount, accountId: decodedId });
               }
             }
+            const oauthBody: OAuthAuthBody = {
+              type: 'oauth',
+              access: codexAccount.accessToken,
+              refresh: codexAccount.refreshToken ?? '',
+              expires: codexAccount.expiresAt ?? 0,
+              accountId: codexAccount.accountId ?? '',
+            };
             await this.client.auth.set({
               path: { id: account.provider },
-              body: {
-                type: 'oauth',
-                access: codexAccount.accessToken,
-                refresh: codexAccount.refreshToken ?? '',
-                expires: codexAccount.expiresAt ?? 0,
-                accountId: codexAccount.accountId ?? '',
-              } as any,
+              body: oauthBody,
             });
           } else {
             await this.client.auth.set({
@@ -869,6 +970,7 @@ export class UsageService {
               'Commands:\n' +
               '  /subscriptions add-opencode-go <name> <workspace-id> <auth-cookie>   Add an OpenCode Go account\n' +
               '  /subscriptions add-neuralwatt <name> <api-key>                       Add a Neuralwatt account\n' +
+              '  /subscriptions add-deepseek <name> <api-key>                         Add a DeepSeek account\n' +
               '  /subscriptions add-codex-device <name>                               Add a Codex account (device auth)\n' +
               '  /subscriptions remove <provider> <name>                              Remove an account\n' +
               '  /subscriptions switch <provider> <name>                              Switch active account for provider\n' +
@@ -897,7 +999,7 @@ export class UsageService {
         SUBSCRIPTIONS_COMMAND
       ] = {
         template:
-          'Manage subscription accounts (add-opencode-go, add-neuralwatt, add-codex-device, remove, list, switch, refresh)',
+          'Manage subscription accounts (add-opencode-go, add-neuralwatt, add-deepseek, add-codex-device, remove, list, switch, refresh)',
         description:
           'Add, remove, list, switch, or refresh subscription accounts for usage tracking in the sidebar',
       };

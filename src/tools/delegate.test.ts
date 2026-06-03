@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import type { PluginConfig } from '../config';
-import { resolveDelegatedAgentConfig } from './delegate';
+import { createDelegateTools, resolveDelegatedAgentConfig } from './delegate';
 
 describe('resolveDelegatedAgentConfig', () => {
   test('uses explicit requested model over config', () => {
@@ -47,5 +47,113 @@ describe('resolveDelegatedAgentConfig', () => {
 
     expect(resolved.model).toBe('alias/explorer-model');
     expect(resolved.variant).toBe('medium');
+  });
+});
+
+describe('createDelegateTools agent normalization', () => {
+  function createClient() {
+    return {
+      session: {
+        create: async () => ({ data: { id: 'child-1' } }),
+        prompt: async ({ body }: { body: { agent: string } }) => {
+          return body.agent;
+        },
+        messages: async () => ({
+          data: [
+            {
+              info: { role: 'assistant' },
+              parts: [{ type: 'text', text: '<summary>done</summary>' }],
+            },
+          ],
+        }),
+        abort: async () => undefined,
+      },
+    };
+  }
+
+  function createArtifactStore() {
+    return {
+      formatForDelegation: () => '',
+      seedArtifact: () => ({
+        artifactPath: '.opencode-dux/designer/file.md',
+        indexPath: '.opencode-dux/orchestrator/index.md',
+      }),
+      appendTurn: () => ({
+        artifactPath: '.opencode-dux/designer/file.md',
+        indexPath: '.opencode-dux/orchestrator/index.md',
+      }),
+      markStatus: () => undefined,
+      getSessionInfo: () => undefined,
+    };
+  }
+
+  test('normalizes @-prefixed agent names before delegation', async () => {
+    const tools = createDelegateTools(
+      {
+        client: createClient() as never,
+        directory: '/tmp/test',
+      },
+      {
+        agents: {
+          designer: { model: 'test/designer' },
+        },
+      },
+      undefined,
+      createArtifactStore() as never,
+    );
+
+    const result = await (
+      tools.delegate_subagent as {
+        execute: (
+          args: Record<string, unknown>,
+          context: { sessionID: string },
+        ) => Promise<string>;
+      }
+    ).execute(
+      {
+        agent: '@designer',
+        prompt: 'route ui work',
+        variant: 'medium',
+      },
+      { sessionID: 'parent-1' },
+    );
+
+    expect(result).toContain('**designer**');
+    expect(result).not.toContain('Unknown subagent');
+  });
+
+  test('resolves displayName aliases before delegation', async () => {
+    const tools = createDelegateTools(
+      {
+        client: createClient() as never,
+        directory: '/tmp/test',
+      },
+      {
+        agents: {
+          designer: { model: 'test/designer', displayName: 'build' },
+        },
+      },
+      undefined,
+      createArtifactStore() as never,
+    );
+
+    const result = await (
+      tools.delegate_subagent as {
+        execute: (
+          args: Record<string, unknown>,
+          context: { sessionID: string },
+        ) => Promise<string>;
+      }
+    ).execute(
+      {
+        agent: '@build',
+        prompt: 'route ui work',
+        variant: 'medium',
+      },
+      { sessionID: 'parent-1' },
+    );
+
+    expect(result).toContain('**designer**');
+    expect(result).not.toContain('Unknown subagent');
   });
 });

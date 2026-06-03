@@ -162,3 +162,300 @@ describe('HandoffArtifactStore', () => {
     expect(fs.existsSync(outsidePath)).toBe(true);
   });
 });
+
+describe('HandoffArtifactStore - selectRelevantArtifacts', () => {
+  function setupStore(now?: Date) {
+    const dir = makeTempDir();
+    const store = new HandoffArtifactStore(dir, {
+      now: () => now ?? new Date('2026-06-02T03:04:05.000Z'),
+    });
+    return { dir, store };
+  }
+
+  function seed(
+    store: HandoffArtifactStore,
+    overrides: {
+      agent: 'oracle' | 'fixer' | 'explorer' | 'designer' | 'steward';
+      childSessionId: string;
+      promptSequence: number;
+      branchRevisionId?: string;
+    },
+  ) {
+    store.seedArtifact({
+      agent: overrides.agent,
+      childSessionId: overrides.childSessionId,
+      parentSessionId: 'parent-1',
+      model: 'test/model',
+      mode: 'blocking',
+      purpose: overrides.childSessionId,
+      promptText: overrides.childSessionId,
+      promptSequence: overrides.promptSequence,
+      branchRevisionId: overrides.branchRevisionId ?? 'v0',
+    });
+    store.markStatus(overrides.childSessionId, 'completed');
+  }
+
+  test('filters by branch revision', () => {
+    const { store } = setupStore();
+    seed(store, { agent: 'oracle', childSessionId: 'a1', promptSequence: 1, branchRevisionId: 'v0' });
+    seed(store, { agent: 'fixer', childSessionId: 'a2', promptSequence: 2, branchRevisionId: 'v0' });
+    seed(store, { agent: 'oracle', childSessionId: 'a3', promptSequence: 1, branchRevisionId: 'v1' });
+
+    // Default branch is v0
+    const v0Artifacts = store.selectRelevantArtifacts('parent-1', {
+      branchRevisionId: 'v0',
+      promptSequenceCutoff: 10,
+      cap: 10,
+    });
+    expect(v0Artifacts.map((a) => a.sessionId).sort()).toEqual(['a1', 'a2']);
+
+    // Branch v1
+    const v1Artifacts = store.selectRelevantArtifacts('parent-1', {
+      branchRevisionId: 'v1',
+      promptSequenceCutoff: 10,
+      cap: 10,
+    });
+    expect(v1Artifacts.map((a) => a.sessionId)).toEqual(['a3']);
+  });
+
+  test('filters by prompt sequence cutoff', () => {
+    const { store } = setupStore();
+    seed(store, { agent: 'oracle', childSessionId: 'p1', promptSequence: 1 });
+    seed(store, { agent: 'oracle', childSessionId: 'p2', promptSequence: 2 });
+    seed(store, { agent: 'oracle', childSessionId: 'p3', promptSequence: 3 });
+
+    const afterCutoff = store.selectRelevantArtifacts('parent-1', {
+      promptSequenceCutoff: 2,
+      cap: 10,
+    });
+    expect(afterCutoff.map((a) => a.sessionId).sort()).toEqual(['p1', 'p2']);
+  });
+
+  test('prefers explicit paths', () => {
+    const { store } = setupStore();
+    seed(store, { agent: 'oracle', childSessionId: 'explicit-1', promptSequence: 3 });
+    seed(store, { agent: 'fixer', childSessionId: 'recent-1', promptSequence: 5 });
+
+    const explicitPath = store.getArtifactPath('explicit-1');
+
+    const artifacts = store.selectRelevantArtifacts('parent-1', {
+      explicitPaths: explicitPath ? [explicitPath] : [],
+      cap: 5,
+    });
+    // Explicit path should be first
+    expect(artifacts.length).toBeGreaterThanOrEqual(2);
+    expect(artifacts[0].sessionId).toBe('explicit-1');
+  });
+
+  test('prefers prerequisite agents for target', () => {
+    const { store } = setupStore();
+    seed(store, { agent: 'explorer', childSessionId: 'exp-1', promptSequence: 1 });
+    seed(store, { agent: 'fixer', childSessionId: 'fix-1', promptSequence: 2 });
+    seed(store, { agent: 'oracle', childSessionId: 'ora-1', promptSequence: 3 });
+
+    // For fixer target, oracle should be preferred over explorer
+    const artifacts = store.selectRelevantArtifacts('parent-1', {
+      targetAgent: 'fixer',
+      cap: 10,
+    });
+    const oracleIdx = artifacts.findIndex((a) => a.agent === 'oracle');
+    const explorerIdx = artifacts.findIndex((a) => a.agent === 'explorer');
+    // Oracle (prerequisite for fixer) should appear before explorer (not a prerequisite)
+    expect(oracleIdx).toBeLessThan(explorerIdx);
+  });
+
+  test('caps results', () => {
+    const { store } = setupStore();
+    for (let i = 1; i <= 10; i++) {
+      seed(store, { agent: 'oracle', childSessionId: `cap-${i}`, promptSequence: i });
+    }
+
+    const defaultCap = store.selectRelevantArtifacts('parent-1');
+    expect(defaultCap.length).toBeLessThanOrEqual(5);
+
+    const promptContextCap = store.selectRelevantArtifacts('parent-1', {
+      context: 'prompt',
+    });
+    expect(promptContextCap.length).toBeLessThanOrEqual(3);
+
+    const explicitCap = store.selectRelevantArtifacts('parent-1', { cap: 2 });
+    expect(explicitCap.length).toBe(2);
+  });
+
+  test('excludes open status by default', () => {
+    const { store } = setupStore();
+    store.seedArtifact({
+      agent: 'oracle',
+      childSessionId: 'open-1',
+      parentSessionId: 'parent-1',
+      model: 'test/model',
+      mode: 'blocking',
+      purpose: 'open artifact',
+      promptText: 'open artifact',
+    });
+    // Don't mark status - stays 'open'
+    seed(store, { agent: 'oracle', childSessionId: 'done-1', promptSequence: 1 });
+
+    const artifacts = store.selectRelevantArtifacts('parent-1', { cap: 10 });
+    expect(artifacts.some((a) => a.sessionId === 'open-1')).toBe(false);
+    expect(artifacts.some((a) => a.sessionId === 'done-1')).toBe(true);
+  });
+
+  test('includes legacy artifacts without branch revision', () => {
+    const { store } = setupStore();
+    // Legacy artifact (no branchRevisionId, no promptSequence)
+    store.seedArtifact({
+      agent: 'oracle',
+      childSessionId: 'legacy-1',
+      parentSessionId: 'parent-1',
+      model: 'test/model',
+      mode: 'blocking',
+      purpose: 'legacy',
+      promptText: 'legacy',
+    });
+    store.markStatus('legacy-1', 'completed');
+
+    // New artifact on branch v2
+    seed(store, { agent: 'oracle', childSessionId: 'new-1', promptSequence: 1, branchRevisionId: 'v2' });
+
+    const artifacts = store.selectRelevantArtifacts('parent-1', {
+      branchRevisionId: 'v2',
+      cap: 10,
+    });
+    const ids = artifacts.map((a) => a.sessionId).sort();
+    expect(ids).toContain('legacy-1');
+    expect(ids).toContain('new-1');
+  });
+});
+
+describe('HandoffArtifactStore - timeline tracking', () => {
+  test('detectRewind creates new branch revision', () => {
+    const dir = makeTempDir();
+    const store = new HandoffArtifactStore(dir, {
+      now: () => new Date('2026-06-02T03:04:05.000Z'),
+    });
+
+    expect(store.getTimeline().branchRevisionId).toBe('v0');
+
+    // First call, no rewind
+    const result1 = store.detectRewind(5);
+    expect(result1).toBe(false);
+    expect(store.getTimeline().branchRevisionId).toBe('v0');
+
+    // Count increases, no rewind
+    const result2 = store.detectRewind(7);
+    expect(result2).toBe(false);
+    expect(store.getTimeline().branchRevisionId).toBe('v0');
+
+    // Count decreases — rewind detected
+    const result3 = store.detectRewind(3);
+    expect(result3).toBe(true);
+    expect(store.getTimeline().branchRevisionId).toBe('v1');
+
+    // Another rewind
+    const result4 = store.detectRewind(1);
+    expect(result4).toBe(true);
+    expect(store.getTimeline().branchRevisionId).toBe('v2');
+  });
+
+  test('incrementSequence advances prompt sequence', () => {
+    const dir = makeTempDir();
+    const store = new HandoffArtifactStore(dir, {
+      now: () => new Date('2026-06-02T03:04:05.000Z'),
+    });
+
+    expect(store.getTimeline().promptSequence).toBe(0);
+
+    const seq1 = store.incrementSequence();
+    expect(seq1).toBe(1);
+    expect(store.getTimeline().promptSequence).toBe(1);
+
+    const seq2 = store.incrementSequence();
+    expect(seq2).toBe(2);
+    expect(store.getTimeline().promptSequence).toBe(2);
+  });
+});
+
+describe('HandoffArtifactStore - formatForDelegation with relevance', () => {
+  test('formatForDelegation only includes relevant artifacts', () => {
+    const dir = makeTempDir();
+    const now = new Date('2026-06-02T03:04:05.000Z');
+    const store = new HandoffArtifactStore(dir, { now: () => now });
+
+    // Seed on branch v0, prompt sequence 1 — pass explicit timeline fields
+    store.seedArtifact({
+      agent: 'oracle',
+      childSessionId: 'child-1',
+      parentSessionId: 'parent-1',
+      model: 'test/model',
+      mode: 'blocking',
+      purpose: 'Analysis',
+      promptText: 'Analysis',
+      branchRevisionId: 'v0',
+      promptSequence: 1,
+    });
+    store.markStatus('child-1', 'completed');
+
+    // Switch to v1 (simulating rewind)
+    // Advance the store timeline so formatForDelegation uses the active branch
+    store.setTimeline(2, 'v1');
+    store.seedArtifact({
+      agent: 'fixer',
+      childSessionId: 'child-2',
+      parentSessionId: 'parent-1',
+      model: 'test/model',
+      mode: 'blocking',
+      purpose: 'Fix',
+      promptText: 'Fix',
+      branchRevisionId: 'v1',
+      promptSequence: 2,
+    });
+    store.markStatus('child-2', 'completed');
+
+    // Format with v1 timeline — should NOT include child-1 (from v0)
+    const formatted = store.formatForDelegation('parent-1', { targetAgent: 'fixer' });
+    expect(formatted).toBeDefined();
+    expect(formatted).toContain('child-2');
+    expect(formatted).not.toContain('child-1');
+  });
+
+  test('formatForPrompt only includes relevant artifacts', () => {
+    const dir = makeTempDir();
+    const now = new Date('2026-06-02T03:04:05.000Z');
+    const store = new HandoffArtifactStore(dir, { now: () => now });
+
+    store.seedArtifact({
+      agent: 'oracle',
+      childSessionId: 'child-a',
+      parentSessionId: 'parent-1',
+      model: 'test/model',
+      mode: 'blocking',
+      purpose: 'First analysis',
+      promptText: 'First analysis',
+      branchRevisionId: 'v0',
+      promptSequence: 1,
+    });
+    store.markStatus('child-a', 'completed');
+
+    // New branch revision — advance store timeline so formatForPrompt picks it up
+    store.setTimeline(2, 'v1');
+    store.seedArtifact({
+      agent: 'oracle',
+      childSessionId: 'child-b',
+      parentSessionId: 'parent-1',
+      model: 'test/model',
+      mode: 'blocking',
+      purpose: 'Second analysis',
+      promptText: 'Second analysis',
+      branchRevisionId: 'v1',
+      promptSequence: 2,
+    });
+    store.markStatus('child-b', 'completed');
+
+    // formatForPrompt uses current timeline (v1)
+    const recall = store.formatForPrompt('parent-1');
+    expect(recall).toBeDefined();
+    expect(recall).toContain('child-b');
+    expect(recall).not.toContain('child-a');
+  });
+});

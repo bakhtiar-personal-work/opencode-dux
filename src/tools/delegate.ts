@@ -7,9 +7,10 @@ import {
   recordDelegatedSubagentSession,
   recordSessionDone,
 } from '../tui-state';
+import { resolveRuntimeAgentName } from '../utils';
 import {
   extractArtifactPathsFromPrompt,
-  HandoffArtifactStore,
+  type HandoffArtifactStore,
   summarizeArtifactOutput,
 } from '../utils/handoff-artifacts';
 import {
@@ -25,33 +26,35 @@ import {
 import type { SubagentDepthTracker } from '../utils/subagent-depth';
 
 /**
- * Mutex for serializing blocking delegate_subagent calls.
- * OpenCode runs multiple tool calls from the same LLM turn in parallel.
- * This ensures steward->oracle->fixer ordering at the runtime level.
- * Fire-forget calls bypass the mutex and run in parallel as intended.
+ * Scoped mutex for serializing only the blocking subagent cases that mutate the
+ * shared workspace or must remain single-threaded per parent session.
  */
-class BlockingMutex {
-  private current: Promise<void> | null = null;
-  private resolveCurrent: (() => void) | null = null;
+class ScopedBlockingMutex {
+  private currentByKey = new Map<string, Promise<void>>();
+  private resolveByKey = new Map<string, () => void>();
 
-  async acquire(): Promise<void> {
-    while (this.current) {
-      await this.current;
+  async acquire(key: string): Promise<void> {
+    while (this.currentByKey.has(key)) {
+      await this.currentByKey.get(key);
     }
-    this.current = new Promise<void>((resolve) => {
-      this.resolveCurrent = resolve;
-    });
+
+    this.currentByKey.set(
+      key,
+      new Promise<void>((resolve) => {
+        this.resolveByKey.set(key, resolve);
+      }),
+    );
   }
 
-  release(): void {
-    const resolve = this.resolveCurrent;
-    this.current = null;
-    this.resolveCurrent = null;
+  release(key: string): void {
+    const resolve = this.resolveByKey.get(key);
+    this.currentByKey.delete(key);
+    this.resolveByKey.delete(key);
     resolve?.();
   }
 }
 
-const blockingMutex = new BlockingMutex();
+const blockingMutex = new ScopedBlockingMutex();
 
 /**
  * When true, blocking `delegate_subagent` keeps the child session open and
@@ -63,6 +66,13 @@ export function subagentOutputRequestsUserHandoff(text: string): boolean {
 
 type OpencodeClient = import('@opencode-ai/plugin').PluginInput['client'];
 type SubagentRuntimeName = Exclude<AgentName, 'orchestrator'>;
+type DelegationTaskInput = {
+  agent: string;
+  prompt: string;
+  variant: (typeof VARIANT_OPTIONS)[number];
+  model?: string;
+  continue_session_id?: string;
+};
 
 const VARIANT_OPTIONS = ['low', 'medium', 'high', 'max'] as const;
 const MODE_OPTIONS = ['blocking', 'fire_forget'] as const;
@@ -71,6 +81,135 @@ const INLINE_SECTION_TAGS_BY_AGENT = {
   designer: ['design_plan', 'implementation_notes'],
   fixer: ['summary', 'verification'],
 } as const;
+const SERIAL_BLOCKING_AGENTS = new Set<SubagentRuntimeName>([
+  'fixer',
+  'steward',
+]);
+
+const PARALLEL_FIXER_PROTOCOL_BLOCK = `<parallel_fixer_batch>
+This fixer run is part of a parallel implementation batch.
+- Implement ONLY the assigned scope. Assume sibling fixer sessions may be editing other files at the same time.
+- Do NOT run repo-wide, integration, or end-to-end validation that can race sibling fixer sessions.
+- Prefer the smallest local sanity check that is safe for your scoped files.
+- In <verification>, explicitly state what you verified locally and that final integrated validation is deferred to the orchestrator after all fixer sessions are collected.
+</parallel_fixer_batch>`;
+const BLOCKING_FIXER_BATCH_WINDOW_MS = 75;
+const FIRE_FORGET_COMPLETION_TIMEOUT_MS = 15 * 60 * 1000;
+const COLLECT_RESULT_RETRY_DELAY_MS = 200;
+const COLLECT_RESULT_MAX_RETRIES = 5;
+
+type CompletionTracker = {
+  promise: Promise<void>;
+  resolve: () => void;
+  terminal: boolean;
+};
+
+type PendingBlockingFixerRequest = {
+  args: DelegationTaskInput & {
+    mode?: 'blocking' | 'fire_forget';
+  };
+  resolve: (result: string) => void;
+  reject: (error: unknown) => void;
+};
+
+type PendingBlockingFixerBatch = {
+  requests: PendingBlockingFixerRequest[];
+  timer?: ReturnType<typeof setTimeout>;
+  flushing: boolean;
+};
+
+const fireForgetCompletionTrackers = new Map<string, CompletionTracker>();
+
+function isTerminalSessionStatus(statusType: string | undefined): boolean {
+  return (
+    statusType === 'idle' ||
+    statusType === 'completed' ||
+    statusType === 'error'
+  );
+}
+
+function ensureFireForgetCompletionTracker(
+  sessionId: string,
+): CompletionTracker {
+  const existing = fireForgetCompletionTrackers.get(sessionId);
+  if (existing) {
+    return existing;
+  }
+
+  let resolvePromise = () => {};
+  const tracker: CompletionTracker = {
+    promise: new Promise<void>((resolve) => {
+      resolvePromise = resolve;
+    }),
+    resolve: () => {
+      tracker.terminal = true;
+      resolvePromise();
+    },
+    terminal: false,
+  };
+  fireForgetCompletionTrackers.set(sessionId, tracker);
+  return tracker;
+}
+
+function clearFireForgetCompletionTracker(sessionId: string): void {
+  fireForgetCompletionTrackers.delete(sessionId);
+}
+
+export function notifyDelegatedSessionStatus(
+  sessionId: string,
+  statusType: string | undefined,
+): void {
+  if (!isTerminalSessionStatus(statusType)) {
+    return;
+  }
+
+  const tracker = fireForgetCompletionTrackers.get(sessionId);
+  if (!tracker || tracker.terminal) {
+    return;
+  }
+  tracker.resolve();
+}
+
+export function notifyDelegatedSessionDeleted(sessionId: string): void {
+  const tracker = fireForgetCompletionTrackers.get(sessionId);
+  if (!tracker || tracker.terminal) {
+    return;
+  }
+  tracker.resolve();
+}
+
+async function waitForFireForgetCompletion(
+  sessionId: string,
+  timeoutMs: number,
+): Promise<boolean> {
+  const tracker = fireForgetCompletionTrackers.get(sessionId);
+  if (!tracker) {
+    return false;
+  }
+  if (tracker.terminal) {
+    return true;
+  }
+
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([
+      tracker.promise,
+      new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timer) {
+      clearTimeout(timer);
+    }
+  }
+
+  return tracker.terminal;
+}
+
+async function delay(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 function extractXmlSection(text: string, tagName: string): string | undefined {
   const match = text.match(
@@ -165,6 +304,65 @@ function buildCompactEnvelope(input: {
   return lines.join('\n');
 }
 
+async function extractAssistantTextAfterCompletionSignal(
+  client: OpencodeClient,
+  sessionId: string,
+  workspaceDirectory: string,
+): Promise<{ text: string; empty: boolean }> {
+  let result = await extractSessionResult(client, sessionId, {
+    includeReasoning: false,
+    directory: workspaceDirectory,
+  });
+
+  for (
+    let attempt = 0;
+    attempt < COLLECT_RESULT_MAX_RETRIES && result.empty;
+    attempt++
+  ) {
+    await delay(COLLECT_RESULT_RETRY_DELAY_MS);
+    result = await extractSessionResult(client, sessionId, {
+      includeReasoning: false,
+      directory: workspaceDirectory,
+    });
+  }
+
+  if (result.empty) {
+    result = await extractSessionResult(client, sessionId, {
+      includeReasoning: true,
+      directory: workspaceDirectory,
+    });
+  }
+
+  return result;
+}
+
+function buildBatchEnvelope(
+  mode: 'blocking' | 'fire_forget',
+  taskCount: number,
+  results: string[],
+): string {
+  return [
+    `## Delegation Batch`,
+    `- Mode: ${mode}`,
+    `- Tasks: ${taskCount}`,
+    '',
+    ...results.flatMap((result, index) =>
+      index === 0 ? [result] : ['', result],
+    ),
+  ].join('\n');
+}
+
+function buildScopedBlockingKey(
+  parentSessionId: string,
+  agentName: SubagentRuntimeName,
+): string | undefined {
+  if (!SERIAL_BLOCKING_AGENTS.has(agentName)) {
+    return undefined;
+  }
+
+  return `${parentSessionId}:${agentName}`;
+}
+
 export function resolveDelegatedAgentConfig(
   config: PluginConfig | undefined,
   agentName: string,
@@ -195,6 +393,36 @@ export function createDelegateTools(
   const subagentOptions: readonly string[] = [
     ...ALL_AGENT_NAMES.filter((name) => name !== 'orchestrator'),
   ];
+  const batchTaskSchema = tool.schema.object({
+    agent: tool.schema.string().describe('Target specialist subagent'),
+    prompt: tool.schema
+      .string()
+      .describe('Detailed task description for the subagent'),
+    variant: tool.schema
+      .enum(VARIANT_OPTIONS)
+      .describe(
+        'Reasoning depth: low (simple), medium (typical), high (complex), max (critical)',
+      ),
+    model: tool.schema
+      .string()
+      .optional()
+      .describe(
+        'Override the subagent model. Pass for @oracle when you selected a specific model (flash vs pro).',
+      ),
+    continue_session_id: tool.schema
+      .string()
+      .optional()
+      .describe(
+        'Blocking only: resume the same child session after <needs_user>.',
+      ),
+  });
+  type DelegationRequest = DelegationTaskInput & {
+    mode?: 'blocking' | 'fire_forget';
+  };
+  const pendingBlockingFixerBatches = new Map<
+    string,
+    PendingBlockingFixerBatch
+  >();
 
   function recordSessionTree(
     sessionId: string,
@@ -337,6 +565,311 @@ export function createDelegateTools(
     }
   }
 
+  async function flushPendingBlockingFixerBatch(
+    parentSessionId: string,
+  ): Promise<void> {
+    const batch = pendingBlockingFixerBatches.get(parentSessionId);
+    if (!batch || batch.flushing) {
+      return;
+    }
+
+    batch.flushing = true;
+    if (batch.timer) {
+      clearTimeout(batch.timer);
+    }
+    pendingBlockingFixerBatches.delete(parentSessionId);
+
+    const requests = batch.requests.splice(0);
+    const parallelFixerBatch = requests.length > 1;
+
+    await Promise.all(
+      requests.map(async (request) => {
+        try {
+          const result = await executeDelegationRequest(
+            request.args,
+            parentSessionId,
+            { parallelBlockingFixerBatch: parallelFixerBatch },
+          );
+          request.resolve(result);
+        } catch (error) {
+          request.reject(error);
+        }
+      }),
+    );
+  }
+
+  function queueBlockingFixerRequest(
+    args: DelegationRequest,
+    parentSessionId: string,
+  ): Promise<string> {
+    return new Promise<string>((resolve, reject) => {
+      const existingBatch = pendingBlockingFixerBatches.get(parentSessionId);
+      if (existingBatch) {
+        existingBatch.requests.push({ args, resolve, reject });
+        return;
+      }
+
+      const batch: PendingBlockingFixerBatch = {
+        requests: [{ args, resolve, reject }],
+        flushing: false,
+      };
+      batch.timer = setTimeout(() => {
+        flushPendingBlockingFixerBatch(parentSessionId).catch((error) => {
+          for (const request of batch.requests.splice(0)) {
+            request.reject(error);
+          }
+        });
+      }, BLOCKING_FIXER_BATCH_WINDOW_MS);
+      pendingBlockingFixerBatches.set(parentSessionId, batch);
+    });
+  }
+
+  async function executeDelegationRequest(
+    args: DelegationRequest,
+    parentSessionId: string,
+    options?: { parallelBlockingFixerBatch?: boolean },
+  ): Promise<string> {
+    const normalizedAgentName = resolveRuntimeAgentName(
+      config,
+      String(args.agent),
+    );
+    if (
+      normalizedAgentName === 'orchestrator' ||
+      !subagentOptions.includes(normalizedAgentName)
+    ) {
+      return `Error: Unknown subagent "${String(args.agent)}". Use one of: ${subagentOptions.join(', ')}`;
+    }
+    const agentName = normalizedAgentName as SubagentRuntimeName;
+    const variant = args.variant;
+    const mode = args.mode ?? 'blocking';
+    const continueSessionId = args.continue_session_id?.trim() || undefined;
+    const parallelBlockingFixerBatch =
+      options?.parallelBlockingFixerBatch === true;
+
+    if (
+      agentName === 'fixer' &&
+      mode === 'blocking' &&
+      !continueSessionId &&
+      !parallelBlockingFixerBatch
+    ) {
+      return queueBlockingFixerRequest(args, parentSessionId);
+    }
+
+    if (continueSessionId && mode === 'fire_forget') {
+      return 'Error: continue_session_id is only valid for blocking delegate_subagent (omit mode or mode: blocking).';
+    }
+
+    if (agentName === 'steward' && mode === 'fire_forget') {
+      return 'Error: @steward must always run in blocking mode. Its repo rule citations are required input for all downstream agents (@oracle, @fixer, @designer). Use mode: "blocking" (or omit mode).';
+    }
+
+    const resolvedConfig = resolveDelegatedAgentConfig(config, agentName, {
+      model: args.model,
+      variant,
+    });
+    const effectiveVariant = resolvedConfig.variant;
+    const model = resolvedConfig.model;
+
+    if (!model) {
+      return `Error: No model configured for agent "${agentName}"`;
+    }
+
+    const referencedArtifactPaths = extractArtifactPathsFromPrompt(args.prompt);
+    const upstreamArtifactContext = artifactStore.formatForDelegation(
+      parentSessionId,
+      {
+        excludeChildSessionId: continueSessionId || undefined,
+        targetAgent: agentName,
+        explicitPaths: referencedArtifactPaths,
+      },
+    );
+    const promptPreamble: string[] = [];
+    if (
+      agentName === 'fixer' &&
+      (mode === 'fire_forget' || parallelBlockingFixerBatch)
+    ) {
+      promptPreamble.push(PARALLEL_FIXER_PROTOCOL_BLOCK);
+    }
+    if (upstreamArtifactContext) {
+      promptPreamble.push(upstreamArtifactContext);
+    }
+    promptPreamble.push(args.prompt);
+    const effectivePrompt = promptPreamble.join('\n\n');
+
+    let frameImageParts: PromptBodyPart[] = [];
+    if (agentName === 'interpreter' && !continueSessionId) {
+      const rawFrameParts = await extractLatestUserImageParts(
+        ctx.client,
+        parentSessionId,
+        directory,
+      );
+      frameImageParts = normalizeImagePartsForChildPrompt(
+        rawFrameParts,
+        directory,
+      );
+
+      if (rawFrameParts.length > 0 && frameImageParts.length === 0) {
+        return (
+          'Error: delegate_subagent(agent: "interpreter") saw image-related parts on the latest user message but could not build a child prompt ' +
+          '(no usable `url` and no resolvable `source.path` for a file attachment). ' +
+          'Try saving the image into the workspace and attaching it as a file, or check OpenCode attachment storage.'
+        );
+      }
+
+      if (frameImageParts.length === 0) {
+        return (
+          'Error: delegate_subagent(agent: "interpreter") found no image attachment parts on the latest user message. ' +
+          'OpenCode stores screenshots as parts with type `file` and mime `image/*` (not type `image`). ' +
+          'If the UI shows placeholders like [Image N] or “img clipboard” in text but this error appears, the session API did not receive file parts - try attaching through the image control, or check OpenCode/provider issues for clipboard vs file attachment.'
+        );
+      }
+    }
+
+    function partsForPrompt(promptText: string): PromptBodyPart[] {
+      return frameImageParts.length > 0
+        ? [...frameImageParts, { type: 'text', text: promptText }]
+        : [{ type: 'text', text: promptText }];
+    }
+
+    if (mode === 'fire_forget') {
+      const modelRef = parseModelReference(model);
+      if (!modelRef) {
+        return `Error: Invalid model format: ${model}`;
+      }
+
+      try {
+        const session = await ctx.client.session.create({
+          body: {
+            parentID: parentSessionId,
+            title: `${agentName} (${effectiveVariant ?? 'default'})`,
+          },
+          query: { directory },
+        });
+
+        if (!session.data?.id) {
+          return 'Error: Failed to create session';
+        }
+
+        const sessionId = session.data.id;
+        ensureFireForgetCompletionTracker(sessionId);
+        const seededArtifact = artifactStore.seedArtifact({
+          agent: agentName,
+          childSessionId: sessionId,
+          parentSessionId,
+          model,
+          variant: effectiveVariant,
+          mode: 'fire_forget',
+          purpose: args.prompt,
+          promptText: effectivePrompt,
+          referencedArtifactPaths,
+        });
+        artifactStore.markStatus(sessionId, 'open');
+
+        recordSessionTree(
+          sessionId,
+          parentSessionId,
+          agentName,
+          effectiveVariant,
+          'fire_forget',
+        );
+
+        if (depthTracker) {
+          depthTracker.registerChild(parentSessionId, sessionId);
+        }
+
+        const promptBody: PromptBody = {
+          agent: agentName,
+          model: modelRef,
+          tools: { task: false },
+          parts: partsForPrompt(effectivePrompt),
+        };
+
+        if (effectiveVariant) {
+          promptBody.variant = effectiveVariant;
+        }
+
+        ctx.client.session
+          .prompt({
+            path: { id: sessionId },
+            body: promptBody,
+            query: { directory },
+          })
+          .catch(() => {});
+
+        return buildCompactEnvelope({
+          agentName,
+          variant: effectiveVariant,
+          childSessionId: sessionId,
+          artifactPath: seededArtifact.artifactPath,
+          indexPath: seededArtifact.indexPath,
+          summaryLine: `${buildSummaryLine(agentName, 'open', '')} Collect with delegate_collect(session_id: "${sessionId}")`,
+          inlineSections: [],
+        });
+      } catch (err) {
+        return `Error launching ${agentName}: ${err instanceof Error ? err.message : String(err)}`;
+      }
+    }
+
+    const blockingKey = parallelBlockingFixerBatch
+      ? undefined
+      : buildScopedBlockingKey(parentSessionId, agentName);
+    if (blockingKey) {
+      await blockingMutex.acquire(blockingKey);
+    }
+    try {
+      const runResult = await runAgentSession({
+        parentSessionId,
+        title: `${agentName} (${effectiveVariant ?? 'default'})`,
+        agent: agentName,
+        model,
+        variant: effectiveVariant,
+        promptText: effectivePrompt,
+        timeout: 0,
+        promptParts: frameImageParts.length > 0 ? frameImageParts : undefined,
+        continueSessionId,
+      });
+      const seededArtifact = artifactStore.seedArtifact({
+        agent: agentName,
+        childSessionId: runResult.sessionId,
+        parentSessionId,
+        model,
+        variant: effectiveVariant,
+        mode: 'blocking',
+        purpose: args.prompt,
+        promptText: effectivePrompt,
+        referencedArtifactPaths,
+      });
+      const inlineSections = collectInlineSections(agentName, runResult.text);
+      const status = determineArtifactStatus(runResult.text, 'blocking');
+      const artifactResult =
+        artifactStore.appendTurn({
+          childSessionId: runResult.sessionId,
+          outputText: runResult.text,
+          inlineSections,
+          status,
+        }) ?? seededArtifact;
+
+      return buildCompactEnvelope({
+        agentName,
+        variant: effectiveVariant,
+        childSessionId: runResult.sessionId,
+        artifactPath: artifactResult.artifactPath,
+        indexPath: artifactResult.indexPath,
+        summaryLine: buildSummaryLine(agentName, status, runResult.text),
+        inlineSections,
+        continueSessionId: runResult.openSessionId,
+      });
+    } catch (err) {
+      return `Error running ${agentName} (variant: ${effectiveVariant ?? 'default'}): ${
+        err instanceof Error ? err.message : String(err)
+      }`;
+    } finally {
+      if (blockingKey) {
+        blockingMutex.release(blockingKey);
+      }
+    }
+  }
+
   const delegateSubagent: ToolDefinition = tool({
     description:
       'Delegate a task to a specialist subagent with explicit variant control. ' +
@@ -375,222 +908,66 @@ export function createDelegateTools(
           'Blocking only: resume the same child session after <needs_user>. Use session_id from <delegate_session_continue> in the prior delegate_subagent result (same agent, model, variant).',
         ),
     },
+    execute: async (args, context) =>
+      executeDelegationRequest(args, context.sessionID),
+  });
+
+  const delegateSubagents: ToolDefinition = tool({
+    description:
+      'Delegate multiple independent tasks to specialist subagents in one batch. ' +
+      'Use this when you need true parallel fan-out inside a single tool call. ' +
+      'Blocking mode waits for every child result and returns all envelopes together. ' +
+      'Fire_forget launches every child and returns session ids to collect later.',
+    args: {
+      tasks: tool.schema
+        .array(batchTaskSchema)
+        .describe(
+          'Independent delegation tasks. Keep scopes disjoint for fixer work; explorer/librarian read-only tasks may overlap.',
+        ),
+      mode: tool.schema
+        .enum(MODE_OPTIONS)
+        .optional()
+        .describe(
+          'blocking (default) waits for every task; fire_forget launches all tasks and returns session_ids immediately',
+        ),
+    },
     execute: async (args, context) => {
-      const parentSessionId = context.sessionID;
-      const agentName = args.agent as SubagentRuntimeName;
-      const variant = args.variant;
-      const mode = args.mode ?? 'blocking';
-      const continueSessionId = args.continue_session_id?.trim() || undefined;
+      const mode = (args.mode ?? 'blocking') as 'blocking' | 'fire_forget';
+      const tasks = args.tasks as DelegationTaskInput[];
 
-      if (continueSessionId && mode === 'fire_forget') {
-        return 'Error: continue_session_id is only valid for blocking delegate_subagent (omit mode or mode: blocking).';
+      if (tasks.length === 0) {
+        return 'Error: delegate_subagents requires at least one task.';
+      }
+      if (tasks.length > 8) {
+        return 'Error: delegate_subagents supports at most 8 tasks per batch.';
       }
 
-      // Enforce steward blocking invariant
-      if (agentName === 'steward' && mode === 'fire_forget') {
-        return 'Error: @steward must always run in blocking mode. Its repo rule citations are required input for all downstream agents (@oracle, @fixer, @designer). Use mode: "blocking" (or omit mode).';
-      }
-
-      const resolvedConfig = resolveDelegatedAgentConfig(config, agentName, {
-        model: args.model,
-        variant,
-      });
-      const effectiveVariant = resolvedConfig.variant;
-      const model = resolvedConfig.model;
-
-      if (!model) {
-        return `Error: No model configured for agent "${agentName}"`;
-      }
-
-      const referencedArtifactPaths = extractArtifactPathsFromPrompt(args.prompt);
-      const upstreamArtifactContext = artifactStore.formatForDelegation(
-        parentSessionId,
-        continueSessionId
-          ? { excludeChildSessionId: continueSessionId }
-          : undefined,
-      );
-      const effectivePrompt = upstreamArtifactContext
-        ? `${upstreamArtifactContext}\n\n${args.prompt}`
-        : args.prompt;
-
-      let frameImageParts: PromptBodyPart[] = [];
-      if (agentName === 'interpreter' && !continueSessionId) {
-        const rawFrameParts = await extractLatestUserImageParts(
-          ctx.client,
-          parentSessionId,
-          directory,
-        );
-        frameImageParts = normalizeImagePartsForChildPrompt(
-          rawFrameParts,
-          directory,
-        );
-
-        if (rawFrameParts.length > 0 && frameImageParts.length === 0) {
-          return (
-            'Error: delegate_subagent(agent: "interpreter") saw image-related parts on the latest user message but could not build a child prompt ' +
-            '(no usable `url` and no resolvable `source.path` for a file attachment). ' +
-            'Try saving the image into the workspace and attaching it as a file, or check OpenCode attachment storage.'
-          );
+      const stewardCount = tasks.filter(
+        (task) =>
+          resolveRuntimeAgentName(config, String(task.agent)) === 'steward',
+      ).length;
+      if (stewardCount > 0) {
+        if (mode === 'fire_forget') {
+          return 'Error: @steward must always run in blocking mode.';
         }
-
-        if (frameImageParts.length === 0) {
-          return (
-            'Error: delegate_subagent(agent: "interpreter") found no image attachment parts on the latest user message. ' +
-            'OpenCode stores screenshots as parts with type `file` and mime `image/*` (not type `image`). ' +
-            'If the UI shows placeholders like [Image N] or “img clipboard” in text but this error appears, the session API did not receive file parts - try attaching through the image control, or check OpenCode/provider issues for clipboard vs file attachment.'
-          );
+        if (tasks.length > 1) {
+          return 'Error: @steward must run alone. Do not batch it with other subagents.';
         }
       }
 
-      function partsForPrompt(promptText: string): PromptBodyPart[] {
-        return frameImageParts.length > 0
-          ? [...frameImageParts, { type: 'text', text: promptText }]
-          : [{ type: 'text', text: promptText }];
-      }
-
-      if (mode === 'fire_forget') {
-        const modelRef = parseModelReference(model);
-        if (!modelRef) {
-          return `Error: Invalid model format: ${model}`;
-        }
-
-        try {
-          const session = await ctx.client.session.create({
-            body: {
-              parentID: parentSessionId,
-              title: `${agentName} (${effectiveVariant ?? 'default'})`,
+      const results = await Promise.all(
+        tasks.map((task) =>
+          executeDelegationRequest(
+            {
+              ...task,
+              mode,
             },
-            query: { directory },
-          });
+            context.sessionID,
+          ),
+        ),
+      );
 
-          if (!session.data?.id) {
-            return 'Error: Failed to create session';
-          }
-
-          const sessionId = session.data.id;
-          const seededArtifact = artifactStore.seedArtifact({
-            agent: agentName,
-            childSessionId: sessionId,
-            parentSessionId,
-            model,
-            variant: effectiveVariant,
-            mode: 'fire_forget',
-            purpose: args.prompt,
-            promptText: effectivePrompt,
-            referencedArtifactPaths: [
-              ...referencedArtifactPaths,
-              ...artifactStore
-                .listSessionArtifacts(parentSessionId)
-                .map((artifact) => artifact.artifactPath),
-            ],
-          });
-          artifactStore.markStatus(sessionId, 'open');
-
-          // Record in session tree directly
-          recordSessionTree(
-            sessionId,
-            parentSessionId,
-            agentName,
-            effectiveVariant,
-            'fire_forget',
-          );
-
-          if (depthTracker) {
-            depthTracker.registerChild(parentSessionId, sessionId);
-          }
-
-          const promptBody: PromptBody = {
-            agent: agentName,
-            model: modelRef,
-            tools: { task: false },
-            parts: partsForPrompt(effectivePrompt),
-          };
-
-          if (effectiveVariant) {
-            promptBody.variant = effectiveVariant;
-          }
-
-          ctx.client.session
-            .prompt({
-              path: { id: sessionId },
-            body: promptBody,
-            query: { directory },
-          })
-            .catch(() => {});
-
-          return buildCompactEnvelope({
-            agentName,
-            variant: effectiveVariant,
-            childSessionId: sessionId,
-            artifactPath: seededArtifact.artifactPath,
-            indexPath: seededArtifact.indexPath,
-            summaryLine: `${buildSummaryLine(agentName, 'open', '')} Collect with delegate_collect(session_id: "${sessionId}")`,
-            inlineSections: [],
-          });
-        } catch (err) {
-          return `Error launching ${agentName}: ${err instanceof Error ? err.message : String(err)}`;
-        }
-      }
-
-      // Blocking mode - acquire serialization lock
-      await blockingMutex.acquire();
-      try {
-        const runResult = await runAgentSession({
-          parentSessionId,
-          title: `${agentName} (${effectiveVariant ?? 'default'})`,
-          agent: agentName,
-          model,
-          variant: effectiveVariant,
-          promptText: effectivePrompt,
-          timeout: 0, // no timeout - let subagents run freely
-          promptParts: frameImageParts.length > 0 ? frameImageParts : undefined,
-          continueSessionId,
-        });
-        const seededArtifact = artifactStore.seedArtifact({
-          agent: agentName,
-          childSessionId: runResult.sessionId,
-          parentSessionId,
-          model,
-          variant: effectiveVariant,
-          mode: 'blocking',
-          purpose: args.prompt,
-          promptText: effectivePrompt,
-          referencedArtifactPaths: [
-            ...referencedArtifactPaths,
-            ...artifactStore
-              .listSessionArtifacts(parentSessionId, {
-                excludeChildSessionId: runResult.sessionId,
-              })
-              .map((artifact) => artifact.artifactPath),
-          ],
-        });
-        const inlineSections = collectInlineSections(agentName, runResult.text);
-        const status = determineArtifactStatus(runResult.text, 'blocking');
-        const artifactResult =
-          artifactStore.appendTurn({
-            childSessionId: runResult.sessionId,
-            outputText: runResult.text,
-            inlineSections,
-            status,
-          }) ?? seededArtifact;
-
-        return buildCompactEnvelope({
-          agentName,
-          variant: effectiveVariant,
-          childSessionId: runResult.sessionId,
-          artifactPath: artifactResult.artifactPath,
-          indexPath: artifactResult.indexPath,
-          summaryLine: buildSummaryLine(agentName, status, runResult.text),
-          inlineSections,
-          continueSessionId: runResult.openSessionId,
-        });
-      } catch (err) {
-        return `Error running ${agentName} (variant: ${effectiveVariant ?? 'default'}): ${
-          err instanceof Error ? err.message : String(err)
-        }`;
-      } finally {
-        blockingMutex.release();
-      }
+      return buildBatchEnvelope(mode, tasks.length, results);
     },
   });
 
@@ -604,11 +981,25 @@ export function createDelegateTools(
   const delegateCollect: ToolDefinition = tool({
     description:
       'Collect results from a fire_forget delegation. ' +
-      'Pass the session_id returned by delegate_subagent in fire_forget mode.',
+      'Pass the session_id returned by delegate_subagent in fire_forget mode. ' +
+      'By default this blocks once until the plugin sees a completion event instead of polling repeatedly. ' +
+      'Set wait: false only for an explicit non-blocking probe.',
     args: {
       session_id: tool.schema
         .string()
         .describe('Session ID from delegate_subagent fire_forget'),
+      wait: tool.schema
+        .boolean()
+        .optional()
+        .describe(
+          'Defaults to true. Set false only to probe without waiting for the internal completion signal.',
+        ),
+      timeout_ms: tool.schema
+        .number()
+        .optional()
+        .describe(
+          'Maximum time to wait when wait: true. Defaults to 15 minutes.',
+        ),
     },
     execute: async (args) => {
       const existingArtifact = artifactStore.getSessionInfo(args.session_id);
@@ -616,31 +1007,48 @@ export function createDelegateTools(
         return 'Session was already collected. Result is available in previous turns.';
       }
 
-      // Check cooldown for non-terminal status
-      const lastAttempt = lastCollectAttempt.get(args.session_id) ?? 0;
-      const elapsed = Date.now() - lastAttempt;
-      if (elapsed < COLLECT_COOLDOWN_MS) {
-        return 'Session status checked recently. Wait before polling again.';
+      const waitForCompletion = args.wait !== false;
+      let completedFromEvent = false;
+      if (waitForCompletion) {
+        completedFromEvent = await waitForFireForgetCompletion(
+          args.session_id,
+          Math.max(
+            1,
+            Math.trunc(args.timeout_ms ?? FIRE_FORGET_COMPLETION_TIMEOUT_MS),
+          ),
+        );
+        if (!completedFromEvent) {
+          return 'Session is still running. Waiting timed out before a completion event arrived.';
+        }
+      } else {
+        const lastAttempt = lastCollectAttempt.get(args.session_id) ?? 0;
+        const elapsed = Date.now() - lastAttempt;
+        if (elapsed < COLLECT_COOLDOWN_MS) {
+          return 'Session status checked recently. Wait before polling again.';
+        }
+        lastCollectAttempt.set(args.session_id, Date.now());
       }
-      lastCollectAttempt.set(args.session_id, Date.now());
 
       try {
         const sid = args.session_id;
-        const statusResult = await (
-          ctx.client.session.status as (
-            args: Record<string, unknown>,
-          ) => Promise<{ data?: Record<string, unknown> }>
-        )({ path: { id: sid }, query: { directory } });
+        let status: string | undefined;
+        if (!completedFromEvent) {
+          const statusResult = await (
+            ctx.client.session.status as (
+              args: Record<string, unknown>,
+            ) => Promise<{ data?: Record<string, unknown> }>
+          )({ path: { id: sid }, query: { directory } });
 
-        const status = (statusResult.data as Record<string, unknown>)?.type as
-          | string
-          | undefined;
+          status = (statusResult.data as Record<string, unknown>)?.type as
+            | string
+            | undefined;
+        }
 
-        if (status === 'idle' || status === 'completed' || status === 'error') {
-          const extraction = await extractSessionResult(
+        if (completedFromEvent || isTerminalSessionStatus(status)) {
+          const extraction = await extractAssistantTextAfterCompletionSignal(
             ctx.client,
             args.session_id,
-            { includeReasoning: false, directory },
+            directory,
           );
 
           if (extraction.empty) {
@@ -651,7 +1059,10 @@ export function createDelegateTools(
             'fire_forget',
           );
           const agentName = existingArtifact?.agent ?? 'fixer';
-          const inlineSections = collectInlineSections(agentName, extraction.text);
+          const inlineSections = collectInlineSections(
+            agentName,
+            extraction.text,
+          );
           const artifactResult =
             artifactStore.appendTurn({
               childSessionId: args.session_id,
@@ -667,6 +1078,7 @@ export function createDelegateTools(
           if (artifactStatus !== 'needs_user') {
             alreadyCollected.add(args.session_id);
             recordSessionDone(args.session_id);
+            clearFireForgetCompletionTracker(args.session_id);
             ctx.client.session
               .abort({ path: { id: args.session_id } })
               .catch(() => {});
@@ -706,6 +1118,7 @@ export function createDelegateTools(
 
   return {
     delegate_subagent: delegateSubagent,
+    delegate_subagents: delegateSubagents,
     delegate_collect: delegateCollect,
   };
 }

@@ -149,11 +149,21 @@ describe('accounts-store (subscriptions)', () => {
       name: 'Main',
       accessToken: 'cx-token',
     });
+    saveAccount({
+      provider: 'deepseek',
+      name: 'Main',
+      apiKey: 'sk-deepseek',
+    });
 
     const accounts = loadAccounts();
-    // All three "Main" accounts should coexist since they're different providers
+    // All four "Main" accounts should coexist since they're different providers
     const providers = accounts.map((a) => a.provider).sort();
-    expect(providers).toEqual(['codex', 'neuralwatt', 'opencode-go']);
+    expect(providers).toEqual([
+      'codex',
+      'deepseek',
+      'neuralwatt',
+      'opencode-go',
+    ]);
     // Verify each account belongs to the right provider
     const goAccount = getAccount('opencode-go', 'Main');
     expect(goAccount).toBeDefined();
@@ -164,6 +174,9 @@ describe('accounts-store (subscriptions)', () => {
     const cxAccount = getAccount('codex', 'Main');
     expect(cxAccount).toBeDefined();
     expect((cxAccount as any).accessToken).toBe('cx-token');
+    const dsAccount = getAccount('deepseek', 'Main');
+    expect(dsAccount).toBeDefined();
+    expect((dsAccount as any).apiKey).toBe('sk-deepseek');
   });
 
   test('removeAccount removes only the matching provider+name pair', () => {

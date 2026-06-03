@@ -2,12 +2,16 @@
  * Type definitions for multi-provider subscription usage tracking.
  *
  * Supports OpenCode Go (dashboard scraping), Neuralwatt (REST API),
- * and Codex (device code auth) as discriminated unions on the
- * `provider` field.
+ * DeepSeek (official balance API), and Codex (device code auth) as
+ * discriminated unions on the `provider` field.
  */
 
 /** Provider discriminator. */
-export type SubscriptionProvider = 'opencode-go' | 'neuralwatt' | 'codex';
+export type SubscriptionProvider =
+  | 'opencode-go'
+  | 'neuralwatt'
+  | 'deepseek'
+  | 'codex';
 
 export interface OpenCodeGoAccount {
   provider: 'opencode-go';
@@ -19,6 +23,12 @@ export interface OpenCodeGoAccount {
 
 export interface NeuralwattAccount {
   provider: 'neuralwatt';
+  name: string;
+  apiKey: string;
+}
+
+export interface DeepSeekAccount {
+  provider: 'deepseek';
   name: string;
   apiKey: string;
 }
@@ -39,6 +49,7 @@ export interface CodexAccount {
 export type StoredAccount =
   | OpenCodeGoAccount
   | NeuralwattAccount
+  | DeepSeekAccount
   | CodexAccount;
 
 /** Per-time-window usage data scraped from the OpenCode Go dashboard. */
@@ -123,6 +134,23 @@ export interface NeuralwattUsageEntry {
   error?: string;
 }
 
+export interface DeepSeekBalanceInfo {
+  currency: 'CNY' | 'USD' | string;
+  total_balance: string;
+  granted_balance: string;
+  topped_up_balance: string;
+}
+
+/** Snapshot entry per DeepSeek account - stored in tui-state.json. */
+export interface DeepSeekUsageEntry {
+  provider: 'deepseek';
+  accountName: string;
+  fetchedAt: number;
+  is_available: boolean;
+  balance_infos: DeepSeekBalanceInfo[];
+  error?: string;
+}
+
 export interface CodexUsageEntry {
   provider: 'codex';
   accountName: string;
@@ -145,6 +173,7 @@ export interface CodexUsageEntry {
 export type SubscriptionUsageEntry =
   | OpenCodeGoUsageEntry
   | NeuralwattUsageEntry
+  | DeepSeekUsageEntry
   | CodexUsageEntry;
 
 /** Detailed usage data from the /usage page. */

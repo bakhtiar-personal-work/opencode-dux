@@ -8,6 +8,7 @@ import type { SubscriptionProvider } from './types';
 const PROVIDER_DISPLAY: Record<SubscriptionProvider, string> = {
   'opencode-go': 'Opencode-Go',
   codex: 'Codex',
+  deepseek: 'DeepSeek',
   neuralwatt: 'Neuralwatt',
 };
 
@@ -15,12 +16,13 @@ const PROVIDER_DISPLAY: Record<SubscriptionProvider, string> = {
 export const PROVIDERS: SubscriptionProvider[] = [
   'opencode-go',
   'neuralwatt',
+  'deepseek',
   'codex',
 ];
 
 /**
  * Resolve a raw string to a SubscriptionProvider.
- * Accepts full names (`opencode-go`) or display labels (`Opencode-Go`, `Codex`, `Neuralwatt`).
+ * Accepts full names (`opencode-go`) or display labels (`Opencode-Go`, `Codex`, `DeepSeek`, `Neuralwatt`).
  * Returns `undefined` if no match.
  */
 export function resolveProvider(

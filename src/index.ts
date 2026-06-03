@@ -14,6 +14,7 @@ import {
   ALL_AGENT_NAMES,
   DEFAULT_MODELS,
   deepMerge,
+  getAgentOverride,
   loadPluginConfig,
 } from './config';
 import { AGENT_ALIASES } from './config/constants';
@@ -47,6 +48,9 @@ import {
   ast_grep_replace,
   ast_grep_search,
   createDelegateTools,
+  notifyDelegatedSessionDeleted,
+  notifyDelegatedSessionStatus,
+  createOrchestratorPromptSectionTool,
   createPresetManager,
   createWebfetchTool,
 } from './tools';
@@ -394,6 +398,7 @@ const OpenCodeDux: Plugin = async (ctx) => {
   let discoverSkillsTool:
     | ReturnType<typeof createDiscoverSkillsTool>
     | undefined;
+  let promptSectionTool: ReturnType<typeof createOrchestratorPromptSectionTool>;
   let rewriteDisplayNameMentions: ReturnType<
     typeof createDisplayNameMentionRewriter
   >;
@@ -488,9 +493,9 @@ const OpenCodeDux: Plugin = async (ctx) => {
 
     if (isFirstInit) {
       console.log(
-        '  \u{1F50C} built-in MCPs: ' + Object.keys(builtinMcps).join(', '),
+        `  \u{1F50C} built-in MCPs: ${Object.keys(builtinMcps).join(', ')}`,
       );
-      log('[init] built-in MCPs: ' + Object.keys(builtinMcps).join(', '));
+      log(`[init] built-in MCPs: ${Object.keys(builtinMcps).join(', ')}`);
     }
 
     // Warm the local discovery cache asynchronously (non-blocking init).
@@ -498,6 +503,24 @@ const OpenCodeDux: Plugin = async (ctx) => {
     getLocalDiscovery(ctx).catch(() => {});
 
     webfetch = createWebfetchTool(ctx);
+    const oracleOverride = getAgentOverride(config, 'oracle');
+    const oracleOptions = oracleOverride?.options as
+      | Record<string, unknown>
+      | undefined;
+    const oracleDefaultModel =
+      typeof oracleOverride?.model === 'string'
+        ? oracleOverride.model
+        : DEFAULT_MODELS.oracle;
+    const oracleSmartModel =
+      typeof oracleOptions?.smart === 'string'
+        ? oracleOptions.smart
+        : oracleDefaultModel;
+    promptSectionTool = createOrchestratorPromptSectionTool({
+      oracleDefaultModel:
+        typeof oracleDefaultModel === 'string' ? oracleDefaultModel : undefined,
+      oracleSmartModel:
+        typeof oracleSmartModel === 'string' ? oracleSmartModel : undefined,
+    });
 
     // Initialize online discovery tools (graceful degradation on failure)
     const toolsOnline: string[] = [];
@@ -517,10 +540,10 @@ const OpenCodeDux: Plugin = async (ctx) => {
     }
     if (isFirstInit) {
       console.log(
-        `  \u{1F527} built-in tools: webfetch, ast_grep_search, ast_grep_replace${toolsOnline.length ? `, ${toolsOnline.join(', ')}` : ''}`,
+        `  \u{1F527} built-in tools: webfetch, ast_grep_search, ast_grep_replace, get_orchestrator_prompt_section${toolsOnline.length ? `, ${toolsOnline.join(', ')}` : ''}`,
       );
       log(
-        `[init] built-in tools: webfetch, ast_grep_search, ast_grep_replace${toolsOnline.length ? `, ${toolsOnline.join(', ')}` : ''}`,
+        `[init] built-in tools: webfetch, ast_grep_search, ast_grep_replace, get_orchestrator_prompt_section${toolsOnline.length ? `, ${toolsOnline.join(', ')}` : ''}`,
       );
     }
 
@@ -648,6 +671,10 @@ const OpenCodeDux: Plugin = async (ctx) => {
         sessionAgentMap.get(sessionID) === 'orchestrator',
       artifactRecallProvider: (sessionID) =>
         handoffArtifactStore.formatForPrompt(sessionID),
+      timelineBeforePrompt: (userMessageCount: number) => {
+        handoffArtifactStore.detectRewind(userMessageCount);
+        handoffArtifactStore.incrementSequence();
+      },
     });
     contextPressureReminderHook = createContextPressureReminderHook({
       enabled: config.contextPressure?.enabled ?? true,
@@ -670,8 +697,10 @@ const OpenCodeDux: Plugin = async (ctx) => {
       Object.keys(delegateTools).length +
       Object.keys(todoContinuationHook.tool).length +
       1 + // webfetch
+      1 + // get_orchestrator_prompt_section
       2 + // ast_grep_search, ast_grep_replace
-      (discoverMcpTool ? 1 : 0); // discover_mcp_servers
+      (discoverMcpTool ? 1 : 0) +
+      (discoverSkillsTool ? 1 : 0); // discover_mcp_servers, discover_skills
 
     if (isFirstInit) {
       console.log(
@@ -816,7 +845,7 @@ const OpenCodeDux: Plugin = async (ctx) => {
     } catch (err) {
       const verErrMsg = err instanceof Error ? err.message : String(err);
       console.log('  📦 Version check failed:', verErrMsg);
-      log('[version] Version check failed: ' + verErrMsg);
+      log(`[version] Version check failed: ${verErrMsg}`);
       return false;
     }
   }
@@ -832,6 +861,7 @@ const OpenCodeDux: Plugin = async (ctx) => {
       ...todoContinuationHook.tool,
       ast_grep_search,
       ast_grep_replace,
+      get_orchestrator_prompt_section: promptSectionTool,
       ...(discoverMcpTool ? { discover_mcp_servers: discoverMcpTool } : {}),
       ...(discoverSkillsTool ? { discover_skills: discoverSkillsTool } : {}),
     },
@@ -1078,7 +1108,7 @@ const OpenCodeDux: Plugin = async (ctx) => {
             const versionErrMsg =
               err instanceof Error ? err.message : String(err);
             console.log('  📦 Version check failed:', versionErrMsg);
-            log('[version] Version check failed: ' + versionErrMsg);
+            log(`[version] Version check failed: ${versionErrMsg}`);
           });
         }
       }
@@ -1361,6 +1391,7 @@ const OpenCodeDux: Plugin = async (ctx) => {
         const sessionID = event.properties?.sessionID;
         if (sessionID && statusType) {
           patchSessionTreeStatusFromOpenCode(sessionID, statusType);
+          notifyDelegatedSessionStatus(sessionID, statusType);
         }
         if (sessionID && statusType === 'idle') {
           if (sessionAgentMap.get(sessionID) === 'orchestrator') {
@@ -1422,6 +1453,7 @@ const OpenCodeDux: Plugin = async (ctx) => {
         const sessionID =
           event.properties?.info?.id ?? event.properties?.sessionID;
         if (sessionID) {
+          notifyDelegatedSessionDeleted(sessionID);
           recordSessionEnd(sessionID);
           recordSessionDone(sessionID);
           deleteSessionEntries(sessionID);
