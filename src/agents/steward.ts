@@ -86,7 +86,7 @@ ${NEEDS_USER_OUTPUT_FORMAT_BLOCK}
 <good_example>
 <needs_user>
 <reason>Multiple convention domains found; need scope.</reason>
-<questions>[{"question": "Which convention domain should I cite?", "header": "Convention scope", "options": [{"label": "Testing", "description": "Test file naming, structure, and runner conventions"}, {"label": "Commits", "description": "Commit message format and branch naming"}]}]</questions>
+<questions>[{"question":"Which convention domain should I cite?","header":"Convention scope","options":[{"label":"Testing","description":"Test file naming, structure, and runner conventions"},{"label":"Commits","description":"Commit message format and branch naming"}]}]</questions>
 </needs_user>
 </good_example>
 </output_format>`;

@@ -103,7 +103,7 @@ ${NEEDS_USER_OUTPUT_FORMAT_BLOCK}
 <good_example>
 <needs_user>
 <reason>Two modules contain retry logic; need user to specify which feature area.</reason>
-<questions>[{"question": "Which retry mechanism?", "header": "Retry context", "options": [{"label": "Queue retry (src/queue)", "description": "Background job retry with exponential backoff"}, {"label": "HTTP retry (src/http)", "description": "API call retry with circuit breaker"}]}]</questions>
+<questions>[{"question":"Which retry mechanism?","header":"Retry context","options":[{"label":"Queue retry (src/queue)","description":"Background job retry with exponential backoff"},{"label":"HTTP retry (src/http)","description":"API call retry with circuit breaker"}]}]</questions>
 </needs_user>
 </good_example>
 </output_format>`;

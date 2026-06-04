@@ -86,7 +86,7 @@ ${NEEDS_USER_OUTPUT_FORMAT_BLOCK}
 <good_example>
 <needs_user>
 <reason>Screenshot shows both form UI and API response — unclear if task is frontend or backend.</reason>
-<questions>[{"question": "What is the primary focus?", "header": "Task focus", "options": [{"label": "Frontend form", "description": "Build/redesign the UI form shown — route to @designer then @fixer"}, {"label": "Backend API", "description": "Implement/fix the API endpoint — route to @fixer"}]}]</questions>
+<questions>[{"question":"What is the primary focus?","header":"Task focus","options":[{"label":"Frontend form","description":"Build/redesign the UI form shown — route to @designer then @fixer"},{"label":"Backend API","description":"Implement/fix the API endpoint — route to @fixer"}]}]</questions>
 </needs_user>
 </good_example>
 </output_format>`;

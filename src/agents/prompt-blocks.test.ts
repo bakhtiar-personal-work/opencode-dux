@@ -84,6 +84,7 @@ describe('FIRST_GATE_BLOCK', () => {
     expect(FIRST_GATE_BLOCK).toContain('DESIGNER GATE');
     expect(FIRST_GATE_BLOCK).toContain('CAPABILITY DISCOVERY');
     expect(FIRST_GATE_BLOCK).toContain('LIFECYCLE: For code-affecting work');
+    expect(FIRST_GATE_BLOCK).toContain('approved specialist handoff');
   });
 });
 
@@ -111,6 +112,15 @@ describe('PLANNING_GATE_BLOCK', () => {
 
   test('requires approval before implementation but allows discovery', () => {
     expect(PLANNING_GATE_BLOCK).toContain('Only after explicit user approval');
+    expect(PLANNING_GATE_BLOCK).toContain(
+      'If the handoff already contains <execution_todo>, delegate directly in the',
+    );
+    expect(PLANNING_GATE_BLOCK).toContain(
+      'same turn after a brief status update. Do NOT add new diagnosis, tradeoffs,',
+    );
+    expect(PLANNING_GATE_BLOCK).toContain(
+      'implementation reasoning, or rewritten tasks between approval and @fixer.',
+    );
     // Discovery is now allowed before approval (capability check, not implementation)
     expect(PLANNING_GATE_BLOCK).toContain('DO NOT proceed to implementation');
     expect(PLANNING_GATE_BLOCK).not.toContain(
@@ -161,9 +171,11 @@ describe('ORCHESTRATOR_CLARIFICATION_HANDOFF_BLOCK', () => {
 describe('SUBAGENT_NEEDS_USER_FORMAT', () => {
   test('contains QuestionInfo schema instructions', () => {
     expect(SUBAGENT_NEEDS_USER_FORMAT).toContain('QuestionInfo JSON');
+    expect(SUBAGENT_NEEDS_USER_FORMAT).toContain('raw JSON only');
     expect(SUBAGENT_NEEDS_USER_FORMAT).toContain('"question"');
     expect(SUBAGENT_NEEDS_USER_FORMAT).toContain('"header"');
     expect(SUBAGENT_NEEDS_USER_FORMAT).toContain('"options"');
+    expect(SUBAGENT_NEEDS_USER_FORMAT).toContain('Optional per question');
   });
 });
 

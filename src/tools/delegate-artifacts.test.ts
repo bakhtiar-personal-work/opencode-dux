@@ -31,6 +31,7 @@ function createDelegateFixture(input: {
   outputsBySession: Record<string, string[]>;
   promptDelayMs?: number;
   statusTypeBySession?: Record<string, string>;
+  onSessionCreate?: (sessionId: string) => void;
   onStatusCheck?: (sessionId: string) => void;
   onPromptStart?: (sessionId: string) => void;
   onPromptEnd?: (sessionId: string) => void;
@@ -44,9 +45,13 @@ function createDelegateFixture(input: {
 
   const client = {
     session: {
-      create: async () => ({
-        data: { id: input.sessionIds[createIndex++] },
-      }),
+      create: async () => {
+        const sessionId = input.sessionIds[createIndex++];
+        input.onSessionCreate?.(sessionId);
+        return {
+          data: { id: sessionId },
+        };
+      },
       prompt: async ({
         path: pathArg,
         body,
@@ -463,6 +468,40 @@ describe('delegate artifact flow', () => {
     expect(firstStart).toBeLessThan(secondEnd);
     expect(promptTexts.get('fixer-1')).toContain('<parallel_fixer_batch>');
     expect(promptTexts.get('fixer-2')).toContain('<parallel_fixer_batch>');
+  });
+
+  test('blocking fixer creates child session before queued execution starts', async () => {
+    const workspace = makeTempDir();
+    const events: string[] = [];
+    const { delegateSubagent } = createDelegateFixture({
+      workspace,
+      sessionIds: ['fixer-1'],
+      outputsBySession: {
+        'fixer-1': [
+          '<summary>Applied fix</summary><verification>- Validation: local only</verification>',
+        ],
+      },
+      promptDelayMs: 75,
+      onSessionCreate: (sessionId) => events.push(`create:${sessionId}`),
+      onPromptStart: (sessionId) => events.push(`prompt:${sessionId}`),
+    });
+
+    const promise = delegateSubagent.execute(
+      {
+        agent: 'fixer',
+        prompt: 'Apply fix',
+        variant: 'low',
+        mode: 'blocking',
+      },
+      { sessionID: 'parent-1' },
+    );
+
+    await Promise.resolve();
+    expect(events[0]).toBe('create:fixer-1');
+
+    const result = await promise;
+    expect(events).toContain('prompt:fixer-1');
+    expect(result).toContain('Applied fix');
   });
 
   test('blocking delegate_subagents batches independent explorer work in parallel', async () => {

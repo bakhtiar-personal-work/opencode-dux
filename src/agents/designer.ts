@@ -8,6 +8,8 @@ import {
   NEEDS_USER_OUTPUT_FORMAT_BLOCK,
   REPO_RULES_PRECEDENCE_BLOCK,
   SELF_REVIEW_BLOCK,
+  SPECIALIST_EXECUTION_TODO_BLOCK,
+  SPECIALIST_EXECUTION_TODO_FORMAT,
   SUBAGENT_NEEDS_USER_FORMAT,
   USER_CHOICE_POLICY_BLOCK,
 } from './prompt-blocks';
@@ -33,6 +35,8 @@ ${REPO_RULES_PRECEDENCE_BLOCK}
 ${CORE_CAPABILITY_AWARENESS_BLOCK}
 
 ${HANDOFF_ARTIFACTS_BLOCK}
+
+${SPECIALIST_EXECUTION_TODO_BLOCK}
 
 <discovery_first>
 Detect styling system (skip if task prompt specifies):
@@ -63,6 +67,7 @@ Detect styling system (skip if task prompt specifies):
 
 <constraints>
 - DEFAULT: design-review mode — produce <implementation_notes> for @fixer. Implement only when task explicitly orders.
+- For downstream implementation handoffs, ALWAYS include <execution_todo> with atomic fixer-ready tasks.
 - Ambiguous scope -> <needs_user> (per <user_choice_policy>). Undetectable tooling -> <blocked>.
 - Respect existing design system tokens and component patterns.
 - Prioritize accessibility and keyboard navigation (WCAG AA contrast minimum).
@@ -97,6 +102,7 @@ ${SELF_REVIEW_BLOCK}
 <implementation_notes>
 - Concrete component/style targets with handoff checklist for @fixer.
 </implementation_notes>
+${SPECIALIST_EXECUTION_TODO_FORMAT}
 ${formatBlockedOutputBlock('the design system cannot be detected or styling context is missing')}
 ${NEEDS_USER_OUTPUT_FORMAT_BLOCK}
 
@@ -105,7 +111,7 @@ Batch every UX pattern choice in one handoff.
 <good_example>
 <needs_user>
 <reason>Config panel entry point ambiguous: modal or inline?</reason>
-<questions>[{"question": "Should the config panel be a modal overlay or an inline section?", "header": "Config panel style", "options": [{"label": "Modal", "description": "Overlay dialog; better focus, interrupts workflow"}, {"label": "Inline", "description": "Same-page section; non-disruptive, visible alongside content"}]}]</questions>
+<questions>[{"question":"Should the config panel be a modal overlay or an inline section?","header":"Config panel style","options":[{"label":"Modal","description":"Overlay dialog; better focus, interrupts workflow"},{"label":"Inline","description":"Same-page section; non-disruptive, visible alongside content"}]}]</questions>
 </needs_user>
 </good_example>
 

@@ -14,7 +14,6 @@ import {
   ALL_AGENT_NAMES,
   DEFAULT_MODELS,
   deepMerge,
-  getAgentOverride,
   loadPluginConfig,
 } from './config';
 import { AGENT_ALIASES } from './config/constants';
@@ -50,7 +49,6 @@ import {
   createDelegateTools,
   notifyDelegatedSessionDeleted,
   notifyDelegatedSessionStatus,
-  createOrchestratorPromptSectionTool,
   createPresetManager,
   createWebfetchTool,
 } from './tools';
@@ -398,7 +396,6 @@ const OpenCodeDux: Plugin = async (ctx) => {
   let discoverSkillsTool:
     | ReturnType<typeof createDiscoverSkillsTool>
     | undefined;
-  let promptSectionTool: ReturnType<typeof createOrchestratorPromptSectionTool>;
   let rewriteDisplayNameMentions: ReturnType<
     typeof createDisplayNameMentionRewriter
   >;
@@ -503,24 +500,6 @@ const OpenCodeDux: Plugin = async (ctx) => {
     getLocalDiscovery(ctx).catch(() => {});
 
     webfetch = createWebfetchTool(ctx);
-    const oracleOverride = getAgentOverride(config, 'oracle');
-    const oracleOptions = oracleOverride?.options as
-      | Record<string, unknown>
-      | undefined;
-    const oracleDefaultModel =
-      typeof oracleOverride?.model === 'string'
-        ? oracleOverride.model
-        : DEFAULT_MODELS.oracle;
-    const oracleSmartModel =
-      typeof oracleOptions?.smart === 'string'
-        ? oracleOptions.smart
-        : oracleDefaultModel;
-    promptSectionTool = createOrchestratorPromptSectionTool({
-      oracleDefaultModel:
-        typeof oracleDefaultModel === 'string' ? oracleDefaultModel : undefined,
-      oracleSmartModel:
-        typeof oracleSmartModel === 'string' ? oracleSmartModel : undefined,
-    });
 
     // Initialize online discovery tools (graceful degradation on failure)
     const toolsOnline: string[] = [];
@@ -540,10 +519,10 @@ const OpenCodeDux: Plugin = async (ctx) => {
     }
     if (isFirstInit) {
       console.log(
-        `  \u{1F527} built-in tools: webfetch, ast_grep_search, ast_grep_replace, get_orchestrator_prompt_section${toolsOnline.length ? `, ${toolsOnline.join(', ')}` : ''}`,
+        `  \u{1F527} built-in tools: webfetch, ast_grep_search, ast_grep_replace${toolsOnline.length ? `, ${toolsOnline.join(', ')}` : ''}`,
       );
       log(
-        `[init] built-in tools: webfetch, ast_grep_search, ast_grep_replace, get_orchestrator_prompt_section${toolsOnline.length ? `, ${toolsOnline.join(', ')}` : ''}`,
+        `[init] built-in tools: webfetch, ast_grep_search, ast_grep_replace${toolsOnline.length ? `, ${toolsOnline.join(', ')}` : ''}`,
       );
     }
 
@@ -697,7 +676,6 @@ const OpenCodeDux: Plugin = async (ctx) => {
       Object.keys(delegateTools).length +
       Object.keys(todoContinuationHook.tool).length +
       1 + // webfetch
-      1 + // get_orchestrator_prompt_section
       2 + // ast_grep_search, ast_grep_replace
       (discoverMcpTool ? 1 : 0) +
       (discoverSkillsTool ? 1 : 0); // discover_mcp_servers, discover_skills
@@ -861,7 +839,6 @@ const OpenCodeDux: Plugin = async (ctx) => {
       ...todoContinuationHook.tool,
       ast_grep_search,
       ast_grep_replace,
-      get_orchestrator_prompt_section: promptSectionTool,
       ...(discoverMcpTool ? { discover_mcp_servers: discoverMcpTool } : {}),
       ...(discoverSkillsTool ? { discover_skills: discoverSkillsTool } : {}),
     },

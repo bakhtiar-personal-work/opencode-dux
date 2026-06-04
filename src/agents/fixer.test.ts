@@ -70,6 +70,17 @@ describe('createFixerAgent', () => {
     }
   });
 
+  test('prompt treats specialist execution todo as authoritative and blocks underspecified handoffs', () => {
+    const agent = createFixerAgent('test/fixer-model');
+    const prompt = agent.config.prompt ?? '';
+    expect(prompt).toContain(
+      'Treat specialist-provided <execution_todo> as the authoritative implementation spec when present.',
+    );
+    expect(prompt).toContain(
+      'If specialist handoff lacks atomic implementation detail',
+    );
+  });
+
   test('prompt does not contain resolver boilerplate', () => {
     const agent = createFixerAgent('test/fixer-model');
     const prompt = agent.config.prompt ?? '';
@@ -84,5 +95,14 @@ describe('createFixerAgent', () => {
       'NEVER act as the primary diagnosis or strategy agent',
     );
     expect(prompt).toContain('route through @oracle');
+  });
+
+  test('verification output is constrained to a JSON object', () => {
+    const agent = createFixerAgent('test/fixer-model');
+    const prompt = agent.config.prompt ?? '';
+    expect(prompt).toContain('<verification>');
+    expect(prompt).toContain('Output ONE raw JSON object');
+    expect(prompt).toContain('"tests":"passed|failed|skipped"');
+    expect(prompt).toContain('"validation":"passed|failed|skipped"');
   });
 });

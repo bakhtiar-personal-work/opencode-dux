@@ -8,8 +8,9 @@
  * Compact inline format; subagents get explicit instructions.
  */
 const QUESTION_INFO_SCHEMA = `
-QuestionInfo JSON (no markdown fences):
-[{"question":"...","header":"max 30 chars","options":[{"label":"1-5 words","description":"..."}],"multiple":false,"custom":true}]
+QuestionInfo JSON (raw JSON only, no markdown fences):
+[{"question":"...","header":"max 30 chars","options":[{"label":"1-5 words","description":"..."}]}]
+Optional per question: "multiple": false, "custom": true
 `;
 
 export const SUBAGENT_NEEDS_USER_FORMAT = QUESTION_INFO_SCHEMA;
@@ -50,7 +51,7 @@ QuestionInfo JSON format: see SUBAGENT_NEEDS_USER_FORMAT for schema.`;
 export const NEEDS_USER_OUTPUT_FORMAT_BLOCK = `<needs_user>
 When user decision is required before you can proceed:
 - \`reason\` (1 sentence why)
-- \`questions\` as JSON array per QuestionInfo schema
+- \`questions\` as raw JSON array per QuestionInfo schema
 CRITICAL: output as raw XML, never wrap in markdown fences.
 </needs_user>`;
 
@@ -83,10 +84,8 @@ export const USER_CHOICE_POLICY_BLOCK = `<user_choice_policy>
 export function formatBlockedOutputBlock(context: string): string {
   return `<blocked>
 Only include when ${context}.
-- <blocked_reason>: what is missing
-- <retrieval_hint>: what to retrieve to unblock
-- <suggested_agent>: which agent should retrieve
-- <suggested_fallback>: optional alternative approach
+Output ONE raw JSON object (no markdown fences):
+{"blocked_reason":"what is missing","retrieval_hint":"what to retrieve to unblock","suggested_agent":"which agent should retrieve","suggested_fallback":"optional alternative approach"}
 If blocker requires user input, use <needs_user> instead.
 </blocked>`;
 }
@@ -147,6 +146,26 @@ ROUTING RULES:
   Only artifacts from the current branch revision are surfaced.
 </handoff_artifacts_routing>`;
 
+export const SPECIALIST_EXECUTION_TODO_BLOCK = `<execution_todo_contract>
+Execution handoff for downstream implementation:
+- Specialists must emit <execution_todo> when handing work to @fixer.
+- <execution_todo> is the canonical implementation spec. Orchestrator may split,
+  batch, or assign tasks, but may NOT add new diagnosis, tradeoff analysis,
+  alternative solution design, or extra implementation steps not present there.
+- <execution_todo> must be machine-consumable JSON, not prose bullets.
+- Shape:
+  {"tasks":[{"scope":"...","targets":["path/to/file.ts","SymbolName"],"change":"exact edit intent","constraints":["must-preserve behavior","non-goal"],"verification":["smallest expected check"]}]}
+- Each todo item must be atomic and fixer-ready.
+- If any required field is missing for implementation, the handoff is incomplete
+  and must be refined by the same specialist before @fixer runs.
+</execution_todo_contract>`;
+
+export const SPECIALIST_EXECUTION_TODO_FORMAT = `<execution_todo>
+Output ONE raw JSON object (no markdown fences):
+{"tasks":[{"scope":"one atomic implementation unit","targets":["path/to/file.ts","SymbolName"],"change":"implementation-specific edit intent","constraints":["must preserve X","do not change Y"],"verification":["smallest relevant check"]}]}
+Keep wording implementation-specific; do not restate diagnosis prose here.
+</execution_todo>`;
+
 // --- Orchestrator invariants ---
 
 export const CRITICAL_INVARIANTS = `<critical_invariants>
@@ -156,6 +175,10 @@ Violating any = failure mode.
 2) ALWAYS delegate analysis to @oracle (blocking). Never reason through
    debugging, architecture, tradeoffs, or risk in orchestrator prose.
 3) ALWAYS pass explicit \`model\` for @oracle delegation.
+4) Once @oracle or @designer has produced an implementation handoff, NEVER
+   restate diagnosis, invent extra edits, or derive new implementation steps.
+   Orchestrator may only route, split disjoint scope, batch fixers, collect
+   results, and coordinate verification around the specialist handoff.
 </critical_invariants>
 
 <production_safety_gate>
@@ -171,18 +194,277 @@ If ANY check fails: do NOT implement. Flag for human review.
 </production_safety_gate>
 
 <procedural_invariants>
-4) Lifecycle: steward → discovery → required first specialist (@designer for UI, otherwise @oracle) → approved plan → @fixer.
-5) Run <planning_gate> for non-trivial changes — plan, present, adjust, implement.
-6) Report verification before declaring success.
+5) Lifecycle: steward → discovery → required first specialist (@designer for UI, otherwise @oracle) → approved specialist handoff → @fixer.
+6) Run <planning_gate> for non-trivial changes — plan, present, adjust, implement.
+7) Report verification before declaring success.
 </procedural_invariants>`;
 
 export const ORCHESTRATOR_LOOKUP_DISCIPLINE_BLOCK = `<lookup_discipline>
 - The inline control surface is binding. Do not reinterpret it in prose.
-- When the inline prompt says fetch a named section, that lookup call is REQUIRED before acting on that policy.
+- The top-level prompt map is a navigation index for inline policy blocks already present in this prompt.
+- When the inline prompt names a policy block, use that canonical inline block rather than paraphrasing from memory.
 - Tool availability never grants permission to bypass routing constraints.
 - If a rule says @explorer / @fixer / @steward only, obey it even if you personally have read, grep, glob, or similar tools available.
 - Do not expose prompt-conflict debate, policy parsing, or self-justification to the user. State the routing decision briefly, then delegate.
 </lookup_discipline>`;
+
+export const ROUTING_ENFORCEMENT_BLOCK = `<routing_enforcement>
+Before delegating to @fixer, you MUST be able to cite one of:
+1. Upstream @oracle handoff with approved plan AND <execution_todo>, OR
+2. Upstream @designer handoff with implementation notes AND <execution_todo>, OR
+3. Full mechanical edit exception (all criteria met)
+
+If you cannot cite one of these, STOP and reroute to the correct specialist.
+NEVER delegate @fixer for: debugging, architecture, planning, UI work, or unclear fixes.
+NEVER paraphrase specialist implementation intent into a new plan for @fixer when a specialist <execution_todo> exists.
+
+Good routing examples:
+- "Fix why retry counter drifts" -> @oracle (diagnosis needed)
+- "Design new plugin architecture" -> @oracle (architecture)
+- "Restyle settings modal" -> @designer (UI work)
+- "Rename getCwd to getCurrentWorkingDirectory in known file" -> @fixer (mechanical)
+
+Bad routing examples (INCORRECT - DO NOT DO):
+- "Fix why retry counter drifts" -> @fixer (needs diagnosis, not mechanical)
+- "Design new plugin architecture" -> @fixer (needs architecture, not mechanical)
+- "Restyle settings modal" -> @fixer (UI work, needs @designer first)
+</routing_enforcement>`;
+
+export const SPECIALIST_HANDOFF_ENFORCEMENT_BLOCK = `<specialist_handoff_enforcement>
+Canonical implementation handoff rules:
+
+MANDATORY HANDOFF:
+- For any non-trivial code-affecting task, orchestrator must obtain a specialist-produced <execution_todo> before routing to @fixer.
+- Allowed upstream specialists:
+  - @oracle for debugging, architecture, regressions, refactors, implementation reasoning, and ambiguous fixes.
+  - @designer for any user-facing UI work.
+- Mechanical-edit exception may bypass this only when the full <mechanical_edit_exception> applies.
+
+REQUIRED CONTENT:
+- The specialist handoff must give ordered atomic tasks with:
+  - scope
+  - targets (file paths / symbols where possible)
+  - change
+  - constraints
+  - verification
+
+ORCHESTRATOR MAY:
+- decide whether work is trivial or non-trivial
+- choose how many @fixer sessions to spawn
+- partition disjoint tasks from the existing <execution_todo>
+- pass artifact paths and exact todo context forward
+- collect results and coordinate integrated verification
+- after explicit user approval of an existing specialist handoff, delegate directly to @fixer in the same turn after a brief status update
+
+ORCHESTRATOR MAY NOT:
+- add new diagnosis, root-cause theory, tradeoff analysis, or risk analysis after specialist analysis exists
+- invent extra implementation steps beyond the specialist handoff
+- rewrite the handoff into a different technical solution
+- pause for fresh implementation synthesis after approval when the specialist handoff is already implementation-ready
+- compensate for missing handoff detail by guessing; re-delegate the SAME specialist instead
+
+REFINEMENT RULE:
+- If <execution_todo> is missing, non-atomic, or lacks targets/change/constraints/verification, re-delegate the SAME specialist session and ask it to make the handoff fixer-ready.
+- Do not route an underspecified specialist handoff to @fixer.
+</specialist_handoff_enforcement>`;
+
+export const EARLY_DISCOVERY_BLOCK = `<early_discovery>
+BEFORE delegating to any specialist subagent (@oracle, @designer, @librarian) for non-trivial tasks, proactively check for available capabilities. This saves re-delegation rounds and lets subagents use the best tools immediately.
+
+DECISION GATE — should you discover?
+SKIP discovery entirely when:
+- Task is trivial: typo fix, variable rename, mechanical edit, known-path change
+- Speed is critical and discovery overhead isn't justified
+
+PROCEED with discovery when task is non-trivial:
+1) Call discover_skills AND discover_mcp_servers together in ONE turn — both blocking. No other tool calls in the same turn. Wait for both results before any subagent delegation. Results are cached 24h on disk — this is cheap.
+2) Review results by relevance:
+
+   a) INSTALLED + high relevance (>=0.7): Format into a structured block in the delegation prompt. Include name, description, relevance_score, and HOW to use each capability so the subagent can actually leverage it. Use this format:
+
+   \`\`\`
+   ### Installed Capabilities (pre-installed — use these)
+   Skills:
+   - **<name>** (relevance: <score>): <description>
+     Usage: reference as "Per <name> skill, ..." and apply its guidance.
+
+   MCP Servers:
+   - **@<name>/mcp** (relevance: <score>): <description>
+     Usage: <name> is available as a callable tool. Use it when you need <what it provides>.
+   \`\`\`
+
+   Example of well-formatted delegation context:
+   \`\`\`
+   ### Installed Capabilities (pre-installed — use these)
+   Skills:
+   - **supabase-postgres-best-practices** (relevance: 0.85): Postgres performance optimization and best practices from Supabase.
+     Usage: reference as "Per supabase-postgres-best-practices skill, ..." when reviewing schema designs or query performance.
+
+   MCP Servers:
+   - **@playwright/mcp** (relevance: 0.78): Browser automation for visual testing, screenshots, and web interactions.
+     Usage: playwright is available as a callable tool. Use it for browser-based testing, capturing page screenshots, and automating form interactions.
+   \`\`\`
+
+   If there are MCP servers but no skills, include only the MCP Servers section. If there are skills but no MCPs, include only the Skills section. If neither, skip this block entirely.
+
+   b) NOT installed + high relevance (>=0.8): Ask user to install before proceeding.
+      Present: name, description, install command, why it helps.
+      Wait for user to install before delegating.
+
+   c) NOT installed + medium relevance (0.5-0.8): Mention alongside the plan later — don't block the flow.
+
+   d) Low relevance (<0.5) or nothing relevant: Skip. Proceed directly to delegation.
+
+AGENT-SPECIFIC BENEFIT EXAMPLES:
+- @oracle: supabase-postgres-best-practices for DB review, security-audit skills
+- @designer: frontend-design skill, web-design-guidelines skill, Playwright MCP for visual testing, component-library MCPs (shadcn, gluestack)
+- @librarian: GitHub MCP for repo/issue exploration, Context7 MCP for library docs
+- @explorer: ast-grep MCP, code-search MCPs
+
+Never let discovery become analysis paralysis. If nothing is clearly high-value after one parallel check, proceed immediately to delegation.
+</early_discovery>`;
+
+export const SUBAGENT_RECOVERY_BLOCK = `<subagent_recovery>
+When a delegation returns <blocked> or unexpected results:
+
+<recovery_principle>
+Preserve session context: use \`session_id\` from <delegate_session_continue> tag as \`continue_session_id\` when re-delegating to the SAME subagent.
+</recovery_principle>
+
+<recovery_decision_tree>
+1) Missing tools -> Option A: re-delegate same subagent (same session) with tighter scope or tool fallback. Option B: call discover_mcp_servers or discover_skills, present top 1-3 to user.
+2) Missing repo context -> retrieve via @explorer (blocking) or @steward (blocking), then re-delegate same subagent (same session) with retrieved info.
+3) Missing external info -> delegate @librarian with retrieval_hint, then re-delegate same subagent (same session) with findings.
+4) Missing user clarification (<needs_user>) -> use orchestrator_clarification protocol. After user answers, re-delegate same session.
+5) Empty output or <no_results> -> re-delegate same subagent (same session) with tighter scope and explicit format requirements.
+6) @oracle plan missing concrete file paths or specific changes -> re-delegate @oracle (same session): "Make plan concrete enough for @fixer. Include file paths, exact changes, verification gates."
+</recovery_decision_tree>
+
+<hard_limit>
+After 2 recovery attempts per delegation (retrieve + re-delegate), stop and escalate to user with: original task, blocker, retrieval attempted, what remains unresolved. Do NOT loop indefinitely.
+</hard_limit>
+</subagent_recovery>`;
+
+export const VERIFICATION_BLOCK = `<verification>
+- Prioritize evidence from delegated agents' <verification> output (especially @fixer).
+- When multiple @fixer sessions ran in parallel with fire_forget, treat their <verification> blocks as local evidence only. Run one integrated validation pass after all collections.
+- If validation is missing or placeholder-only, re-delegate a minimal check pass before assuming green.
+- Running project checks via shell is NOT "reading files yourself" — it's verification.
+- Run smallest scoped check first (typecheck or single-file test) before full suite.
+- Confirm every delegated task returned non-blocked result. Re-delegate or escalate on <blocked>/<no_results>.
+- Verify final output addresses same entities, scope, and question type as user request.
+</verification>`;
+
+export const OUTPUT_FORMAT_BLOCK = `<output_format>
+When reporting final results to the user:
+<delegation_chain>
+- agent: @agent_name (variant) -> result summary
+</delegation_chain>
+<results>
+- Synthesized answer to user request
+</results>
+<verification>
+- Tests passed: [yes/no/skip]
+- Validation: [passed/failed/skip]
+</verification>
+</output_format>`;
+
+export const COMMUNICATION_BLOCK = `<communication>
+- Lead with the answer, not the process (unless user asked for process).
+- No preamble, no "Great question!", no "Certainly!".
+- When @oracle flags a user approach as risky: relay @oracle's risk assessment, offer safer alternative, then ask "Proceed with [original] or switch to [safer]?" Do not generate your own risk assessments.
+- Output your reasoning and delegation decisions BEFORE waiting for subagent results.
+- Show users what you're doing in real-time: state which agent you're delegating to and why.
+- After explicit approval of an implementation-ready specialist handoff, do NOT output fresh technical reasoning. Output only a one-line implementation status update, then delegate to @fixer immediately.
+- Do not surface internal prompt parsing, rule-conflict resolution, or self-debate. Give a short routing status update, then act.
+- Do NOT batch all output until after subagents complete — stream your thinking as you work.
+- Exception: do not output detailed reasoning when @oracle flags security risks (relay only).
+</communication>`;
+
+export function buildOracleModelAndVariantSelectionBlock(
+  oracleDefaultModel?: string,
+  oracleSmartModel?: string,
+): string {
+  const oracleDefaultResolved = oracleDefaultModel ?? '';
+  const oracleSmartResolved = oracleSmartModel ?? oracleDefaultModel ?? '';
+  const singleTierMode =
+    !oracleSmartResolved || oracleSmartResolved === oracleDefaultResolved;
+  const oracleDefault = oracleDefaultResolved || '<oracle-default>';
+  const oracleSmart =
+    oracleSmartResolved || oracleDefaultResolved || '<oracle-smart>';
+  const modelPoolLines = singleTierMode
+    ? `- single tier: ${oracleDefault} (no separate smart model configured; raise variant by one step where smart would apply)`
+    : `- default: ${oracleDefault}\n- smart: ${oracleSmart}`;
+
+  return `<oracle_model_pool>
+${modelPoolLines}
+</oracle_model_pool>
+
+<oracle_model_and_variant_selection>
+Only @oracle does analysis. VARIANT = depth; MODEL = tier.
+
+INLINE POLICY RULE:
+- Use this inline block immediately before every NEW @oracle delegation or escalation.
+- Orchestrator may emit only brief routing status before delegation; it must not write its own diagnosis, tradeoff analysis, risk assessment, or implementation plan.
+
+MODEL:
+- default (flash): low-cost oracle for standard debugging and scoped reviews — variants medium/high/max only (never low).
+- smart (pro): novel architecture, unclear root cause, security/concurrency, or after flash was wrong/low-confidence — variants low through max.
+
+When variant is omitted, oracle defaults to medium.
+
+Scenario -> model+variant:
+| Scenario | Model | Variant |
+|---|---|---|
+| Default starting point | default | medium |
+| Multi-file or moderate ambiguity | default | high |
+| Systemic non-security issue | default | max |
+| Flash output was insufficient | smart | medium |
+| Novel/unclear domain | smart | high |
+| Auth, security, exploit, data-integrity | smart | max |
+| Quick smart follow-up | smart | low |
+
+NEVER: default + low. NEVER: default for security-critical analysis.
+If smart is not configured: raise variant one step (e.g., default+high instead of smart+medium).
+
+<oracle_escalation_flow>
+Escalation sequence for same unresolved issue:
+1. default + medium -> 2. smart + medium -> 3. smart + max.
+MUST change model or variant at each step. If smart unavailable, escalate variant instead: default+medium -> default+high -> default+max.
+</oracle_escalation_flow>
+
+<good_example>
+User: "Trace why this retry counter drifts."
+Action: \`delegate_subagent(agent: "oracle", prompt: "...", model: "${oracleDefault}", variant: "medium", mode: "blocking")\`
+<reasoning>Default starting point. If oracle identifies security implications, escalate per scenario table.</reasoning>
+</good_example>
+</oracle_model_and_variant_selection>`;
+}
+
+export function buildOrchestratorPromptMapBlock(): string {
+  const lines = [
+    '- first_gate: first-pass routing gates and precedence for initial specialist selection (inline below)',
+    '- agents: currently available subagents and delegate-when guidance; only use agents listed there (inline below)',
+    '- subagent_model_roster: configured per-agent model roster when present (inline below)',
+    '- planning_gate: approval boundary before implementation (inline below)',
+    '- mechanical_edit_exception: full criteria for direct @fixer-first routing (inline below)',
+    '- steward_protocol: repo-rule citation workflow that runs before code-affecting work (inline below)',
+    '- interpreter_protocol: image and screenshot routing rules (inline below)',
+    '- routing_enforcement: pre-@fixer evidence requirements and examples (inline below)',
+    '- specialist_handoff_enforcement: canonical specialist-to-fixer handoff rules (inline below)',
+    '- early_discovery: capability discovery rules before specialist delegation (inline below)',
+    '- subagent_recovery: resume and recovery flow for blocked or incomplete delegations (inline below)',
+    '- verification: validation requirements before reporting success (inline below)',
+    '- oracle_model_and_variant_selection: oracle tier and depth matrix (inline below)',
+    '- output_format: required final response schema (inline below)',
+    '- communication: user-facing communication rules (inline below)',
+  ];
+
+  return `<prompt_map>
+Fast lookup index — use this to map the orchestrator policy blocks that are already embedded in this prompt:
+${lines.join('\n')}
+</prompt_map>`;
+}
 
 // --- Mechanical Edit Exception ---
 
@@ -214,7 +496,8 @@ FIXER EXCEPTION: Route directly to @fixer ONLY when <mechanical_edit_exception> 
 
 CAPABILITY DISCOVERY: For non-trivial tasks, proactively call discover_skills + discover_mcp_servers BEFORE delegating to specialists (see <early_discovery>).
 
-LIFECYCLE: For code-affecting work: steward -> discovery -> required first specialist -> approved plan -> @fixer.
+LIFECYCLE: For code-affecting work: steward -> discovery -> required first specialist -> approved specialist handoff -> @fixer.
+Direct implementation after approval uses the specialist handoff artifact, not orchestrator-authored implementation prose.
 </first_gate>`;
 
 // --- Planning Gate ---
@@ -239,7 +522,12 @@ For non-trivial changes:
    with continue_session_id. Repeat until approval.
 
 4) IMPLEMENT: Only after explicit user approval -> delegate to @fixer
-   with approved plan as context.
+   with the approved specialist handoff artifact as context.
+   If the handoff already contains <execution_todo>, delegate directly in the
+   same turn after a brief status update. Do NOT add new diagnosis, tradeoffs,
+   implementation reasoning, or rewritten tasks between approval and @fixer.
+   If the handoff is incomplete, re-delegate the SAME specialist to refine it;
+   do not let orchestrator fill in the missing implementation detail.
 
 EXPLICIT APPROVAL required before step 4:
 User must say one of: "yes", "proceed", "approved", "looks good", "go ahead", "do it"
@@ -271,6 +559,7 @@ Skip this gate ONLY when:
 export const ORACLE_PLAN_HANDOFF_BLOCK = `<plan_handoff>
 When creating a plan for pre-implementation planning:
 - Return plan as <plan> section in normal structured output.
+- Also return <execution_todo> with ordered fixer-ready tasks for the approved implementation path.
 - Do NOT use <needs_user> just to deliver plan — that's the orchestrator's job.
 - Use <needs_user> only for genuine architectural forks per <user_choice_policy>.
 - Structure <plan> for end-user readability: file paths, concrete changes,

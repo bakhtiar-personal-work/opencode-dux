@@ -24,6 +24,14 @@ describe('createOracleAgent', () => {
     expect(prompt).toContain('<output_format>');
   });
 
+  test('prompt includes specialist execution handoff contract', () => {
+    const agent = createOracleAgent('test/oracle-model');
+    const prompt = agent.config.prompt ?? '';
+    expect(prompt).toContain('<execution_todo_contract>');
+    expect(prompt).toContain('<execution_todo>');
+    expect(prompt).toContain('canonical implementation spec');
+  });
+
   test('has temperature 0.15', () => {
     const agent = createOracleAgent('test/oracle-model');
     expect(agent.config.temperature).toBe(0.15);
@@ -72,6 +80,7 @@ describe('createOracleAgent', () => {
       '<recommendation>',
       '<confidence>',
       '<action_items>',
+      '<execution_todo>',
       '<blocked>',
       '<needs_user>',
     ];
@@ -88,6 +97,9 @@ describe('createOracleAgent', () => {
     expect(prompt).toContain('<risks>: REQUIRED for variant high/max');
     expect(prompt).toContain(
       '<plan>: include ONLY when orchestrator delegates',
+    );
+    expect(prompt).toContain(
+      '<execution_todo>: REQUIRED whenever your recommendation is meant to be implemented by @fixer. Output machine-consumable JSON matching the <execution_todo_contract>.',
     );
     expect(prompt).toContain(
       '<blocked>: include ONLY when analysis cannot be completed',
@@ -110,8 +122,8 @@ describe('createOracleAgent', () => {
   test('prompt is materially shorter than the old verbose version', () => {
     const agent = createOracleAgent('test/oracle-model');
     const prompt = agent.config.prompt ?? '';
-    // Oracle prompt should be well under 10k chars after compaction
-    expect(prompt.length).toBeLessThan(10000);
+    // Oracle prompt should remain compact even with the execution handoff contract
+    expect(prompt.length).toBeLessThan(11000);
   });
 });
 

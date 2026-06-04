@@ -92,7 +92,7 @@ ${NEEDS_USER_OUTPUT_FORMAT_BLOCK}
 <good_example>
 <needs_user>
 <reason>Library has multiple major versions with breaking changes.</reason>
-<questions>[{"question": "Which version should I reference?", "header": "Library version", "options": [{"label": "v14.x (stable)", "description": "Current LTS, most docs and examples target this"}, {"label": "v15.x (canary)", "description": "Latest features, may have breaking changes, fewer examples"}]}]</questions>
+<questions>[{"question":"Which version should I reference?","header":"Library version","options":[{"label":"v14.x (stable)","description":"Current LTS, most docs and examples target this"},{"label":"v15.x (canary)","description":"Latest features, may have breaking changes, fewer examples"}]}]</questions>
 </needs_user>
 </good_example>
 </output_format>`;

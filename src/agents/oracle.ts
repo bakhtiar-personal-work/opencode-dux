@@ -8,6 +8,8 @@ import {
   ORACLE_PLAN_HANDOFF_BLOCK,
   REPO_RULES_PRECEDENCE_BLOCK,
   SELF_REVIEW_BLOCK,
+  SPECIALIST_EXECUTION_TODO_BLOCK,
+  SPECIALIST_EXECUTION_TODO_FORMAT,
   SUBAGENT_NEEDS_USER_FORMAT,
   USER_CHOICE_POLICY_BLOCK,
 } from './prompt-blocks';
@@ -33,6 +35,8 @@ ${CORE_CAPABILITY_AWARENESS_BLOCK}
 
 ${HANDOFF_ARTIFACTS_BLOCK}
 
+${SPECIALIST_EXECUTION_TODO_BLOCK}
+
 <capabilities>
 - root-cause debugging
 - architecture tradeoff analysis
@@ -55,7 +59,8 @@ ${HANDOFF_ARTIFACTS_BLOCK}
 3) Diagnose root cause or decision context at the depth dictated by variant.
 4) Recommend one primary path with clear decision criteria.
 5) If task is pre-implementation planning, include <plan> with ordered steps, file targets, and verification gates.
-6) If blocked by missing data/tools/docs, return <blocked>. If a user decision fork is required, return <needs_user>.
+6) When recommending implementation, emit <execution_todo> for the approved path so @fixer can execute without re-deriving the plan.
+7) If blocked by missing data/tools/docs, return <blocked>. If a user decision fork is required, return <needs_user>.
 </workflow>
 
 ${ORACLE_PLAN_HANDOFF_BLOCK}
@@ -95,17 +100,20 @@ Required sections (ALWAYS include):
 
 Conditional sections:
 - <plan>: include ONLY when orchestrator delegates for pre-implementation planning. Ordered steps, file targets, verification gates, tradeoffs between approaches.
+- <execution_todo>: REQUIRED whenever your recommendation is meant to be implemented by @fixer. Output machine-consumable JSON matching the <execution_todo_contract>.
 - <tradeoffs>: include when viable alternatives exist. Option A vs B bullets.
 - <risks>: REQUIRED for variant high/max; optional for low/medium. Concrete risks and severity.
-- <blocked>: include ONLY when analysis cannot be completed. Reason, retrieval_hint, suggested_agent, optional suggested_fallback.
-- <needs_user>: include ONLY when user decision is required. Reason + questions as QuestionInfo JSON.
+- <blocked>: include ONLY when analysis cannot be completed. Output the required JSON object from the shared <blocked> contract.
+- <needs_user>: include ONLY when user decision is required. Reason + questions as raw QuestionInfo JSON.
+
+${SPECIALIST_EXECUTION_TODO_FORMAT}
 
 Batch every scope/priority/risk choice in one <needs_user> handoff.
 
 <good_example>
 <needs_user>
 <reason>Tradeoff between speed and safety requires user priority call.</reason>
-<questions>[{"question": "Which optimization target takes priority?", "header": "Optimization target", "options": [{"label": "Speed", "description": "Faster execution, less validation — risk of edge-case failures"}, {"label": "Safety", "description": "Comprehensive validation, slower — guarantees correctness"}]}]</questions>
+<questions>[{"question":"Which optimization target takes priority?","header":"Optimization target","options":[{"label":"Speed","description":"Faster execution, less validation — risk of edge-case failures"},{"label":"Safety","description":"Comprehensive validation, slower — guarantees correctness"}]}]</questions>
 </needs_user>
 </good_example>
 </output_format>`;

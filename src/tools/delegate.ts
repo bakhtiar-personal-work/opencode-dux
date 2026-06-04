@@ -646,15 +646,6 @@ export function createDelegateTools(
     const parallelBlockingFixerBatch =
       options?.parallelBlockingFixerBatch === true;
 
-    if (
-      agentName === 'fixer' &&
-      mode === 'blocking' &&
-      !continueSessionId &&
-      !parallelBlockingFixerBatch
-    ) {
-      return queueBlockingFixerRequest(args, parentSessionId);
-    }
-
     if (continueSessionId && mode === 'fire_forget') {
       return 'Error: continue_session_id is only valid for blocking delegate_subagent (omit mode or mode: blocking).';
     }
@@ -695,6 +686,56 @@ export function createDelegateTools(
     }
     promptPreamble.push(args.prompt);
     const effectivePrompt = promptPreamble.join('\n\n');
+
+    if (
+      agentName === 'fixer' &&
+      mode === 'blocking' &&
+      !continueSessionId &&
+      !parallelBlockingFixerBatch
+    ) {
+      try {
+        const session = await ctx.client.session.create({
+          body: {
+            parentID: parentSessionId,
+            title: `${agentName} (${effectiveVariant ?? 'default'})`,
+          },
+          query: { directory },
+        });
+
+        if (!session.data?.id) {
+          return 'Error: Failed to create session';
+        }
+
+        const sessionId = session.data.id;
+        recordSessionTree(
+          sessionId,
+          parentSessionId,
+          agentName,
+          effectiveVariant,
+          'blocking',
+        );
+
+        if (depthTracker) {
+          const registered = depthTracker.registerChild(
+            parentSessionId,
+            sessionId,
+          );
+          if (!registered) {
+            return 'Error: Subagent depth exceeded';
+          }
+        }
+
+        return queueBlockingFixerRequest(
+          {
+            ...args,
+            continue_session_id: sessionId,
+          },
+          parentSessionId,
+        );
+      } catch (err) {
+        return `Error launching ${agentName}: ${err instanceof Error ? err.message : String(err)}`;
+      }
+    }
 
     let frameImageParts: PromptBodyPart[] = [];
     if (agentName === 'interpreter' && !continueSessionId) {

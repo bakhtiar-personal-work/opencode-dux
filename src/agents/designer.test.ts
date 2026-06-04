@@ -25,6 +25,14 @@ describe('createDesignerAgent', () => {
     expect(prompt).toContain('<output_format>');
   });
 
+  test('prompt includes execution todo handoff for fixer', () => {
+    const agent = createDesignerAgent('test/designer-model');
+    const prompt = agent.config.prompt ?? '';
+    expect(prompt).toContain('<execution_todo_contract>');
+    expect(prompt).toContain('<execution_todo>');
+    expect(prompt).toContain('atomic fixer-ready tasks');
+  });
+
   test('has temperature 0.3', () => {
     const agent = createDesignerAgent('test/designer-model');
     expect(agent.config.temperature).toBe(0.3);
@@ -69,6 +77,7 @@ describe('createDesignerAgent', () => {
       '<design_plan>',
       '<accessibility_check>',
       '<implementation_notes>',
+      '<execution_todo>',
       '<blocked>',
     ];
     for (const section of requiredSections) {
