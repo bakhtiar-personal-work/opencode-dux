@@ -405,6 +405,12 @@ export class HandoffArtifactStore {
     const now = this.now();
     const purpose = derivePurpose(input.purpose || input.promptText, input.agent);
     const slug = slugifyArtifactPurpose(purpose || input.agent);
+    const effectiveBranchRevisionId =
+      input.branchRevisionId ??
+      (this.promptSequence > 0 ? this.branchRevisionId : undefined);
+    const effectivePromptSequence =
+      input.promptSequence ??
+      (this.promptSequence > 0 ? this.promptSequence : undefined);
     const existing = this.childRecords.get(input.childSessionId);
     if (existing) {
       existing.updatedAtIso = formatIso(now);
@@ -446,8 +452,8 @@ export class HandoffArtifactStore {
       updatedAtIso: formatIso(now),
       turns: [],
       latestStatus: 'open',
-      branchRevisionId: input.branchRevisionId,
-      promptSequence: input.promptSequence,
+      branchRevisionId: effectiveBranchRevisionId,
+      promptSequence: effectivePromptSequence,
     };
 
     this.childRecords.set(input.childSessionId, record);

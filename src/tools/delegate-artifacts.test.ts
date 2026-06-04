@@ -25,6 +25,13 @@ function parseEnvelopeField(output: string, label: string): string {
   return match?.[1] ?? '';
 }
 
+function withApprovedFixerPrompt(prompt: string): string {
+  return [
+    '<implementation_authorization>{"status":"approved","source":"latest_user_message","evidence":"User approved the implementation plan."}</implementation_authorization>',
+    prompt,
+  ].join('\n\n');
+}
+
 function createDelegateFixture(input: {
   workspace: string;
   sessionIds: string[];
@@ -285,7 +292,7 @@ describe('delegate artifact flow', () => {
     const launched = await delegateSubagent.execute(
       {
         agent: 'fixer',
-        prompt: 'Apply the auth fix',
+        prompt: withApprovedFixerPrompt('Apply the auth fix'),
         variant: 'medium',
         mode: 'fire_forget',
       },
@@ -390,7 +397,7 @@ describe('delegate artifact flow', () => {
     await delegateSubagent.execute(
       {
         agent: 'fixer',
-        prompt: 'Edit only src/a.ts',
+        prompt: withApprovedFixerPrompt('Edit only src/a.ts'),
         variant: 'medium',
         mode: 'fire_forget',
       },
@@ -437,7 +444,7 @@ describe('delegate artifact flow', () => {
       delegateSubagent.execute(
         {
           agent: 'fixer',
-          prompt: 'Apply fix one',
+          prompt: withApprovedFixerPrompt('Apply fix one'),
           variant: 'medium',
           mode: 'blocking',
         },
@@ -446,7 +453,7 @@ describe('delegate artifact flow', () => {
       delegateSubagent.execute(
         {
           agent: 'fixer',
-          prompt: 'Apply fix two',
+          prompt: withApprovedFixerPrompt('Apply fix two'),
           variant: 'medium',
           mode: 'blocking',
         },
@@ -489,7 +496,7 @@ describe('delegate artifact flow', () => {
     const promise = delegateSubagent.execute(
       {
         agent: 'fixer',
-        prompt: 'Apply fix',
+        prompt: withApprovedFixerPrompt('Apply fix'),
         variant: 'low',
         mode: 'blocking',
       },
@@ -579,7 +586,7 @@ describe('delegate artifact flow', () => {
     await delegateSubagent.execute(
       {
         agent: 'fixer',
-        prompt: 'Apply background fix',
+        prompt: withApprovedFixerPrompt('Apply background fix'),
         variant: 'medium',
         mode: 'fire_forget',
       },
@@ -624,7 +631,7 @@ describe('delegate artifact flow', () => {
     await delegateSubagent.execute(
       {
         agent: 'fixer',
-        prompt: 'Apply another background fix',
+        prompt: withApprovedFixerPrompt('Apply another background fix'),
         variant: 'medium',
         mode: 'fire_forget',
       },

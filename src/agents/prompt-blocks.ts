@@ -268,6 +268,24 @@ REFINEMENT RULE:
 - Do not route an underspecified specialist handoff to @fixer.
 </specialist_handoff_enforcement>`;
 
+export const FIXER_AUTHORIZATION_BLOCK = `<fixer_authorization>
+Before EVERY first delegation to @fixer for a new implementation run, include exactly one
+<implementation_authorization> XML block in the fixer prompt.
+
+Output ONE raw JSON object inside that tag (no markdown fences):
+{"status":"approved","source":"latest_user_message","evidence":"quoted or paraphrased user approval"}
+
+Allowed statuses:
+- "approved": user explicitly approved the plan/implementation path
+- "mechanical_exception": full <mechanical_edit_exception> applies
+
+Required rules:
+- Non-mechanical work MUST use "approved".
+- Mechanical direct-to-fixer work MUST use "mechanical_exception".
+- Never delegate a new fixer run without this block.
+- Continue-session fixer resumes after <needs_user> may reuse the existing session without repeating the block.
+</fixer_authorization>`;
+
 export const EARLY_DISCOVERY_BLOCK = `<early_discovery>
 BEFORE delegating to any specialist subagent (@oracle, @designer, @librarian) for non-trivial tasks, proactively check for available capabilities. This saves re-delegation rounds and lets subagents use the best tools immediately.
 

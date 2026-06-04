@@ -156,4 +156,76 @@ describe('createDelegateTools agent normalization', () => {
     expect(result).toContain('**designer**');
     expect(result).not.toContain('Unknown subagent');
   });
+
+  test('rejects new fixer delegations without implementation authorization', async () => {
+    const tools = createDelegateTools(
+      {
+        client: createClient() as never,
+        directory: '/tmp/test',
+      },
+      {
+        agents: {
+          fixer: { model: 'test/fixer' },
+        },
+      },
+      undefined,
+      createArtifactStore() as never,
+    );
+
+    const result = await (
+      tools.delegate_subagent as {
+        execute: (
+          args: Record<string, unknown>,
+          context: { sessionID: string },
+        ) => Promise<string>;
+      }
+    ).execute(
+      {
+        agent: 'fixer',
+        prompt: 'Apply the fix',
+        variant: 'medium',
+      },
+      { sessionID: 'parent-1' },
+    );
+
+    expect(result).toContain(
+      'New @fixer delegations require <implementation_authorization>',
+    );
+  });
+
+  test('allows new fixer delegations with explicit implementation authorization', async () => {
+    const tools = createDelegateTools(
+      {
+        client: createClient() as never,
+        directory: '/tmp/test',
+      },
+      {
+        agents: {
+          fixer: { model: 'test/fixer' },
+        },
+      },
+      undefined,
+      createArtifactStore() as never,
+    );
+
+    const result = await (
+      tools.delegate_subagent as {
+        execute: (
+          args: Record<string, unknown>,
+          context: { sessionID: string },
+        ) => Promise<string>;
+      }
+    ).execute(
+      {
+        agent: 'fixer',
+        prompt:
+          '<implementation_authorization>{"status":"approved","source":"latest_user_message","evidence":"User said go ahead."}</implementation_authorization>\n\nApply the fix',
+        variant: 'medium',
+      },
+      { sessionID: 'parent-1' },
+    );
+
+    expect(result).toContain('**fixer**');
+    expect(result).not.toContain('implementation_authorization');
+  });
 });

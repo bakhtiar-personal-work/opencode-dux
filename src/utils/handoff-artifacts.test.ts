@@ -458,4 +458,41 @@ describe('HandoffArtifactStore - formatForDelegation with relevance', () => {
     expect(recall).toContain('child-b');
     expect(recall).not.toContain('child-a');
   });
+
+  test('runtime-seeded artifacts inherit current timeline and exclude reverted fixer handoffs', () => {
+    const dir = makeTempDir();
+    const now = new Date('2026-06-02T03:04:05.000Z');
+    const store = new HandoffArtifactStore(dir, { now: () => now });
+
+    store.setTimeline(1, 'v0');
+    store.seedArtifact({
+      agent: 'fixer',
+      childSessionId: 'fixer-v0',
+      parentSessionId: 'parent-1',
+      model: 'test/model',
+      mode: 'blocking',
+      purpose: 'Old fix implementation',
+      promptText: 'Old fix implementation',
+    });
+    store.markStatus('fixer-v0', 'completed');
+
+    store.setTimeline(2, 'v1');
+    store.seedArtifact({
+      agent: 'oracle',
+      childSessionId: 'oracle-v1',
+      parentSessionId: 'parent-1',
+      model: 'test/model',
+      mode: 'blocking',
+      purpose: 'Reanalyze after revert',
+      promptText: 'Reanalyze after revert',
+    });
+    store.markStatus('oracle-v1', 'completed');
+
+    const delegation = store.formatForDelegation('parent-1', {
+      targetAgent: 'oracle',
+    });
+
+    expect(delegation).toContain('oracle-v1');
+    expect(delegation).not.toContain('fixer-v0');
+  });
 });

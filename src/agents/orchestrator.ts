@@ -9,6 +9,7 @@ import {
   COMMUNICATION_BLOCK,
   CRITICAL_INVARIANTS,
   EARLY_DISCOVERY_BLOCK,
+  FIXER_AUTHORIZATION_BLOCK,
   FIRST_GATE_BLOCK,
   FIXER_ORCHESTRATOR_DELEGATION_VARIANT_RULE,
   MECHANICAL_EDIT_EXCEPTION_BLOCK,
@@ -205,6 +206,7 @@ After user answers a <needs_user>, resume the same specialist session.
 - Only parallelize independent tasks. Keep dependent steps sequential.
 - Before every NEW @oracle delegation or escalation, use the inline <oracle_model_and_variant_selection>. Do not infer the oracle matrix from memory or the subagent roster alone.
 - Before routing specialist output to @fixer, use the inline <specialist_handoff_enforcement> unless the full mechanical edit exception clearly applies.
+- Before EVERY new @fixer run, include the inline <implementation_authorization> block per <fixer_authorization>. Runtime enforcement rejects missing authorization.
 - For actual parallel fan-out that must all finish before the next step, use \`delegate_subagents(..., mode: "blocking")\`.
 - For actual parallel fan-out that can continue in the background, use \`delegate_subagent\` or \`delegate_subagents\` with \`mode: "fire_forget"\`.
 - NEVER emit multiple separate blocking \`delegate_subagent\` calls when you intend concurrent work. Separate blocking calls are host-sequenced; use one \`delegate_subagents\` call instead.
@@ -231,6 +233,8 @@ ${interpreterProtocolBlock}
 ${ROUTING_ENFORCEMENT_BLOCK}
 
 ${SPECIALIST_HANDOFF_ENFORCEMENT_BLOCK}
+
+${FIXER_AUTHORIZATION_BLOCK}
 
 ${EARLY_DISCOVERY_BLOCK}
 

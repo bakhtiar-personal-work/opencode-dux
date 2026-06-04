@@ -68,6 +68,7 @@ Keep `"opencode-dux"` without a version in your config. Pinning a version like `
 Routing notes:
 
 - Bug fixes go to `@oracle` first when they need diagnosis, root-cause analysis, tradeoff evaluation, or multi-file reasoning. `@fixer` implements the approved plan.
+- Before any non-mechanical `@fixer` implementation run, the orchestrator must first present the proposed fix/plan to the user and get explicit approval. The user can choose the implementation path, request changes, or stop before code is modified.
 - Only purely mechanical edits such as typos, obvious single-line fixes, or user-specified exact changes may bypass `@oracle` and go straight to `@fixer`.
 
 ## Configuration
@@ -117,7 +118,7 @@ The orchestrator discovers skills and MCPs before delegating to subagents:
 - **Skills**: Before @oracle, @designer, or @librarian runs on a non-trivial task, the orchestrator calls `discover_skills` and `discover_mcp_servers` in parallel. Results are cached for 24 hours.
 - **Installed capabilities**: Relevant installed skills and MCPs are injected into the delegation prompt with their name, description, relevance, and usage instructions. Subagents can reference them right away.
 - **Missing capabilities**: If a useful capability is found but not yet installed, the orchestrator shows the install command before moving on.
-- **Prompt policy lookup**: The orchestrator keeps its routing control surface inline, but fetches detailed policy blocks through the internal built-in tool `get_orchestrator_prompt_section(section: "...")`. When the inline prompt says to fetch a named section, that lookup is mandatory before acting on that policy. In particular, every new `@oracle` delegation or escalation must fetch `oracle_model_and_variant_selection` first; the orchestrator should not write its own diagnosis or implementation plan.
+- **Approval gate**: For any new non-mechanical `@fixer` run, the orchestrator must include an explicit implementation-authorization block derived from the latest user approval. The delegate runtime rejects missing authorization, so prompt-only drift cannot silently bypass confirmation.
 
 Discovery runs automatically for non-trivial tasks.
 
@@ -132,12 +133,13 @@ Delegated subagent runs now persist handoff artifacts in the workspace:
 Behavior:
 
 - Blocking `delegate_subagent` results return a compact envelope with artifact paths instead of always echoing the full raw child output.
+- New `@fixer` runs require an explicit implementation-authorization block from the orchestrator. In practice this means the user must have already approved the proposed plan, unless the change is a true mechanical-edit exception.
 - For true "run these several searches now and wait for all of them" behavior, the orchestrator uses batched blocking delegation internally rather than emitting separate blocking calls one-by-one.
 - Parallel subagent fan-out should use `mode: "fire_forget"` for independent work streams. Read-only blocking delegations can overlap, but parallel `@fixer` batches should be collected first and then verified once by the orchestrator against the final combined repo state.
 - If the orchestrator still emits multiple near-simultaneous blocking `@fixer` delegations from the same parent turn, the delegate runtime now coalesces them into one internal parallel batch instead of serializing them one-by-one.
 - `delegate_collect(session_id: "...")` now waits by default for the internal completion event. Use `wait: false` only for an intentional non-blocking status probe; avoid repeated polling loops.
 - Only orchestration-critical sections stay inline: `needs_user`, `blocked`, oracle `plan`, designer `design_plan` + `implementation_notes`, fixer `summary` + `verification`.
-- The orchestrator system prompt now keeps core routing inline (`prompt_map`, `first_gate`, `agents`, and execution skeleton) and uses `get_orchestrator_prompt_section` to retrieve longer policy sections when needed. Built-in tool availability does not let the orchestrator bypass specialist-only routing constraints.
+- The orchestrator system prompt keeps the routing control surface inline. Built-in tool availability does not let the orchestrator bypass specialist-only routing constraints.
 - Resumed child sessions via `continue_session_id` append additional turns into the same artifact file.
 - Artifacts are retained for 7 days and then pruned from `.opencode-dux/` by the plugin.
 
@@ -218,7 +220,7 @@ How the full flow works:
 4. Otherwise it searches online with `npx skills find <keywords>` for skills or npm registry for MCPs
 5. Installed items are injected into delegation prompts with name, description, relevance, and usage instructions
 6. Useful items that aren't installed yet are recommended to the user with install commands
-7. When the inline orchestrator prompt requires a detailed internal policy block (approval rules, verification, recovery, oracle model matrix, etc.), it calls the built-in lookup tool `get_orchestrator_prompt_section` instead of carrying the entire policy corpus inline.
+7. The orchestrator carries its routing and approval policy inline, then delegates once the required gates are satisfied.
 
 Install skills: `npx skills add <owner/repo> --skill <skill-name> -g -a opencode -y`
 
