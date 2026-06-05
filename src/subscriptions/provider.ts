@@ -10,6 +10,7 @@ const PROVIDER_DISPLAY: Record<SubscriptionProvider, string> = {
   codex: 'Codex',
   deepseek: 'DeepSeek',
   neuralwatt: 'Neuralwatt',
+  mimo: 'MiMo',
 };
 
 /** Ordered list of all supported providers. */
@@ -18,6 +19,7 @@ export const PROVIDERS: SubscriptionProvider[] = [
   'neuralwatt',
   'deepseek',
   'codex',
+  'mimo',
 ];
 
 /**

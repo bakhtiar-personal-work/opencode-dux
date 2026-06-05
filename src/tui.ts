@@ -10,6 +10,7 @@ import { tuiProviderLabel } from './subscriptions/provider';
 import type {
   CodexUsageEntry,
   DeepSeekUsageEntry,
+  MiMoUsageEntry,
   NeuralwattUsage,
   NeuralwattUsageEntry,
 } from './subscriptions/types';
@@ -740,6 +741,71 @@ function renderDeepSeekUsage(
   }
 }
 
+/** Format a token count as a human-readable decimal string (e.g. "77.234M"). */
+function formatMimoTokenDecimal(tokens: number): string {
+  if (tokens >= 1_000_000_000) {
+    return `${(tokens / 1_000_000_000).toFixed(3)}B`;
+  }
+  if (tokens >= 1_000_000) {
+    return `${(tokens / 1_000_000).toFixed(3)}M`;
+  }
+  if (tokens >= 1_000) {
+    return `${(tokens / 1_000).toFixed(3)}K`;
+  }
+  return tokens.toFixed(3);
+}
+
+function renderMiMoUsage(
+  entry: MiMoUsageEntry,
+  rows: Child[],
+  theme: { text: unknown; textMuted: unknown; accent: unknown },
+): void {
+  // Row 1: AI Credits (used / max limit)
+  const planTotalItem = entry.planUsage.items.find(
+    (i) => i.name === 'plan_total_token',
+  );
+  if (planTotalItem) {
+    const usedStr = formatMimoTokenDecimal(planTotalItem.used);
+    const limitStr = formatMimoTokenDecimal(planTotalItem.limit);
+    rows.push(
+      box({ width: '100%', flexDirection: 'row' }, [
+        text({ fg: theme.accent }, [`${usedStr} / ${limitStr} AI Credits`]),
+      ]),
+    );
+  }
+
+  // Row 2: Progress bar with remaining percentage
+  const percentRemaining = planTotalItem
+    ? 100 - (planTotalItem.percent ?? 0) * 100
+    : 100;
+  const bar = renderUsageBar(percentRemaining);
+  const color = getUsageColor(percentRemaining);
+  rows.push(
+    box({ width: '100%', flexDirection: 'row' }, [
+      text({ fg: color || theme.text }, [
+        `${bar} ${percentRemaining.toFixed(1)}%`,
+      ]),
+    ]),
+  );
+
+  // Row 3: Balance
+  const balance = entry.balance.balance ?? '0';
+  rows.push(
+    box({ width: '100%', flexDirection: 'row' }, [
+      text({ fg: theme.text }, [`💰 $${balance} remaining`]),
+    ]),
+  );
+
+  // Row 4: Plan name
+  const planName = entry.planDetail.planName || 'Unknown';
+  rows.push(
+    box({ width: '100%', flexDirection: 'row' }, [
+      text({ fg: theme.textMuted }, [`   Plan: ${planName}`]),
+    ]),
+  );
+
+}
+
 function renderSubscriptionPanel(
   snapshot: TuiSnapshot,
   theme: {
@@ -806,6 +872,12 @@ function renderSubscriptionPanel(
       renderNeuralwattUsage(entry, rows, theme);
     } else if (entry.provider === 'deepseek') {
       renderDeepSeekUsage(entry as DeepSeekUsageEntry, rows, theme);
+    } else if (entry.provider === 'mimo') {
+      try {
+        renderMiMoUsage(entry as MiMoUsageEntry, rows, theme);
+      } catch (_e) {
+        rows.push(text({ fg: '#E74C3C' }, ['  ⚠️ Error rendering MiMo usage']));
+      }
     } else if (entry.provider === 'codex') {
       try {
         renderCodexUsage(entry as CodexUsageEntry, rows, theme);

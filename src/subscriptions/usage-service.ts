@@ -37,12 +37,14 @@ import {
 } from './codex-device-auth';
 import { scrapeCodexQuota } from './codex-scraper';
 import { scrapeDeepSeekBalance } from './deepseek-scraper';
+import { scrapeMiMoUsage } from './mimo-scraper';
 import { scrapeNeuralwattQuota } from './neuralwatt-scraper';
 import { scrapeQuota } from './opencode-go-scraper';
 import { PROVIDERS, resolveProvider } from './provider';
 import type {
   CodexAccount,
   DeepSeekAccount,
+  MiMoAccount,
   NeuralwattAccount,
   OpenCodeGoAccount,
   SubscriptionProvider,
@@ -257,6 +259,51 @@ export class UsageService {
             );
             entry.accountName = account.name;
             return entry as SubscriptionUsageEntry;
+          } else if (account.provider === 'mimo') {
+            if (
+              !account.platformPh?.trim() ||
+              !account.serviceToken?.trim() ||
+              !account.slh?.trim() ||
+              !account.userId?.trim()
+            ) {
+              return {
+                provider: 'mimo',
+                accountName: account.name,
+                fetchedAt: Date.now(),
+                balance: {
+                  balance: '0',
+                  frozenBalance: '0',
+                  currency: 'USD',
+                  overdraftLimit: '0',
+                  remainingOverdraftLimit: '0',
+                  giftBalance: '0',
+                  cashBalance: '0',
+                },
+                planDetail: {
+                  planCode: '',
+                  planName: '',
+                  currentPeriodEnd: '',
+                  expired: true,
+                  enableAutoRenew: false,
+                  autoRenewDiscount: null,
+                  hasAutoRenewSubscribed: false,
+                },
+                monthUsage: { percent: 0, items: [] },
+                planUsage: { percent: 0, items: [] },
+                error:
+                  'Missing MiMo cookie values. Re-add with /subscriptions add-mimo <name> <api-key> <platform_ph> <serviceToken> <slh> <userId>.',
+              } as SubscriptionUsageEntry;
+            }
+            const entry = await scrapeMiMoUsage(
+              account.name,
+              account.platformPh,
+              account.serviceToken,
+              account.slh,
+              account.userId,
+              controller.signal,
+            );
+            entry.accountName = account.name;
+            return entry as SubscriptionUsageEntry;
           } else {
             // neuralwatt
             if (!account.apiKey?.trim()) {
@@ -359,6 +406,8 @@ export class UsageService {
               if (account.provider !== provider) return false;
               if (account.provider === 'codex')
                 return account.accessToken === key;
+              if (account.provider === 'mimo')
+                return account.apiKey === key;
               return account.apiKey === key;
             })
           : undefined;
@@ -612,6 +661,63 @@ export class UsageService {
         break;
       }
 
+      case 'add-mimo': {
+        const [_, name, apiKey, platformPh, serviceToken, slh, userId] = parts;
+        if (!name || !apiKey || !platformPh || !serviceToken || !slh || !userId) {
+          output.parts.push(
+            createInternalAgentTextPart(
+              'Usage: /subscriptions add-mimo <name> <api-key> <platform_ph> <serviceToken> <slh> <userId>\n' +
+                'Example: /subscriptions add-mimo my-mimo sk-xxx ph_value token_value slh_value uid_value',
+            ),
+          );
+          return;
+        }
+        const nameValidation = validateAccountName(name);
+        if (!nameValidation.valid) {
+          output.parts.push(
+            createInternalAgentTextPart(
+              `❌ Invalid account name: ${nameValidation.error}`,
+            ),
+          );
+          return;
+        }
+        const account: StoredAccount = {
+          provider: 'mimo',
+          name,
+          apiKey,
+          platformPh,
+          serviceToken,
+          slh,
+          userId,
+        };
+        saveAccount(account);
+        // Auto-activate if no active account for this provider
+        {
+          const activeByProvider = this.syncActiveAccounts();
+          const pKey: string = account.provider;
+          if (!activeByProvider[pKey as SubscriptionProvider]) {
+            try {
+              const key = (account as MiMoAccount).apiKey ?? '';
+              if (key) {
+                await this.client.auth.set({
+                  path: { id: pKey },
+                  body: { type: 'api', key },
+                });
+                this.syncActiveAccounts();
+              }
+            } catch {
+              // Non-fatal: account is saved but not activated
+            }
+          }
+        }
+        // Refresh to update sidebar immediately
+        this.refresh(true).catch(() => {});
+        output.parts.push(
+          createInternalAgentTextPart(`✅ Added MiMo account "${name}".`),
+        );
+        break;
+      }
+
       case 'add-codex-device': {
         const [_, name] = parts;
         if (!name) {
@@ -744,7 +850,7 @@ export class UsageService {
           output.parts.push(
             createInternalAgentTextPart(
               'Usage: /subscriptions remove <provider> <name>\n' +
-                'Providers: opencode-go, neuralwatt, deepseek, codex\n' +
+                'Providers: opencode-go, neuralwatt, deepseek, codex, mimo\n' +
                 'Example: /subscriptions remove opencode-go personal',
             ),
           );
@@ -786,7 +892,7 @@ export class UsageService {
         if (accounts.length === 0) {
           output.parts.push(
             createInternalAgentTextPart(
-              'No accounts configured. Use /subscriptions add-opencode-go, /subscriptions add-neuralwatt, /subscriptions add-deepseek, or /subscriptions add-codex-device to add one.',
+              'No accounts configured. Use /subscriptions add-opencode-go, /subscriptions add-neuralwatt, /subscriptions add-deepseek, /subscriptions add-mimo, or /subscriptions add-codex-device to add one.',
             ),
           );
           return;
@@ -812,6 +918,12 @@ export class UsageService {
             lines.push(
               `    refresh-token: ${acct.refreshToken ? '[set]' : '-'}`,
             );
+          } else if (acct.provider === 'mimo') {
+            lines.push(`    api-key: ${maskCookie(acct.apiKey)}`);
+            lines.push(`    platform_ph: ${maskCookie(acct.platformPh)}`);
+            lines.push(`    serviceToken: ${maskCookie(acct.serviceToken)}`);
+            lines.push(`    slh: ${maskCookie(acct.slh)}`);
+            lines.push(`    userId: ${maskCookie(acct.userId)}`);
           } else {
             lines.push(`    api-key: ${maskCookie(acct.apiKey)}`);
           }
@@ -832,6 +944,7 @@ export class UsageService {
         );
         lines.push('  /subscriptions add-neuralwatt <name> <api-key>');
         lines.push('  /subscriptions add-deepseek <name> <api-key>');
+        lines.push('  /subscriptions add-mimo <name> <api-key> <platform_ph> <serviceToken> <slh> <userId>');
         lines.push('  /subscriptions add-codex-device <name>');
         lines.push('  /subscriptions remove <provider> <name>');
         lines.push('  /subscriptions switch <provider> <name>');
@@ -848,7 +961,7 @@ export class UsageService {
           output.parts.push(
             createInternalAgentTextPart(
               'Usage: /subscriptions switch <provider> <name>\n' +
-                'Providers: opencode-go, neuralwatt, deepseek, codex\n' +
+                'Providers: opencode-go, neuralwatt, deepseek, codex, mimo\n' +
                 'Example: /subscriptions switch opencode-go personal',
             ),
           );
@@ -871,6 +984,15 @@ export class UsageService {
             output.parts.push(
               createInternalAgentTextPart(
                 `Account "${name}" has no access token set. Use /subscriptions add-codex-device to re-add.`,
+              ),
+            );
+            return;
+          }
+        } else if (account.provider === 'mimo') {
+          if (!account.apiKey) {
+            output.parts.push(
+              createInternalAgentTextPart(
+                `Account "${name}" has no API key set. Re-add with /subscriptions add-mimo <name> <api-key> <platform_ph> <serviceToken> <slh> <userId>.`,
               ),
             );
             return;
@@ -920,6 +1042,11 @@ export class UsageService {
             await this.client.auth.set({
               path: { id: account.provider },
               body: oauthBody,
+            });
+          } else if (account.provider === 'mimo') {
+            await this.client.auth.set({
+              path: { id: account.provider },
+              body: { type: 'api', key: account.apiKey ?? '' },
             });
           } else {
             await this.client.auth.set({
@@ -971,6 +1098,7 @@ export class UsageService {
               '  /subscriptions add-opencode-go <name> <workspace-id> <auth-cookie>   Add an OpenCode Go account\n' +
               '  /subscriptions add-neuralwatt <name> <api-key>                       Add a Neuralwatt account\n' +
               '  /subscriptions add-deepseek <name> <api-key>                         Add a DeepSeek account\n' +
+              '  /subscriptions add-mimo <name> <api-key> <platform_ph> <serviceToken> <slh> <userId>  Add a MiMo account\n' +
               '  /subscriptions add-codex-device <name>                               Add a Codex account (device auth)\n' +
               '  /subscriptions remove <provider> <name>                              Remove an account\n' +
               '  /subscriptions switch <provider> <name>                              Switch active account for provider\n' +
@@ -999,7 +1127,7 @@ export class UsageService {
         SUBSCRIPTIONS_COMMAND
       ] = {
         template:
-          'Manage subscription accounts (add-opencode-go, add-neuralwatt, add-deepseek, add-codex-device, remove, list, switch, refresh)',
+          'Manage subscription accounts (add-opencode-go, add-neuralwatt, add-deepseek, add-mimo, add-codex-device, remove, list, switch, refresh)',
         description:
           'Add, remove, list, switch, or refresh subscription accounts for usage tracking in the sidebar',
       };

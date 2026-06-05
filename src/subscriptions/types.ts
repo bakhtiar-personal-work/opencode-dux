@@ -11,7 +11,8 @@ export type SubscriptionProvider =
   | 'opencode-go'
   | 'neuralwatt'
   | 'deepseek'
-  | 'codex';
+  | 'codex'
+  | 'mimo';
 
 export interface OpenCodeGoAccount {
   provider: 'opencode-go';
@@ -46,11 +47,22 @@ export interface CodexAccount {
   idToken?: string;
 }
 
+export interface MiMoAccount {
+  provider: 'mimo';
+  name: string;
+  apiKey: string;
+  platformPh: string;
+  serviceToken: string;
+  slh: string;
+  userId: string;
+}
+
 export type StoredAccount =
   | OpenCodeGoAccount
   | NeuralwattAccount
   | DeepSeekAccount
-  | CodexAccount;
+  | CodexAccount
+  | MiMoAccount;
 
 /** Per-time-window usage data scraped from the OpenCode Go dashboard. */
 export interface UsageWindow {
@@ -151,6 +163,50 @@ export interface DeepSeekUsageEntry {
   error?: string;
 }
 
+export interface MiMoBalance {
+  balance: string;
+  frozenBalance: string;
+  currency: string;
+  overdraftLimit: string;
+  remainingOverdraftLimit: string;
+  giftBalance: string;
+  cashBalance: string;
+}
+
+export interface MiMoPlanDetail {
+  planCode: string;
+  planName: string;
+  currentPeriodEnd: string;
+  expired: boolean;
+  enableAutoRenew: boolean;
+  autoRenewDiscount: unknown;
+  hasAutoRenewSubscribed: boolean;
+}
+
+export interface MiMoUsageItem {
+  name: string;
+  used: number;
+  limit: number;
+  percent: number;
+}
+
+export interface MiMoUsageData {
+  percent: number;
+  items: MiMoUsageItem[];
+}
+
+/** Snapshot entry per MiMo account - stored in tui-state.json. */
+export interface MiMoUsageEntry {
+  provider: 'mimo';
+  accountName: string;
+  fetchedAt: number;
+  error?: string;
+  balance: MiMoBalance;
+  planDetail: MiMoPlanDetail;
+  monthUsage: MiMoUsageData;
+  planUsage: MiMoUsageData;
+}
+
 export interface CodexUsageEntry {
   provider: 'codex';
   accountName: string;
@@ -174,7 +230,8 @@ export type SubscriptionUsageEntry =
   | OpenCodeGoUsageEntry
   | NeuralwattUsageEntry
   | DeepSeekUsageEntry
-  | CodexUsageEntry;
+  | CodexUsageEntry
+  | MiMoUsageEntry;
 
 /** Detailed usage data from the /usage page. */
 export interface UsageDetail {

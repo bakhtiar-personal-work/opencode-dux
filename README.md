@@ -155,6 +155,7 @@ Manage API accounts from the OpenCode prompt with `/subscriptions`:
 - `/subscriptions add-opencode-go <name> <workspace-id> <auth-cookie>` - Add OpenCode Go account
 - `/subscriptions add-neuralwatt <name> <api-key>` - Add Neuralwatt account
 - `/subscriptions add-deepseek <name> <api-key>` - Add DeepSeek account
+- `/subscriptions add-mimo <name> <api-key> <platform_ph> <serviceToken> <slh> <userId>` - Add MiMo (Xiaomi) account (cookie values from browser DevTools)
 - `/subscriptions add-codex-device <name>` - Add Codex (OpenAI) account via device auth
 - `/subscriptions switch <provider> <name>` - Activate an account for a provider
 - `/subscriptions remove <provider> <name>` - Delete an account
@@ -167,6 +168,7 @@ Manage API accounts from the OpenCode prompt with `/subscriptions`:
 | **OpenCode Go** | `opencode-go` | Dashboard scraping (rolling, weekly, monthly windows) | Workspace ID + auth cookie |
 | **Neuralwatt**  | `neuralwatt`  | REST API (credits, kWh, token usage)                  | API key                    |
 | **DeepSeek**    | `deepseek`    | Official REST API (`/user/balance`)                   | API key                    |
+| **MiMo**        | `mimo`        | Platform API (balance, plan, AI Credits usage)        | API key + cookie values    |
 | **Codex**       | `codex`       | REST API (5H/7D rate limits, credits)                 | Device code auth (OAuth)   |
 
 Accounts are identified by provider and name. You can have accounts with the same name across different providers (e.g., "Main" for Codex, "Main" for Neuralwatt) without collisions. Remove a specific account with `/subscriptions remove <provider> <name>`.
@@ -185,6 +187,19 @@ Codex uses your ChatGPT account, not an API key. The device auth flow works from
 4. Usage tracking starts immediately
 
 Access tokens refresh automatically. If the refresh token expires (e.g., after a password change), run `/subscriptions add-codex-device` again.
+
+### MiMo authentication
+
+MiMo uses both an API key (for inference) and cookie values (for usage tracking).
+
+1. Run `/subscriptions add-mimo <name> <api-key> <platform_ph> <serviceToken> <slh> <userId>`
+2. Get cookie values from browser DevTools → Application → Cookies → `platform.xiaomimimo.com`:
+   - `api-platform_ph`
+   - `api-platform_serviceToken`
+   - `api-platform_slh`
+   - `userId`
+
+Usage tracking shows AI Credits (remaining / total) and balance in the TUI sidebar.
 
 ## Prompt overrides
 
