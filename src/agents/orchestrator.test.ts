@@ -11,9 +11,7 @@ describe('resolvePrompt', () => {
   });
 
   test('append prompt is appended to base', () => {
-    expect(resolvePrompt('BASE', undefined, 'APPEND')).toBe(
-      'BASE\n\nAPPEND',
-    );
+    expect(resolvePrompt('BASE', undefined, 'APPEND')).toBe('BASE\n\nAPPEND');
   });
 });
 
@@ -68,7 +66,9 @@ describe('buildOrchestratorPrompt', () => {
     expect(prompt).toContain('<routing_enforcement>');
     expect(prompt).toContain('Good routing examples:');
     expect(prompt).toContain('<specialist_handoff_enforcement>');
-    expect(prompt).toContain('Do not route an underspecified specialist handoff to @fixer.');
+    expect(prompt).toContain(
+      'Do not route an underspecified specialist handoff to @fixer.',
+    );
     expect(prompt).toContain('<verification>');
     expect(prompt).toContain(
       "Prioritize evidence from delegated agents' <verification> output",

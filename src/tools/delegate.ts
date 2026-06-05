@@ -273,9 +273,7 @@ function parseImplementationAuthorization(
   }
 }
 
-function validateFixerAuthorization(
-  promptText: string,
-): string | undefined {
+function validateFixerAuthorization(promptText: string): string | undefined {
   const authorization = parseImplementationAuthorization(promptText);
   if (!authorization) {
     return (

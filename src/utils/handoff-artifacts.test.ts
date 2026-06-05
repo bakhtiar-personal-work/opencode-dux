@@ -136,7 +136,10 @@ describe('HandoffArtifactStore', () => {
     expect(a.indexPath).toBe(b.indexPath);
     expect(a.artifactPath).not.toBe(b.artifactPath);
 
-    const indexBody = fs.readFileSync(path.join(workspace, a.indexPath), 'utf8');
+    const indexBody = fs.readFileSync(
+      path.join(workspace, a.indexPath),
+      'utf8',
+    );
     expect(indexBody).toContain('oracle-1');
     expect(indexBody).toContain('oracle-2');
   });
@@ -197,9 +200,24 @@ describe('HandoffArtifactStore - selectRelevantArtifacts', () => {
 
   test('filters by branch revision', () => {
     const { store } = setupStore();
-    seed(store, { agent: 'oracle', childSessionId: 'a1', promptSequence: 1, branchRevisionId: 'v0' });
-    seed(store, { agent: 'fixer', childSessionId: 'a2', promptSequence: 2, branchRevisionId: 'v0' });
-    seed(store, { agent: 'oracle', childSessionId: 'a3', promptSequence: 1, branchRevisionId: 'v1' });
+    seed(store, {
+      agent: 'oracle',
+      childSessionId: 'a1',
+      promptSequence: 1,
+      branchRevisionId: 'v0',
+    });
+    seed(store, {
+      agent: 'fixer',
+      childSessionId: 'a2',
+      promptSequence: 2,
+      branchRevisionId: 'v0',
+    });
+    seed(store, {
+      agent: 'oracle',
+      childSessionId: 'a3',
+      promptSequence: 1,
+      branchRevisionId: 'v1',
+    });
 
     // Default branch is v0
     const v0Artifacts = store.selectRelevantArtifacts('parent-1', {
@@ -233,8 +251,16 @@ describe('HandoffArtifactStore - selectRelevantArtifacts', () => {
 
   test('prefers explicit paths', () => {
     const { store } = setupStore();
-    seed(store, { agent: 'oracle', childSessionId: 'explicit-1', promptSequence: 3 });
-    seed(store, { agent: 'fixer', childSessionId: 'recent-1', promptSequence: 5 });
+    seed(store, {
+      agent: 'oracle',
+      childSessionId: 'explicit-1',
+      promptSequence: 3,
+    });
+    seed(store, {
+      agent: 'fixer',
+      childSessionId: 'recent-1',
+      promptSequence: 5,
+    });
 
     const explicitPath = store.getArtifactPath('explicit-1');
 
@@ -249,9 +275,17 @@ describe('HandoffArtifactStore - selectRelevantArtifacts', () => {
 
   test('prefers prerequisite agents for target', () => {
     const { store } = setupStore();
-    seed(store, { agent: 'explorer', childSessionId: 'exp-1', promptSequence: 1 });
+    seed(store, {
+      agent: 'explorer',
+      childSessionId: 'exp-1',
+      promptSequence: 1,
+    });
     seed(store, { agent: 'fixer', childSessionId: 'fix-1', promptSequence: 2 });
-    seed(store, { agent: 'oracle', childSessionId: 'ora-1', promptSequence: 3 });
+    seed(store, {
+      agent: 'oracle',
+      childSessionId: 'ora-1',
+      promptSequence: 3,
+    });
 
     // For fixer target, oracle should be preferred over explorer
     const artifacts = store.selectRelevantArtifacts('parent-1', {
@@ -267,7 +301,11 @@ describe('HandoffArtifactStore - selectRelevantArtifacts', () => {
   test('caps results', () => {
     const { store } = setupStore();
     for (let i = 1; i <= 10; i++) {
-      seed(store, { agent: 'oracle', childSessionId: `cap-${i}`, promptSequence: i });
+      seed(store, {
+        agent: 'oracle',
+        childSessionId: `cap-${i}`,
+        promptSequence: i,
+      });
     }
 
     const defaultCap = store.selectRelevantArtifacts('parent-1');
@@ -294,7 +332,11 @@ describe('HandoffArtifactStore - selectRelevantArtifacts', () => {
       promptText: 'open artifact',
     });
     // Don't mark status - stays 'open'
-    seed(store, { agent: 'oracle', childSessionId: 'done-1', promptSequence: 1 });
+    seed(store, {
+      agent: 'oracle',
+      childSessionId: 'done-1',
+      promptSequence: 1,
+    });
 
     const artifacts = store.selectRelevantArtifacts('parent-1', { cap: 10 });
     expect(artifacts.some((a) => a.sessionId === 'open-1')).toBe(false);
@@ -316,7 +358,12 @@ describe('HandoffArtifactStore - selectRelevantArtifacts', () => {
     store.markStatus('legacy-1', 'completed');
 
     // New artifact on branch v2
-    seed(store, { agent: 'oracle', childSessionId: 'new-1', promptSequence: 1, branchRevisionId: 'v2' });
+    seed(store, {
+      agent: 'oracle',
+      childSessionId: 'new-1',
+      promptSequence: 1,
+      branchRevisionId: 'v2',
+    });
 
     const artifacts = store.selectRelevantArtifacts('parent-1', {
       branchRevisionId: 'v2',
@@ -413,7 +460,9 @@ describe('HandoffArtifactStore - formatForDelegation with relevance', () => {
     store.markStatus('child-2', 'completed');
 
     // Format with v1 timeline — should NOT include child-1 (from v0)
-    const formatted = store.formatForDelegation('parent-1', { targetAgent: 'fixer' });
+    const formatted = store.formatForDelegation('parent-1', {
+      targetAgent: 'fixer',
+    });
     expect(formatted).toBeDefined();
     expect(formatted).toContain('child-2');
     expect(formatted).not.toContain('child-1');

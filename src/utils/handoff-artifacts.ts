@@ -139,13 +139,19 @@ function pad(value: number): string {
 }
 
 function formatTimestampForFilename(date: Date): string {
-  return [
-    date.getUTCFullYear(),
-    pad(date.getUTCMonth() + 1),
-    pad(date.getUTCDate()),
-  ].join('') +
+  return (
+    [
+      date.getUTCFullYear(),
+      pad(date.getUTCMonth() + 1),
+      pad(date.getUTCDate()),
+    ].join('') +
     '-' +
-    [pad(date.getUTCHours()), pad(date.getUTCMinutes()), pad(date.getUTCSeconds())].join('');
+    [
+      pad(date.getUTCHours()),
+      pad(date.getUTCMinutes()),
+      pad(date.getUTCSeconds()),
+    ].join('')
+  );
 }
 
 function formatIso(date: Date): string {
@@ -244,7 +250,14 @@ function renderChildArtifact(record: ChildArtifactRecord): string {
     }
   }
 
-  lines.push('', '### Original Delegation Prompt', '```text', record.originalPrompt, '```', '');
+  lines.push(
+    '',
+    '### Original Delegation Prompt',
+    '```text',
+    record.originalPrompt,
+    '```',
+    '',
+  );
 
   for (const turn of record.turns) {
     lines.push(
@@ -260,8 +273,12 @@ function renderChildArtifact(record: ChildArtifactRecord): string {
   }
 
   lines.push('## Parsed Summary');
-  lines.push(`- Detected needs_user: ${record.latestStatus === 'needs_user' ? 'yes' : 'no'}`);
-  lines.push(`- Detected blocked: ${record.latestStatus === 'blocked' ? 'yes' : 'no'}`);
+  lines.push(
+    `- Detected needs_user: ${record.latestStatus === 'needs_user' ? 'yes' : 'no'}`,
+  );
+  lines.push(
+    `- Detected blocked: ${record.latestStatus === 'blocked' ? 'yes' : 'no'}`,
+  );
   lines.push('- Inline Handoff Sections:');
   const latestInlineSections = record.turns.at(-1)?.inlineSections ?? [];
   if (latestInlineSections.length === 0) {
@@ -305,7 +322,10 @@ export class HandoffArtifactStore {
   private readonly now: () => Date;
   private readonly retentionMs: number;
   private readonly childRecords = new Map<string, ChildArtifactRecord>();
-  private readonly orchestratorIndexes = new Map<string, OrchestratorIndexRecord>();
+  private readonly orchestratorIndexes = new Map<
+    string,
+    OrchestratorIndexRecord
+  >();
 
   /** Current prompt sequence number (orchestrator turn count). */
   private promptSequence: number = 0;
@@ -332,7 +352,10 @@ export class HandoffArtifactStore {
   }
 
   getTimeline(): { promptSequence: number; branchRevisionId: string } {
-    return { promptSequence: this.promptSequence, branchRevisionId: this.branchRevisionId };
+    return {
+      promptSequence: this.promptSequence,
+      branchRevisionId: this.branchRevisionId,
+    };
   }
 
   /**
@@ -403,7 +426,10 @@ export class HandoffArtifactStore {
   seedArtifact(input: ArtifactSeedInput): ArtifactRecordResult {
     this.pruneExpired();
     const now = this.now();
-    const purpose = derivePurpose(input.purpose || input.promptText, input.agent);
+    const purpose = derivePurpose(
+      input.purpose || input.promptText,
+      input.agent,
+    );
     const slug = slugifyArtifactPurpose(purpose || input.agent);
     const effectiveBranchRevisionId =
       input.branchRevisionId ??
@@ -421,7 +447,10 @@ export class HandoffArtifactStore {
       existing.originalPrompt = input.promptText;
       existing.referencedArtifactPaths = unique(
         input.referencedArtifactPaths?.length
-          ? [...existing.referencedArtifactPaths, ...input.referencedArtifactPaths]
+          ? [
+              ...existing.referencedArtifactPaths,
+              ...input.referencedArtifactPaths,
+            ]
           : existing.referencedArtifactPaths,
       );
       this.writeChildArtifact(existing);
@@ -593,12 +622,17 @@ export class HandoffArtifactStore {
   ): ArtifactSessionInfo[] {
     const cap = options.cap ?? (options.context === 'prompt' ? 3 : 5);
     // Only apply timeline defaults when the store has actually been advanced
-    const branchRevId = options.branchRevisionId ?? (this.promptSequence > 0 ? this.branchRevisionId : undefined);
-    const cutoffPSeq = options.promptSequenceCutoff ?? (this.promptSequence > 0 ? this.promptSequence : undefined);
+    const branchRevId =
+      options.branchRevisionId ??
+      (this.promptSequence > 0 ? this.branchRevisionId : undefined);
+    const cutoffPSeq =
+      options.promptSequenceCutoff ??
+      (this.promptSequence > 0 ? this.promptSequence : undefined);
 
     // Get all artifacts for this parent
-    let artifacts = [...this.childRecords.values()]
-      .filter((r) => r.parentSessionId === parentSessionId);
+    let artifacts = [...this.childRecords.values()].filter(
+      (r) => r.parentSessionId === parentSessionId,
+    );
 
     // Filter by branch revision (unversioned legacy artifacts are always included)
     if (branchRevId != null) {
@@ -646,10 +680,9 @@ export class HandoffArtifactStore {
     remaining.sort(sortDesc);
 
     // Prefer prerequisite-agent artifacts for the target agent
-    const prerequisites =
-      options.targetAgent
-        ? HandoffArtifactStore.PREREQUISITE_AGENTS[options.targetAgent] ?? []
-        : [];
+    const prerequisites = options.targetAgent
+      ? (HandoffArtifactStore.PREREQUISITE_AGENTS[options.targetAgent] ?? [])
+      : [];
 
     const preferred: ChildArtifactRecord[] = [];
     const rest: ChildArtifactRecord[] = [];
@@ -744,7 +777,11 @@ export class HandoffArtifactStore {
     }
 
     const relativePath = path
-      .join(ARTIFACT_ROOT_DIRNAME, ORCHESTRATOR_INDEX_DIRNAME, `${parentSessionId}.md`)
+      .join(
+        ARTIFACT_ROOT_DIRNAME,
+        ORCHESTRATOR_INDEX_DIRNAME,
+        `${parentSessionId}.md`,
+      )
       .split(path.sep)
       .join('/');
     const record: OrchestratorIndexRecord = {
@@ -786,7 +823,7 @@ export class HandoffArtifactStore {
 
 export function extractArtifactPathsFromPrompt(promptText: string): string[] {
   const matches = promptText.match(
-    /(?:^|[\s`(])(\.opencode-dux\/[A-Za-z0-9._\-\/]+\.md)(?=$|[\s`)])/gm,
+    /(?:^|[\s`(])(\.opencode-dux\/[A-Za-z0-9._\-/]+\.md)(?=$|[\s`)])/gm,
   );
   if (!matches) {
     return [];
@@ -794,9 +831,7 @@ export function extractArtifactPathsFromPrompt(promptText: string): string[] {
 
   return unique(
     matches
-      .map((match) =>
-        match.replace(/^[\s`(]+/, '').replace(/[\s`)]+$/, ''),
-      )
+      .map((match) => match.replace(/^[\s`(]+/, '').replace(/[\s`)]+$/, ''))
       .filter(Boolean),
   );
 }

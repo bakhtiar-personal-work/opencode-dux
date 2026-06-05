@@ -1,6 +1,6 @@
-import type { PluginInput } from '@opencode-ai/plugin';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import type { PluginInput } from '@opencode-ai/plugin';
 import { crossSpawn } from '../../utils/compat';
 import { log } from '../../utils/logger';
 import { writeVersionCache } from '../../version-store';
