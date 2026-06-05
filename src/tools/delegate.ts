@@ -279,7 +279,11 @@ function validateFixerAuthorization(promptText: string): string | undefined {
     return (
       'Error: New @fixer delegations require <implementation_authorization> ' +
       'with raw JSON indicating either {"status":"approved"} for explicit user approval ' +
-      'or {"status":"mechanical_exception"} when the full mechanical edit exception applies.'
+      'or {"status":"mechanical_exception"} when the full mechanical edit exception applies. ' +
+      'Follow orchestrator <planning_gate> first: run @designer for UI work or @oracle otherwise, ' +
+      'present that specialist handoff, wait for explicit user approval, then pass the exact ' +
+      '<execution_todo> plus the required <implementation_authorization> block described in ' +
+      '<fixer_authorization>.'
     );
   }
 

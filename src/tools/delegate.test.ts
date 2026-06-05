@@ -191,6 +191,9 @@ describe('createDelegateTools agent normalization', () => {
     expect(result).toContain(
       'New @fixer delegations require <implementation_authorization>',
     );
+    expect(result).toContain('<planning_gate>');
+    expect(result).toContain('<execution_todo>');
+    expect(result).toContain('<fixer_authorization>');
   });
 
   test('allows new fixer delegations with explicit implementation authorization', async () => {
