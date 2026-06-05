@@ -16,32 +16,21 @@ describe('resolvePrompt', () => {
 });
 
 describe('buildOrchestratorPrompt', () => {
-  test('starts with an inline prompt map instead of a lookup tool', () => {
+  test('starts with role and rules sections', () => {
     const prompt = buildOrchestratorPrompt();
 
-    expect(prompt.startsWith('<prompt_map>')).toBe(true);
+    expect(prompt.startsWith('# Role')).toBe(true);
+    expect(prompt).toContain('# Rules');
     expect(prompt).toContain(
-      'Fast lookup index — use this to map the orchestrator policy blocks that are already embedded in this prompt:',
+      'You route and delegate.',
     );
-    expect(prompt).toContain(
-      '- planning_gate: approval boundary before implementation (inline below)',
-    );
-    expect(prompt).toContain(
-      '- specialist_handoff_enforcement: canonical specialist-to-fixer handoff rules (inline below)',
-    );
-    expect(prompt).not.toContain('get_orchestrator_prompt_section');
-    expect(prompt).not.toContain('<prompt_lookup>');
   });
 
-  test('keeps inline routing discipline and agent roster near the top', () => {
+  test('keeps routing gates and agent roster near the top', () => {
     const prompt = buildOrchestratorPrompt();
 
-    expect(prompt).toContain('<lookup_discipline>');
-    expect(prompt).toContain(
-      'The top-level prompt map is a navigation index for inline policy blocks already present in this prompt.',
-    );
-    expect(prompt).toContain('<first_gate>');
-    expect(prompt).toContain('<agents>');
+    expect(prompt).toContain('# Routing Gates');
+    expect(prompt).toContain('# Agents');
     expect(prompt).toContain('@oracle');
     expect(prompt).toContain('@fixer');
   });
@@ -49,7 +38,7 @@ describe('buildOrchestratorPrompt', () => {
   test('includes approval checkpoint that forbids self-approval', () => {
     const prompt = buildOrchestratorPrompt();
 
-    expect(prompt).toContain('<approval_checkpoint>');
+    expect(prompt).toContain('## Approval Checkpoint');
     expect(prompt).toContain(
       'Implementation approval must come from the user, never from your own reasoning.',
     );
@@ -61,42 +50,42 @@ describe('buildOrchestratorPrompt', () => {
   test('inlines planning, routing, handoff, and verification policy blocks', () => {
     const prompt = buildOrchestratorPrompt();
 
-    expect(prompt).toContain('<planning_gate>');
-    expect(prompt).toContain('EXPLICIT APPROVAL required before step 4:');
-    expect(prompt).toContain('<routing_enforcement>');
-    expect(prompt).toContain('Good routing examples:');
-    expect(prompt).toContain('<specialist_handoff_enforcement>');
+    expect(prompt).toContain('# Planning Gate');
+    expect(prompt).toContain('**Explicit approval required before step 4:**');
+    expect(prompt).toContain('## Routing Enforcement');
+    expect(prompt).toContain('**Good routing:**');
+    expect(prompt).toContain('## Specialist Handoff');
     expect(prompt).toContain(
-      'Do not route an underspecified specialist handoff to @fixer.',
+      'Do not route underspecified handoffs to @fixer.',
     );
-    expect(prompt).toContain('<verification>');
+    expect(prompt).toContain('## Verification');
     expect(prompt).toContain(
-      "Prioritize evidence from delegated agents' <verification> output",
+      "Prioritize evidence from delegated agents'",
     );
   });
 
   test('inlines steward, interpreter, discovery, recovery, output, and communication blocks', () => {
     const prompt = buildOrchestratorPrompt();
 
-    expect(prompt).toContain('<steward_protocol>');
-    expect(prompt).toContain('STEWARDSHIP REQUIRED (MUST RUN FIRST):');
-    expect(prompt).toContain('<interpreter_protocol>');
+    expect(prompt).toContain('# Steward Protocol');
+    expect(prompt).toContain('Stewardship required for any task');
+    expect(prompt).toContain('## Interpreter Protocol');
     expect(prompt).toContain(
       'User message includes images and task is not explicitly UI redesign/polish:',
     );
-    expect(prompt).toContain('<early_discovery>');
+    expect(prompt).toContain('# Capability Discovery');
     expect(prompt).toContain(
       'BEFORE delegating to any specialist subagent (@oracle, @designer, @librarian)',
     );
-    expect(prompt).toContain('<subagent_recovery>');
+    expect(prompt).toContain('## Recovery');
     expect(prompt).toContain(
-      'Preserve session context: use `session_id` from <delegate_session_continue> tag',
+      'Preserve session context',
     );
     expect(prompt).toContain('<output_format>');
     expect(prompt).toContain('When reporting final results to the user:');
-    expect(prompt).toContain('<communication>');
+    expect(prompt).toContain('# Communication');
     expect(prompt).toContain(
-      'Lead with the answer, not the process (unless user asked for process).',
+      'Lead with the answer or status, not the process',
     );
   });
 
@@ -106,39 +95,35 @@ describe('buildOrchestratorPrompt', () => {
       'openai/gpt-5.5-pro',
     );
 
-    expect(prompt).toContain('<oracle_model_and_variant_selection>');
-    expect(prompt).toContain('INLINE POLICY RULE:');
+    expect(prompt).toContain('# Oracle Model Selection');
     expect(prompt).toContain('openai/gpt-5.5');
     expect(prompt).toContain('openai/gpt-5.5-pro');
     expect(prompt).toContain('Scenario -> model+variant:');
   });
 
-  test('execution flow references inline policy blocks instead of fetched sections', () => {
+  test('execution flow references inline policy blocks', () => {
     const prompt = buildOrchestratorPrompt();
 
     expect(prompt).toContain(
-      '2) STEWARD BRIEF: For code-affecting work, use <steward_protocol> before deciding whether the steward gate applies',
+      '2) **STEWARD BRIEF:**',
     );
     expect(prompt).toContain(
-      '3) CONTEXT RETRIEVAL: After steward and before the first reasoning specialist, retrieve missing facts.',
+      '3) **CONTEXT RETRIEVAL:**',
     );
     expect(prompt).toContain(
-      '4) CAPABILITY DISCOVERY (BLOCKING): For non-trivial tasks, use <early_discovery> before deciding whether to skip discovery.',
+      '4) **DISCOVERY:**',
     );
     expect(prompt).toContain(
-      '5) REQUIRED FIRST SPECIALIST: @designer for ANY user-facing UI work.',
+      '5) **FIRST SPECIALIST:**',
     );
     expect(prompt).toContain(
-      'Use <oracle_model_and_variant_selection> immediately before every new @oracle delegation.',
+      '6) **PLAN PRESENTATION:**',
     );
     expect(prompt).toContain(
-      '6) PLAN PRESENTATION: Use <planning_gate> before presenting any implementation plan or deciding whether approval is required.',
+      '7) **IMPLEMENTATION:**',
     );
     expect(prompt).toContain(
-      '7) IMPLEMENTATION: Before any @fixer delegation, use <routing_enforcement> and <specialist_handoff_enforcement>',
-    );
-    expect(prompt).toContain(
-      '9) VERIFICATION AND REPORTING: Use <verification> before declaring success. Use <output_format> and <communication> immediately before the final user-facing response.',
+      '9) **VERIFICATION:**',
     );
   });
 
@@ -153,7 +138,7 @@ describe('buildOrchestratorPrompt', () => {
       },
     );
 
-    expect(prompt).toContain('<subagent_model_roster>');
+    expect(prompt).toContain('## Agent Models');
     expect(prompt).toContain('- @explorer: github-copilot/grok-code-fast-1');
     expect(prompt).toContain(
       '- @oracle: default=openai/gpt-5.5; smart=openai/gpt-5.5-pro',

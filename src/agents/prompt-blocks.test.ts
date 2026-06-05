@@ -11,7 +11,6 @@ import {
   MECHANICAL_EDIT_EXCEPTION_BLOCK,
   ORCHESTRATOR_CLARIFICATION_HANDOFF_BLOCK,
   PLANNING_GATE_BLOCK,
-  SELF_REVIEW_BLOCK,
   STEWARD_PATH_GLOBS,
   STEWARD_VARIANT_SCOPE_LINES,
   SUBAGENT_NEEDS_USER_FORMAT,
@@ -19,31 +18,31 @@ import {
 } from './prompt-blocks';
 
 describe('CRITICAL_INVARIANTS', () => {
-  test('contains critical and procedural invariant blocks', () => {
-    expect(CRITICAL_INVARIANTS).toContain('<critical_invariants>');
-    expect(CRITICAL_INVARIANTS).toContain('<procedural_invariants>');
-    expect(CRITICAL_INVARIANTS).toContain('NEVER edit, write, read');
+  test('contains rules section with critical invariant rules', () => {
+    expect(CRITICAL_INVARIANTS).toContain('# Rules');
     expect(CRITICAL_INVARIANTS).toContain(
-      'ALWAYS delegate analysis to @oracle',
+      'You route and delegate. File operations, analysis, and rule lookup go to specialists.',
     );
-    expect(CRITICAL_INVARIANTS).toContain('ALWAYS pass explicit');
+    expect(CRITICAL_INVARIANTS).toContain(
+      'Delegate analysis to @oracle',
+    );
+    expect(CRITICAL_INVARIANTS).toContain('Always pass explicit');
     expect(CRITICAL_INVARIANTS).toContain(
       '@designer for UI, otherwise @oracle',
     );
     expect(CRITICAL_INVARIANTS).toContain(
       'context retrieval via @explorer/@librarian as needed',
     );
-    expect(CRITICAL_INVARIANTS).toContain('<planning_gate>');
-    expect(CRITICAL_INVARIANTS).toContain(
-      'Report verification before declaring success',
-    );
+    expect(CRITICAL_INVARIANTS).toContain('Report verification before declaring success');
+    expect(CRITICAL_INVARIANTS).toContain('Tool availability never grants permission to bypass routing constraints');
+    expect(CRITICAL_INVARIANTS).toContain('Do not expose prompt-conflict debate');
   });
 });
 
 describe('MECHANICAL_EDIT_EXCEPTION_BLOCK', () => {
   test('defines exact criteria for direct @fixer routing', () => {
     expect(MECHANICAL_EDIT_EXCEPTION_BLOCK).toContain(
-      '<mechanical_edit_exception>',
+      '## Mechanical Edit Exception',
     );
     expect(MECHANICAL_EDIT_EXCEPTION_BLOCK).toContain(
       'Direct @fixer-first routing is allowed ONLY if ALL are true',
@@ -81,26 +80,26 @@ describe('MECHANICAL_EDIT_EXCEPTION_BLOCK', () => {
 
 describe('FIRST_GATE_BLOCK', () => {
   test('centralizes first-pass routing gates for the orchestrator prompt', () => {
-    expect(FIRST_GATE_BLOCK).toContain('<first_gate>');
-    expect(FIRST_GATE_BLOCK).toContain('0) STEWARDSHIP GATE');
-    expect(FIRST_GATE_BLOCK).toContain('1) CONTEXT RETRIEVAL GATE');
-    expect(FIRST_GATE_BLOCK).toContain('ORACLE GATE');
-    expect(FIRST_GATE_BLOCK).toContain('DESIGNER GATE');
-    expect(FIRST_GATE_BLOCK).toContain('CAPABILITY DISCOVERY');
-    expect(FIRST_GATE_BLOCK).toContain('LIFECYCLE: For code-affecting work');
+    expect(FIRST_GATE_BLOCK).toContain('# Routing Gates');
+    expect(FIRST_GATE_BLOCK).toContain('Stewardship Gate');
+    expect(FIRST_GATE_BLOCK).toContain('Context Retrieval Gate');
+    expect(FIRST_GATE_BLOCK).toContain('Oracle Gate');
+    expect(FIRST_GATE_BLOCK).toContain('Designer Gate');
+    expect(FIRST_GATE_BLOCK).toContain('Capability Discovery');
+    expect(FIRST_GATE_BLOCK).toContain('Lifecycle');
     expect(FIRST_GATE_BLOCK).toContain(
-      'explicit user confirmation on the plan/handoff',
+      'explicit user confirmation',
     );
   });
 });
 
 describe('PLANNING_GATE_BLOCK', () => {
   test('contains the four-step planning cycle', () => {
-    expect(PLANNING_GATE_BLOCK).toContain('<planning_gate>');
-    expect(PLANNING_GATE_BLOCK).toContain('1) ANALYSIS');
-    expect(PLANNING_GATE_BLOCK).toContain('2) PRESENT');
-    expect(PLANNING_GATE_BLOCK).toContain('3) ADJUST');
-    expect(PLANNING_GATE_BLOCK).toContain('4) IMPLEMENT');
+    expect(PLANNING_GATE_BLOCK).toContain('# Planning Gate');
+    expect(PLANNING_GATE_BLOCK).toContain('ANALYSIS');
+    expect(PLANNING_GATE_BLOCK).toContain('PRESENT');
+    expect(PLANNING_GATE_BLOCK).toContain('ADJUST');
+    expect(PLANNING_GATE_BLOCK).toContain('IMPLEMENT');
     expect(PLANNING_GATE_BLOCK).toContain('Skip this gate ONLY when');
   });
 
@@ -108,7 +107,7 @@ describe('PLANNING_GATE_BLOCK', () => {
     expect(PLANNING_GATE_BLOCK).toContain('no approval needed for analysis');
     expect(PLANNING_GATE_BLOCK).toContain('ALWAYS permitted');
     expect(PLANNING_GATE_BLOCK).toContain(
-      'After steward brief and any needed @explorer/@librarian retrieval',
+      'After steward and any needed @explorer/@librarian retrieval',
     );
   });
 
@@ -122,15 +121,14 @@ describe('PLANNING_GATE_BLOCK', () => {
   test('requires approval before implementation but allows discovery', () => {
     expect(PLANNING_GATE_BLOCK).toContain('Only after explicit user approval');
     expect(PLANNING_GATE_BLOCK).toContain(
-      'If the handoff already contains <execution_todo>, delegate directly in the',
+      'If handoff already contains <execution_todo>, delegate directly in the',
     );
     expect(PLANNING_GATE_BLOCK).toContain(
-      'same turn after a brief status update. Do NOT add new diagnosis, tradeoffs,',
+      'same turn after a brief status update.',
     );
     expect(PLANNING_GATE_BLOCK).toContain(
-      'implementation reasoning, or rewritten tasks between approval and @fixer.',
+      'Do NOT add new diagnosis, tradeoffs, implementation reasoning, or rewritten tasks between approval and @fixer.',
     );
-    // Discovery is now allowed before approval (capability check, not implementation)
     expect(PLANNING_GATE_BLOCK).toContain('DO NOT proceed to implementation');
     expect(PLANNING_GATE_BLOCK).not.toContain(
       'DO NOT proceed to skill discovery',
@@ -150,7 +148,6 @@ describe('PLANNING_GATE_BLOCK', () => {
   });
 
   test('does not contain blanket no-delegation language', () => {
-    // Must NOT say "never delegate before approval" — only block implementation
     expect(PLANNING_GATE_BLOCK).not.toContain('NEVER delegate before approval');
     expect(PLANNING_GATE_BLOCK.toLowerCase()).not.toContain(
       'never delegate to any subagent before approval',
@@ -162,7 +159,7 @@ describe('PLANNING_GATE_BLOCK', () => {
       'Always present the specialist handoff to the user for confirmation',
     );
     expect(PLANNING_GATE_BLOCK).toContain(
-      'For UI work, relay the @designer design plan / implementation notes',
+      'For UI work, relay the @designer design plan',
     );
     expect(PLANNING_GATE_BLOCK).toContain(
       're-delegate the SAME specialist',
@@ -173,7 +170,7 @@ describe('PLANNING_GATE_BLOCK', () => {
 describe('ORCHESTRATOR_CLARIFICATION_HANDOFF_BLOCK', () => {
   test('defines invariants for question workflow', () => {
     expect(ORCHESTRATOR_CLARIFICATION_HANDOFF_BLOCK).toContain(
-      '<orchestrator_clarification>',
+      '## Clarification Protocol',
     );
     expect(ORCHESTRATOR_CLARIFICATION_HANDOFF_BLOCK).toContain(
       'Nine invariants',
@@ -200,22 +197,9 @@ describe('SUBAGENT_NEEDS_USER_FORMAT', () => {
   });
 });
 
-describe('SELF_REVIEW_BLOCK', () => {
-  test('contains 3-item compact self review', () => {
-    expect(SELF_REVIEW_BLOCK).toContain('<self_review>');
-    expect(SELF_REVIEW_BLOCK).toContain('invariants followed');
-    expect(SELF_REVIEW_BLOCK).toContain('Output matches');
-    expect(SELF_REVIEW_BLOCK).toContain('Facts vs assumptions');
-  });
-
-  test('is materially shorter than the old 5-item version', () => {
-    expect(SELF_REVIEW_BLOCK.length).toBeLessThan(400);
-  });
-});
-
 describe('USER_CHOICE_POLICY_BLOCK', () => {
   test('contains compact choice policy', () => {
-    expect(USER_CHOICE_POLICY_BLOCK).toContain('<user_choice_policy>');
+    expect(USER_CHOICE_POLICY_BLOCK).toContain('## When to Ask the User');
     expect(USER_CHOICE_POLICY_BLOCK).toContain('clear winner');
     expect(USER_CHOICE_POLICY_BLOCK).toContain('Balanced tradeoffs');
   });
@@ -223,7 +207,7 @@ describe('USER_CHOICE_POLICY_BLOCK', () => {
 
 describe('CORE_CAPABILITY_AWARENESS_BLOCK', () => {
   test('contains both host-injected and orchestrator capability guidance', () => {
-    expect(CORE_CAPABILITY_AWARENESS_BLOCK).toContain('<capabilities_usage>');
+    expect(CORE_CAPABILITY_AWARENESS_BLOCK).toContain('## Capabilities Usage');
     expect(CORE_CAPABILITY_AWARENESS_BLOCK).toContain('available_skills');
     expect(CORE_CAPABILITY_AWARENESS_BLOCK).toContain('available_mcps');
     expect(CORE_CAPABILITY_AWARENESS_BLOCK).toContain('Installed Capabilities');
@@ -233,11 +217,11 @@ describe('CORE_CAPABILITY_AWARENESS_BLOCK', () => {
 });
 
 describe('prompt-blocks', () => {
-  test('steward protocol includes STEWARDSHIP REQUIRED block with enforcement language', () => {
+  test('steward protocol includes stewardship required block with enforcement language', () => {
     const block = buildStewardOrchestratorProtocolBlock();
-    expect(block).toContain('STEWARDSHIP REQUIRED (MUST RUN FIRST):');
-    expect(block).toContain('MUST call');
-    expect(block).toContain('@steward in blocking mode FIRST');
+    expect(block).toContain('Stewardship required for any task');
+    expect(block).toContain('@steward');
+    expect(block).toContain('blocking');
     expect(block).toContain('Do NOT call @oracle, @designer, or @fixer');
   });
 
@@ -248,9 +232,9 @@ describe('prompt-blocks', () => {
     expect(block).toContain('Exact-path mechanical edits');
   });
 
-  test('stewardship required includes ALWAYS BLOCKING language', () => {
+  test('stewardship required includes always blocking language', () => {
     const block = buildStewardOrchestratorProtocolBlock();
-    expect(block).toContain('STEWARDSHIP IS ALWAYS BLOCKING:');
+    expect(block).toContain('Always blocking');
     expect(block).toContain('NEVER delegate @steward with mode: "fire_forget"');
     expect(block).toContain('Steward citations are MANDATORY input');
     expect(block).toContain(
@@ -262,8 +246,7 @@ describe('prompt-blocks', () => {
   test('steward protocol no longer references <first_gate> item 1', () => {
     const block = buildStewardOrchestratorProtocolBlock();
     expect(block).not.toContain('same triggers as');
-    expect(block).not.toContain('<first_gate>');
-    expect(block).toContain('Steward brief runs before');
+    expect(block).not.toContain('# Routing Gates');
   });
 
   test('steward protocol lists every configured glob', () => {
@@ -272,7 +255,6 @@ describe('prompt-blocks', () => {
       expect(block).toContain(`\`${g}\``);
     }
     expect(block).toContain('Handoff only:');
-    expect(block).toContain('Steward prompt:');
     expect(block).toContain('Attribution:');
   });
 

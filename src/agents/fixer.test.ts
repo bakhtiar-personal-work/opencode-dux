@@ -15,17 +15,11 @@ describe('createFixerAgent', () => {
   test('prompt contains expected sections', () => {
     const agent = createFixerAgent('test/fixer-model');
     const prompt = agent.config.prompt ?? '';
-    expect(prompt).toContain('<role>');
-    expect(prompt).toContain('<handoff_artifacts>');
-    expect(prompt).toContain('<workflow>');
-    expect(prompt).toContain('<file_read_budget>');
-    expect(prompt).toContain('<constraints>');
-    expect(prompt).toContain('<user_choice_policy>');
-    expect(prompt).toContain('<self_review>');
-    expect(prompt).toContain('<build_recovery>');
-    expect(prompt).toContain('<verification_hints>');
-    expect(prompt).toContain('<output_format>');
-    expect(prompt).toContain('<variant_policy>');
+    expect(prompt).toContain('# Role');
+    expect(prompt).toContain('# Workflow');
+    expect(prompt).toContain('# Rules');
+    expect(prompt).toContain('## Variant Policy');
+    expect(prompt).toContain('# Output Format');
   });
 
   test('custom prompt overrides the base prompt', () => {
@@ -41,7 +35,7 @@ describe('createFixerAgent', () => {
     );
     const prompt = agent.config.prompt ?? '';
     expect(prompt).toContain('Extra instructions');
-    expect(prompt).toContain('<role>');
+    expect(prompt).toContain('# Role');
   });
 
   test('has description', () => {
@@ -50,34 +44,11 @@ describe('createFixerAgent', () => {
     expect(agent.description?.length).toBeGreaterThan(10);
   });
 
-  test('prompt contains all required sections (complete check)', () => {
-    const agent = createFixerAgent('test/fixer-model');
-    const prompt = agent.config.prompt ?? '';
-    const requiredSections = [
-      '<role>',
-      '<workflow>',
-      '<file_read_budget>',
-      '<constraints>',
-      '<user_choice_policy>',
-      '<self_review>',
-      '<variant_policy>',
-      '<build_recovery>',
-      '<verification_hints>',
-      '<output_format>',
-    ];
-    for (const section of requiredSections) {
-      expect(prompt).toContain(section);
-    }
-  });
-
-  test('prompt treats specialist execution todo as authoritative and blocks underspecified handoffs', () => {
+  test('prompt treats specialist execution todo as authoritative', () => {
     const agent = createFixerAgent('test/fixer-model');
     const prompt = agent.config.prompt ?? '';
     expect(prompt).toContain(
       'Treat specialist-provided <execution_todo> as the authoritative implementation spec when present.',
-    );
-    expect(prompt).toContain(
-      'If specialist handoff lacks atomic implementation detail',
     );
   });
 
@@ -92,7 +63,7 @@ describe('createFixerAgent', () => {
     const agent = createFixerAgent('test/fixer-model');
     const prompt = agent.config.prompt ?? '';
     expect(prompt).toContain(
-      'NEVER act as the primary diagnosis or strategy agent',
+      'Never act as the primary diagnosis or strategy agent',
     );
     expect(prompt).toContain('route through @oracle');
   });

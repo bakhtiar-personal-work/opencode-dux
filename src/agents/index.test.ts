@@ -159,7 +159,7 @@ describe('orchestrator agent', () => {
     const agents = await createAgents(config);
     const orchestrator = agents.find((a) => a.name === 'orchestrator');
 
-    expect(orchestrator?.config.prompt).toContain('<subagent_model_roster>');
+    expect(orchestrator?.config.prompt).toContain('## Agent Models');
     expect(orchestrator?.config.prompt).toContain(
       '- @explorer: github-copilot/grok-code-fast-1',
     );

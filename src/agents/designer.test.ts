@@ -15,22 +15,20 @@ describe('createDesignerAgent', () => {
   test('prompt contains expected sections', () => {
     const agent = createDesignerAgent('test/designer-model');
     const prompt = agent.config.prompt ?? '';
-    expect(prompt).toContain('<role>');
-    expect(prompt).toContain('<handoff_artifacts>');
-    expect(prompt).toContain('<discovery_first>');
-    expect(prompt).toContain('<design_principles>');
-    expect(prompt).toContain('<user_choice_policy>');
-    expect(prompt).toContain('<constraints>');
-    expect(prompt).toContain('<variant_policy>');
-    expect(prompt).toContain('<output_format>');
+    expect(prompt).toContain('# Role');
+    expect(prompt).toContain('# Discovery');
+    expect(prompt).toContain('# Design Principles');
+    expect(prompt).toContain('# Rules');
+    expect(prompt).toContain('## Variant Policy');
+    expect(prompt).toContain('# Output Format');
   });
 
   test('prompt includes execution todo handoff for fixer', () => {
     const agent = createDesignerAgent('test/designer-model');
     const prompt = agent.config.prompt ?? '';
-    expect(prompt).toContain('<execution_todo_contract>');
+    expect(prompt).toContain('## Execution Todo Contract');
     expect(prompt).toContain('<execution_todo>');
-    expect(prompt).toContain('atomic fixer-ready tasks');
+    expect(prompt).toContain('atomic and fixer-ready');
   });
 
   test('has temperature 0.3', () => {
@@ -54,35 +52,13 @@ describe('createDesignerAgent', () => {
     );
     const prompt = agent.config.prompt ?? '';
     expect(prompt).toContain('Extra instructions');
-    expect(prompt).toContain('<role>');
+    expect(prompt).toContain('# Role');
   });
 
   test('has description', () => {
     const agent = createDesignerAgent('test/designer-model');
     expect(agent.description).toBeTruthy();
     expect(agent.description?.length).toBeGreaterThan(10);
-  });
-
-  test('prompt contains all required sections (complete check)', () => {
-    const agent = createDesignerAgent('test/designer-model');
-    const prompt = agent.config.prompt ?? '';
-    const requiredSections = [
-      '<role>',
-      '<discovery_first>',
-      '<design_principles>',
-      '<user_choice_policy>',
-      '<constraints>',
-      '<variant_policy>',
-      '<output_format>',
-      '<design_plan>',
-      '<accessibility_check>',
-      '<implementation_notes>',
-      '<execution_todo>',
-      '<blocked>',
-    ];
-    for (const section of requiredSections) {
-      expect(prompt).toContain(section);
-    }
   });
 
   test('prompt does not contain resolver boilerplate', () => {

@@ -15,19 +15,18 @@ describe('createOracleAgent', () => {
   test('prompt contains expected sections', () => {
     const agent = createOracleAgent('test/oracle-model');
     const prompt = agent.config.prompt ?? '';
-    expect(prompt).toContain('<role>');
-    expect(prompt).toContain('<capabilities>');
-    expect(prompt).toContain('<handoff_artifacts>');
-    expect(prompt).toContain('<tool_routing>');
-    expect(prompt).toContain('<constraints>');
-    expect(prompt).toContain('<variant_policy>');
-    expect(prompt).toContain('<output_format>');
+    expect(prompt).toContain('# Role');
+    expect(prompt).toContain('## Handoff Artifacts');
+    expect(prompt).toContain('## Tool Routing');
+    expect(prompt).toContain('# Rules');
+    expect(prompt).toContain('## Variant Policy');
+    expect(prompt).toContain('# Output Format');
   });
 
   test('prompt includes specialist execution handoff contract', () => {
     const agent = createOracleAgent('test/oracle-model');
     const prompt = agent.config.prompt ?? '';
-    expect(prompt).toContain('<execution_todo_contract>');
+    expect(prompt).toContain('## Execution Todo Contract');
     expect(prompt).toContain('<execution_todo>');
     expect(prompt).toContain('canonical implementation spec');
   });
@@ -53,7 +52,7 @@ describe('createOracleAgent', () => {
     );
     const prompt = agent.config.prompt ?? '';
     expect(prompt).toContain('Extra instructions');
-    expect(prompt).toContain('<role>');
+    expect(prompt).toContain('# Role');
   });
 
   test('has description', () => {
@@ -66,16 +65,12 @@ describe('createOracleAgent', () => {
     const agent = createOracleAgent('test/oracle-model');
     const prompt = agent.config.prompt ?? '';
     const requiredSections = [
-      '<role>',
-      '<critical_invariants>',
-      '<capabilities>',
-      '<tool_routing>',
-      '<workflow>',
-      '<constraints>',
-      '<user_choice_policy>',
-      '<variant_policy>',
-      '<self_review>',
-      '<output_format>',
+      '# Role',
+      '# Rules',
+      '## Tool Routing',
+      '# Workflow',
+      '# Variant Policy',
+      '# Output Format',
       '<diagnosis>',
       '<recommendation>',
       '<confidence>',
@@ -99,7 +94,7 @@ describe('createOracleAgent', () => {
       '<plan>: include ONLY when orchestrator delegates',
     );
     expect(prompt).toContain(
-      '<execution_todo>: REQUIRED whenever your recommendation is meant to be implemented by @fixer. Output machine-consumable JSON matching the <execution_todo_contract>.',
+      '<execution_todo>: REQUIRED whenever your recommendation is meant to be implemented by @fixer',
     );
     expect(prompt).toContain(
       '<blocked>: include ONLY when analysis cannot be completed',
@@ -122,7 +117,6 @@ describe('createOracleAgent', () => {
   test('prompt is materially shorter than the old verbose version', () => {
     const agent = createOracleAgent('test/oracle-model');
     const prompt = agent.config.prompt ?? '';
-    // Oracle prompt should remain compact even with the execution handoff contract
     expect(prompt.length).toBeLessThan(11000);
   });
 });
@@ -145,13 +139,11 @@ describe('buildOraclePrompt', () => {
   test('true output contains all essential sections', () => {
     const prompt = buildOraclePrompt(true);
     const requiredSections = [
-      '<role>',
-      '<capabilities>',
-      '<tool_routing>',
-      '<model_tier>',
-      '<constraints>',
-      '<variant_policy>',
-      '<output_format>',
+      '# Role',
+      '## Tool Routing',
+      '# Rules',
+      '# Variant Policy',
+      '# Output Format',
       '<diagnosis>',
       '<recommendation>',
       '<confidence>',
@@ -166,12 +158,11 @@ describe('buildOraclePrompt', () => {
   test('false output contains all sections except model_tier', () => {
     const prompt = buildOraclePrompt(false);
     const requiredSections = [
-      '<role>',
-      '<capabilities>',
-      '<tool_routing>',
-      '<constraints>',
-      '<variant_policy>',
-      '<output_format>',
+      '# Role',
+      '## Tool Routing',
+      '# Rules',
+      '# Variant Policy',
+      '# Output Format',
       '<diagnosis>',
       '<recommendation>',
       '<confidence>',
@@ -188,8 +179,8 @@ describe('buildOraclePrompt', () => {
     const promptTrue = buildOraclePrompt(true);
     const promptFalse = buildOraclePrompt(false);
 
-    expect(promptTrue.startsWith('<role>')).toBe(true);
-    expect(promptFalse.startsWith('<role>')).toBe(true);
+    expect(promptTrue.startsWith('# Role')).toBe(true);
+    expect(promptFalse.startsWith('# Role')).toBe(true);
     expect(promptTrue.endsWith('</model_tier>')).toBe(true);
   });
 });

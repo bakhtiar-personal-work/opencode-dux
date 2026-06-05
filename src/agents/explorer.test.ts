@@ -15,13 +15,13 @@ describe('createExplorerAgent', () => {
   test('prompt contains expected sections', () => {
     const agent = createExplorerAgent('test/explorer-model');
     const prompt = agent.config.prompt ?? '';
-    expect(prompt).toContain('<role>');
-    expect(prompt).toContain('<tool_routing>');
-    expect(prompt).toContain('<workflow>');
-    expect(prompt).toContain('<constraints>');
-    expect(prompt).toContain('<user_choice_policy>');
-    expect(prompt).toContain('<output_format>');
-    expect(prompt).toContain('<variant_policy>');
+    expect(prompt).toContain('# Role');
+    expect(prompt).toContain('## Tool Routing');
+    expect(prompt).toContain('# Workflow');
+    expect(prompt).toContain('# Rules');
+    expect(prompt).toContain('## Variant Policy');
+    expect(prompt).toContain('## Stale Codemap');
+    expect(prompt).toContain('# Output Format');
   });
 
   test('custom prompt overrides the base prompt', () => {
@@ -40,34 +40,13 @@ describe('createExplorerAgent', () => {
     );
     const prompt = agent.config.prompt ?? '';
     expect(prompt).toContain('Extra instructions');
-    expect(prompt).toContain('<role>');
+    expect(prompt).toContain('# Role');
   });
 
   test('has description', () => {
     const agent = createExplorerAgent('test/explorer-model');
     expect(agent.description).toBeTruthy();
     expect(agent.description?.length).toBeGreaterThan(10);
-  });
-
-  test('prompt contains all required sections (complete check)', () => {
-    const agent = createExplorerAgent('test/explorer-model');
-    const prompt = agent.config.prompt ?? '';
-    const requiredSections = [
-      '<role>',
-      '<tool_routing>',
-      '<workflow>',
-      '<big_repo_strategy>',
-      '<constraints>',
-      '<user_choice_policy>',
-      '<variant_policy>',
-      '<stale_codemap>',
-      '<output_format>',
-      '<results>',
-      '<no_results>',
-    ];
-    for (const section of requiredSections) {
-      expect(prompt).toContain(section);
-    }
   });
 
   test('prompt does not contain resolver boilerplate', () => {

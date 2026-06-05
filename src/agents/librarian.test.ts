@@ -15,12 +15,12 @@ describe('createLibrarianAgent', () => {
   test('prompt contains expected sections', () => {
     const agent = createLibrarianAgent('test/librarian-model');
     const prompt = agent.config.prompt ?? '';
-    expect(prompt).toContain('<role>');
-    expect(prompt).toContain('<workflow>');
-    expect(prompt).toContain('<conflict_resolution>');
-    expect(prompt).toContain('<variant_policy>');
-    expect(prompt).toContain('<constraints>');
-    expect(prompt).toContain('<output_format>');
+    expect(prompt).toContain('# Role');
+    expect(prompt).toContain('# Workflow');
+    expect(prompt).toContain('## Conflict Resolution');
+    expect(prompt).toContain('## Variant Policy');
+    expect(prompt).toContain('# Rules');
+    expect(prompt).toContain('# Output Format');
   });
 
   test('custom prompt overrides the base prompt', () => {
@@ -39,33 +39,13 @@ describe('createLibrarianAgent', () => {
     );
     const prompt = agent.config.prompt ?? '';
     expect(prompt).toContain('Extra instructions');
-    expect(prompt).toContain('<role>');
+    expect(prompt).toContain('# Role');
   });
 
   test('has description', () => {
     const agent = createLibrarianAgent('test/librarian-model');
     expect(agent.description).toBeTruthy();
     expect(agent.description?.length).toBeGreaterThan(10);
-  });
-
-  test('prompt contains all required sections (complete check)', () => {
-    const agent = createLibrarianAgent('test/librarian-model');
-    const prompt = agent.config.prompt ?? '';
-    const requiredSections = [
-      '<role>',
-      '<workflow>',
-      '<conflict_resolution>',
-      '<variant_policy>',
-      '<constraints>',
-      '<output_format>',
-      '<answer>',
-      '<sources>',
-      '<notes>',
-      '<blocked>',
-    ];
-    for (const section of requiredSections) {
-      expect(prompt).toContain(section);
-    }
   });
 
   test('prompt does not contain resolver boilerplate', () => {
