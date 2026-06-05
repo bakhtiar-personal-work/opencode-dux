@@ -49,6 +49,18 @@ function normalizePathForMatch(path: string): string {
   return path.replaceAll('\\', '/');
 }
 
+function resolveFileUriPath(entry: string): string | null {
+  if (!entry.startsWith('file://')) {
+    return null;
+  }
+
+  try {
+    return new URL(entry).pathname.replace(/^\/([A-Za-z]:\/)/, '$1');
+  } catch {
+    return entry.slice('file://'.length);
+  }
+}
+
 function findPackageRoot(startPath: string): string | null {
   let currentPath = dirname(startPath);
 
@@ -84,12 +96,8 @@ function isPackageManagerInstall(path: string): boolean {
   return normalizedPath.includes(`/node_modules/${PACKAGE_NAME}`);
 }
 
-function isLocalPackageRootEntry(entry: string): boolean {
-  if (!entry || entry.startsWith('file://')) {
-    return false;
-  }
-
-  const packageJsonPath = join(entry, 'package.json');
+function isPackageRoot(path: string): boolean {
+  const packageJsonPath = join(path, 'package.json');
   if (!existsSync(packageJsonPath)) {
     return false;
   }
@@ -104,11 +112,23 @@ function isLocalPackageRootEntry(entry: string): boolean {
   }
 }
 
+function isLocalPackageRootEntry(entry: string): boolean {
+  if (!entry) {
+    return false;
+  }
+
+  const localPath = resolveFileUriPath(entry) ?? entry;
+  if (!localPath) {
+    return false;
+  }
+
+  return isPackageRoot(localPath);
+}
+
 function isPluginEntry(entry: string): boolean {
   return (
     entry === PACKAGE_NAME ||
     entry.startsWith(`${PACKAGE_NAME}@`) ||
-    (entry.startsWith('file://') && entry.includes(PACKAGE_NAME)) ||
     isLocalPackageRootEntry(entry)
   );
 }

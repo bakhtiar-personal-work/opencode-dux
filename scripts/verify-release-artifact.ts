@@ -27,10 +27,10 @@ const packagedRequiredFiles = [
   'LICENSE',
   'dist/index.js',
   'dist/index.d.ts',
+  'dist/tui.js',
+  'dist/tui.d.ts',
   'dist/cli/index.js',
   'opencode-dux.schema.json',
-  'src/skills/simplify/SKILL.md',
-  'src/skills/codemap/SKILL.md',
 ];
 
 function fail(message: string): never {
@@ -77,6 +77,38 @@ function walkFiles(dir: string): string[] {
   });
 }
 
+function toPackagedPath(value: string): string {
+  return value.replace(/^\.\//, '');
+}
+
+function getRuntimeTargets(): string[] {
+  const packageJson = JSON.parse(
+    readFileSync(path.join(repoRoot, 'package.json'), 'utf8'),
+  ) as {
+    main?: string;
+    types?: string;
+    exports?: Record<string, { import?: string; types?: string }>;
+  };
+
+  const targets = new Set<string>();
+  if (packageJson.main) {
+    targets.add(toPackagedPath(packageJson.main));
+  }
+  if (packageJson.types) {
+    targets.add(toPackagedPath(packageJson.types));
+  }
+  for (const entry of Object.values(packageJson.exports ?? {})) {
+    if (entry.import) {
+      targets.add(toPackagedPath(entry.import));
+    }
+    if (entry.types) {
+      targets.add(toPackagedPath(entry.types));
+    }
+  }
+
+  return [...targets];
+}
+
 function verifyDistHasNoLeakedPaths() {
   console.log('Checking dist for leaked machine paths...');
   const files = walkFiles(distDir).filter((file) =>
@@ -115,7 +147,7 @@ function packArtifact() {
   const packagedFiles = new Set(
     (parsed[0]?.files ?? []).map((file) => file.path),
   );
-  for (const requiredFile of packagedRequiredFiles) {
+  for (const requiredFile of [...packagedRequiredFiles, ...getRuntimeTargets()]) {
     if (!packagedFiles.has(requiredFile)) {
       fail(`npm pack artifact is missing required file: ${requiredFile}`);
     }
@@ -164,13 +196,15 @@ function verifyFreshInstall(tarballPath: string) {
     }
 
     const smokeScript = [
-      "import pkg from 'opencode-dux';",
-      "if (typeof pkg !== 'function') throw new Error('default export is not a function');",
-      "console.log('package loads');",
+      "const pkg = await import('opencode-dux');",
+      "const tui = await import('opencode-dux/tui');",
+      "if (typeof pkg.default !== 'function') throw new Error('default export is not a function');",
+      "if (!('default' in tui)) throw new Error('tui export is missing default export');",
+      "console.log('package and tui load');",
       'process.exit(0);',
     ].join('\n');
-    console.log('Importing installed package entrypoint...');
-    run('node', ['--input-type=module', '--eval', smokeScript], {
+    console.log('Importing installed package entrypoints...');
+    run('bun', ['--eval', smokeScript], {
       cwd: installDir,
     });
   } finally {

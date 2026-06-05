@@ -17,6 +17,10 @@ mock.module('../../cli/config-manager', () => ({
 // Cache buster for dynamic imports
 let importCounter = 0;
 
+function normalizePath(value: string): string {
+  return value.replaceAll('\\', '/');
+}
+
 describe('auto-update-checker/checker', () => {
   describe('extractChannel', () => {
     test('returns latest for null or empty', async () => {
@@ -106,6 +110,50 @@ describe('auto-update-checker/checker', () => {
       statSpy.mockRestore();
       readSpy.mockRestore();
     });
+
+    test('returns version from absolute-path local install', async () => {
+      const existsSpy = spyOn(fs, 'existsSync').mockImplementation(
+        (p: string) => {
+          if (p.includes('opencode.json')) return true;
+          if (normalizePath(p).endsWith('/dev/opencode-dux/package.json')) {
+            return true;
+          }
+          return false;
+        },
+      );
+      const statSpy = spyOn(fs, 'statSync').mockImplementation(
+        () =>
+          ({
+            isDirectory: () => true,
+          }) as unknown as fs.Stats,
+      );
+      const readSpy = spyOn(fs, 'readFileSync').mockImplementation(
+        (p: string) => {
+          if (p.includes('opencode.json')) {
+            return JSON.stringify({
+              plugin: ['/dev/opencode-dux'],
+            });
+          }
+          if (normalizePath(p).endsWith('/dev/opencode-dux/package.json')) {
+            return JSON.stringify({
+              name: 'opencode-dux',
+              version: '1.2.3-dev',
+            });
+          }
+          return '';
+        },
+      );
+
+      const { getLocalDevVersion } = await import(
+        `./checker?test=${importCounter++}`
+      );
+
+      expect(getLocalDevVersion('/test')).toBe('1.2.3-dev');
+
+      existsSpy.mockRestore();
+      statSpy.mockRestore();
+      readSpy.mockRestore();
+    });
   });
 
   describe('findPluginEntry', () => {
@@ -151,6 +199,43 @@ describe('auto-update-checker/checker', () => {
       expect(entry).not.toBeNull();
       expect(entry?.isPinned).toBe(true);
       expect(entry?.pinnedVersion).toBe('1.0.0');
+
+      existsSpy.mockRestore();
+      readSpy.mockRestore();
+    });
+
+    test('detects absolute-path local install entry', async () => {
+      const existsSpy = spyOn(fs, 'existsSync').mockImplementation(
+        (p: string) =>
+          p.includes('opencode.json') ||
+          normalizePath(p).endsWith('/dev/opencode-dux/package.json'),
+      );
+      const readSpy = spyOn(fs, 'readFileSync').mockImplementation(
+        (p: string) => {
+          if (p.includes('opencode.json')) {
+            return JSON.stringify({
+              plugin: ['/dev/opencode-dux'],
+            });
+          }
+          if (normalizePath(p).endsWith('/dev/opencode-dux/package.json')) {
+            return JSON.stringify({
+              name: 'opencode-dux',
+              version: '1.2.3-dev',
+            });
+          }
+          return '';
+        },
+      );
+
+      const { findPluginEntry } = await import(
+        `./checker?test=${importCounter++}`
+      );
+
+      const entry = findPluginEntry('/test');
+      expect(entry).not.toBeNull();
+      expect(entry?.entry).toBe('/dev/opencode-dux');
+      expect(entry?.isPinned).toBe(false);
+      expect(entry?.pinnedVersion).toBeNull();
 
       existsSpy.mockRestore();
       readSpy.mockRestore();

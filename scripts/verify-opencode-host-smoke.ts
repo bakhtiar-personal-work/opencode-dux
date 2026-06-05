@@ -58,6 +58,22 @@ function parsePackJson(output: string) {
   }>;
 }
 
+function resolveOpencodeBin(hostDir: string): string {
+  const candidates = [
+    path.join(hostDir, 'node_modules', '.bin', 'opencode'),
+    path.join(hostDir, 'node_modules', '.bin', 'opencode.cmd'),
+    path.join(hostDir, 'node_modules', '.bin', 'opencode.exe'),
+    path.join(hostDir, 'node_modules', 'opencode-ai', 'bin', 'opencode.js'),
+  ];
+
+  const found = candidates.find((candidate) => existsSync(candidate));
+  if (!found) {
+    fail(`Expected opencode binary at one of: ${candidates.join(', ')}`);
+  }
+
+  return found;
+}
+
 function packArtifact() {
   const output = run('npm', ['pack', '--json', '--ignore-scripts']);
   const parsed = parsePackJson(output);
@@ -117,15 +133,61 @@ function formatCapturedLogs(stdout: string, stderr: string): string {
 async function stopProcess(child: ReturnType<typeof spawn>) {
   if (child.exitCode !== null) return;
 
-  child.kill('SIGTERM');
+  child.kill(process.platform === 'win32' ? undefined : 'SIGTERM');
   const exited = await Promise.race([
     new Promise<boolean>((resolve) => child.once('exit', () => resolve(true))),
     new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 5000)),
   ]);
 
   if (!exited && child.exitCode === null) {
-    child.kill('SIGKILL');
-    await new Promise((resolve) => child.once('exit', resolve));
+    if (process.platform === 'win32' && child.pid) {
+      spawnSync('taskkill', ['/pid', String(child.pid), '/t', '/f'], {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+    } else {
+      child.kill('SIGKILL');
+    }
+
+    await Promise.race([
+      new Promise((resolve) => child.once('exit', resolve)),
+      new Promise((resolve) => setTimeout(resolve, 5000)),
+    ]);
+  }
+}
+
+async function removeDirWithRetries(targetPath: string): Promise<boolean> {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    try {
+      rmSync(targetPath, { recursive: true, force: true });
+      return true;
+    } catch (error) {
+      const code =
+        error && typeof error === 'object' && 'code' in error
+          ? String(error.code)
+          : '';
+      if (code !== 'EBUSY' && code !== 'EPERM') {
+        throw error;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 500 * (attempt + 1)));
+    }
+  }
+
+  try {
+    rmSync(targetPath, { recursive: true, force: true });
+    return true;
+  } catch (error) {
+    const code =
+      error && typeof error === 'object' && 'code' in error
+        ? String(error.code)
+        : '';
+    if (code === 'EBUSY' || code === 'EPERM') {
+      console.warn(
+        `Warning: could not remove temp host-smoke directory ${targetPath} (${code})`,
+      );
+      return false;
+    }
+    throw error;
   }
 }
 
@@ -169,6 +231,7 @@ async function verifyHostSmoke(tarballPath: string) {
   const tarballTarget = path.join(tempRoot, path.basename(tarballPath));
   const port = await getFreePort();
   const healthTimeoutMs = process.platform === 'darwin' ? 60_000 : 30_000;
+  let child: ReturnType<typeof spawn> | null = null;
 
   try {
     console.log('Packing plugin tarball into isolated test root...');
@@ -200,10 +263,7 @@ async function verifyHostSmoke(tarballPath: string) {
     console.log('Installing opencode-ai into isolated test root...');
     run('bun', ['add', 'opencode-ai@latest'], { cwd: hostDir });
 
-    const opencodeBin = path.join(hostDir, 'node_modules', '.bin', 'opencode');
-    if (!existsSync(opencodeBin)) {
-      fail(`Expected opencode binary at ${opencodeBin}`);
-    }
+    const opencodeBin = resolveOpencodeBin(hostDir);
 
     writeFileSync(
       path.join(configDir, 'package.json'),
@@ -244,18 +304,34 @@ async function verifyHostSmoke(tarballPath: string) {
     };
 
     console.log('Starting opencode serve with packaged plugin...');
-    const child = spawn(
-      opencodeBin,
-      [
-        'serve',
-        '--print-logs',
-        '--log-level',
-        'DEBUG',
-        '--hostname',
-        '127.0.0.1',
-        '--port',
-        String(port),
-      ],
+    const command =
+      path.extname(opencodeBin) === '.js' ? process.execPath : opencodeBin;
+    const args =
+      path.extname(opencodeBin) === '.js'
+        ? [
+            opencodeBin,
+            'serve',
+            '--print-logs',
+            '--log-level',
+            'DEBUG',
+            '--hostname',
+            '127.0.0.1',
+            '--port',
+            String(port),
+          ]
+        : [
+            'serve',
+            '--print-logs',
+            '--log-level',
+            'DEBUG',
+            '--hostname',
+            '127.0.0.1',
+            '--port',
+            String(port),
+          ];
+    child = spawn(
+      command,
+      args,
       {
         cwd: workspaceDir,
         env: {
@@ -276,7 +352,7 @@ async function verifyHostSmoke(tarballPath: string) {
     });
 
     const exitPromise = new Promise<never>((_, reject) => {
-      child.once('exit', (code, signal) => {
+      child?.once('exit', (code, signal) => {
         reject(
           new Error(
             `opencode serve exited before smoke test completed (code=${code}, signal=${signal})\n${stdout}\n${stderr}`,
@@ -305,7 +381,10 @@ async function verifyHostSmoke(tarballPath: string) {
 
     await stopProcess(child);
   } finally {
-    rmSync(tempRoot, { recursive: true, force: true });
+    if (child) {
+      await stopProcess(child).catch(() => {});
+    }
+    await removeDirWithRetries(tempRoot);
   }
 }
 

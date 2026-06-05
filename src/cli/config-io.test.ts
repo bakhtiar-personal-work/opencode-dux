@@ -353,6 +353,22 @@ describe('config-io', () => {
     expect(saved.plugin).toEqual([packageRoot]);
   });
 
+  test('addPluginToOpenCodeTuiConfig matches file URI local dev entries', async () => {
+    const tuiPath = join(tmpDir, 'opencode', 'tui.json');
+    const packageRoot = join(tmpDir, 'repo');
+    const fileUri = `file:///${packageRoot.replaceAll('\\', '/')}`;
+    paths.ensureConfigDir();
+    writePackageJson(packageRoot);
+    writeFileSync(tuiPath, JSON.stringify({ plugin: ['other', fileUri] }));
+    process.argv[1] = '';
+
+    const result = await addPluginToOpenCodeTuiConfig(fileUri);
+
+    expect(result.success).toBe(true);
+    const saved = JSON.parse(readFileSync(tuiPath, 'utf-8'));
+    expect(saved.plugin).toEqual(['other', fileUri]);
+  });
+
   test('addPluginToOpenCodeTuiConfig deduplicates existing local repo path entries', async () => {
     const tuiPath = join(tmpDir, 'opencode', 'tui.json');
     const packageRoot = join(tmpDir, 'repo');
@@ -599,11 +615,9 @@ describe('config-io', () => {
     test('handles file:// URI entries containing PACKAGE_NAME', () => {
       const configPath = join(tmpDir, 'opencode', 'opencode.json');
       const packageRoot = join(tmpDir, 'repo');
-      // isPluginEntry requires file:// URIs to include PACKAGE_NAME in the path
-      const duxDir = join(packageRoot, 'node_modules', 'opencode-dux');
-      const fileUri = `file://${duxDir.replace(/\\/g, '/')}`;
+      const fileUri = `file:///${packageRoot.replace(/\\/g, '/')}`;
       paths.ensureConfigDir();
-      writePackageJson(duxDir);
+      writePackageJson(packageRoot);
       writeFileSync(
         configPath,
         JSON.stringify({

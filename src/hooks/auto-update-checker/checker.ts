@@ -26,6 +26,50 @@ function getPluginEntries(config: OpencodeConfig): string[] {
   return Array.isArray(config.plugin) ? config.plugin.filter(isString) : [];
 }
 
+function resolveFileUriPath(entry: string): string | null {
+  if (!entry.startsWith('file://')) {
+    return null;
+  }
+
+  try {
+    return fileURLToPath(entry);
+  } catch {
+    return entry.slice('file://'.length);
+  }
+}
+
+function readPackageJsonName(packageJsonPath: string): string | null {
+  try {
+    const content = fs.readFileSync(packageJsonPath, 'utf-8');
+    const pkg = JSON.parse(content) as PackageJson;
+    return typeof pkg.name === 'string' ? pkg.name : null;
+  } catch {
+    return null;
+  }
+}
+
+function isLocalPackageRootEntry(entry: string): boolean {
+  if (!entry) {
+    return false;
+  }
+
+  const localPath = resolveFileUriPath(entry) ?? entry;
+  const packageJsonPath = path.join(localPath, 'package.json');
+  if (!fs.existsSync(packageJsonPath)) {
+    return false;
+  }
+
+  return readPackageJsonName(packageJsonPath) === PACKAGE_NAME;
+}
+
+function isPluginEntry(entry: string): boolean {
+  return (
+    entry === PACKAGE_NAME ||
+    entry.startsWith(`${PACKAGE_NAME}@`) ||
+    isLocalPackageRootEntry(entry)
+  );
+}
+
 /**
  * Checks if a version string indicates a prerelease (contains a hyphen).
  */
@@ -75,7 +119,7 @@ function getConfigPaths(directory: string): string[] {
 }
 
 /**
- * Attempts to find a local development path (file://) for the plugin in configs.
+ * Attempts to find a local development path for the plugin in configs.
  */
 function getLocalDevPath(directory: string): string | null {
   for (const configPath of getConfigPaths(directory)) {
@@ -86,12 +130,12 @@ function getLocalDevPath(directory: string): string | null {
       const plugins = getPluginEntries(config);
 
       for (const entry of plugins) {
-        if (entry.startsWith('file://') && entry.includes(PACKAGE_NAME)) {
-          try {
-            return fileURLToPath(entry);
-          } catch {
-            return entry.replace('file://', '');
-          }
+        const localPath = resolveFileUriPath(entry);
+        if (localPath && isLocalPackageRootEntry(entry)) {
+          return localPath;
+        }
+        if (isLocalPackageRootEntry(entry)) {
+          return entry;
         }
       }
     } catch {}
@@ -173,6 +217,10 @@ export function findPluginEntry(directory: string): PluginEntryInfo | null {
       const plugins = getPluginEntries(config);
 
       for (const entry of plugins) {
+        if (!isPluginEntry(entry)) {
+          continue;
+        }
+
         if (entry === PACKAGE_NAME) {
           return { entry, isPinned: false, pinnedVersion: null, configPath };
         }
@@ -186,6 +234,13 @@ export function findPluginEntry(directory: string): PluginEntryInfo | null {
             configPath,
           };
         }
+
+        return {
+          entry,
+          isPinned: false,
+          pinnedVersion: null,
+          configPath,
+        };
       }
     } catch {}
   }
