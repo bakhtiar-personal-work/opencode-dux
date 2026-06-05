@@ -241,65 +241,6 @@ function collectInlineSections(agentName: string, text: string): string[] {
   return sections;
 }
 
-type ImplementationAuthorization = {
-  status?: string;
-  source?: string;
-  evidence?: string;
-};
-
-function extractXmlTagBody(text: string, tagName: string): string | undefined {
-  const match = text.match(
-    new RegExp(`<${tagName}>([\\s\\S]*?)<\\/${tagName}>`, 'i'),
-  );
-  return match?.[1]?.trim();
-}
-
-function parseImplementationAuthorization(
-  promptText: string,
-): ImplementationAuthorization | undefined {
-  const body = extractXmlTagBody(promptText, 'implementation_authorization');
-  if (!body) {
-    return undefined;
-  }
-
-  try {
-    const parsed = JSON.parse(body) as ImplementationAuthorization;
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      return undefined;
-    }
-    return parsed;
-  } catch {
-    return undefined;
-  }
-}
-
-function validateFixerAuthorization(promptText: string): string | undefined {
-  const authorization = parseImplementationAuthorization(promptText);
-  if (!authorization) {
-    return (
-      'Error: New @fixer delegations require <implementation_authorization> ' +
-      'with raw JSON indicating either {"status":"approved"} for explicit user approval ' +
-      'or {"status":"mechanical_exception"} when the full mechanical edit exception applies. ' +
-      'Follow orchestrator <planning_gate> first: run @designer for UI work or @oracle otherwise, ' +
-      'present that specialist handoff, wait for explicit user approval, then pass the exact ' +
-      '<execution_todo> plus the required <implementation_authorization> block described in ' +
-      '<fixer_authorization>.'
-    );
-  }
-
-  if (
-    authorization.status !== 'approved' &&
-    authorization.status !== 'mechanical_exception'
-  ) {
-    return (
-      'Error: <implementation_authorization> must use status ' +
-      '"approved" or "mechanical_exception" for new @fixer delegations.'
-    );
-  }
-
-  return undefined;
-}
-
 function determineArtifactStatus(
   text: string,
   mode: 'blocking' | 'fire_forget',
@@ -745,13 +686,6 @@ export function createDelegateTools(
     }
     promptPreamble.push(args.prompt);
     const effectivePrompt = promptPreamble.join('\n\n');
-
-    if (agentName === 'fixer' && !continueSessionId) {
-      const authorizationError = validateFixerAuthorization(effectivePrompt);
-      if (authorizationError) {
-        return authorizationError;
-      }
-    }
 
     if (
       agentName === 'fixer' &&

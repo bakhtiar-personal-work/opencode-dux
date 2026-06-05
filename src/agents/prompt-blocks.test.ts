@@ -30,6 +30,9 @@ describe('CRITICAL_INVARIANTS', () => {
     expect(CRITICAL_INVARIANTS).toContain(
       '@designer for UI, otherwise @oracle',
     );
+    expect(CRITICAL_INVARIANTS).toContain(
+      'context retrieval via @explorer/@librarian as needed',
+    );
     expect(CRITICAL_INVARIANTS).toContain('<planning_gate>');
     expect(CRITICAL_INVARIANTS).toContain(
       'Report verification before declaring success',
@@ -80,11 +83,14 @@ describe('FIRST_GATE_BLOCK', () => {
   test('centralizes first-pass routing gates for the orchestrator prompt', () => {
     expect(FIRST_GATE_BLOCK).toContain('<first_gate>');
     expect(FIRST_GATE_BLOCK).toContain('0) STEWARDSHIP GATE');
+    expect(FIRST_GATE_BLOCK).toContain('1) CONTEXT RETRIEVAL GATE');
     expect(FIRST_GATE_BLOCK).toContain('ORACLE GATE');
     expect(FIRST_GATE_BLOCK).toContain('DESIGNER GATE');
     expect(FIRST_GATE_BLOCK).toContain('CAPABILITY DISCOVERY');
     expect(FIRST_GATE_BLOCK).toContain('LIFECYCLE: For code-affecting work');
-    expect(FIRST_GATE_BLOCK).toContain('approved specialist handoff');
+    expect(FIRST_GATE_BLOCK).toContain(
+      'explicit user confirmation on the plan/handoff',
+    );
   });
 });
 
@@ -101,6 +107,9 @@ describe('PLANNING_GATE_BLOCK', () => {
   test('allows analysis delegation before user approval', () => {
     expect(PLANNING_GATE_BLOCK).toContain('no approval needed for analysis');
     expect(PLANNING_GATE_BLOCK).toContain('ALWAYS permitted');
+    expect(PLANNING_GATE_BLOCK).toContain(
+      'After steward brief and any needed @explorer/@librarian retrieval',
+    );
   });
 
   test('narrows the mechanical-edit skip to no-diagnosis cases', () => {
@@ -145,6 +154,18 @@ describe('PLANNING_GATE_BLOCK', () => {
     expect(PLANNING_GATE_BLOCK).not.toContain('NEVER delegate before approval');
     expect(PLANNING_GATE_BLOCK.toLowerCase()).not.toContain(
       'never delegate to any subagent before approval',
+    );
+  });
+
+  test('generalizes presentation and adjustment to the first specialist', () => {
+    expect(PLANNING_GATE_BLOCK).toContain(
+      'Always present the specialist handoff to the user for confirmation',
+    );
+    expect(PLANNING_GATE_BLOCK).toContain(
+      'For UI work, relay the @designer design plan / implementation notes',
+    );
+    expect(PLANNING_GATE_BLOCK).toContain(
+      're-delegate the SAME specialist',
     );
   });
 });

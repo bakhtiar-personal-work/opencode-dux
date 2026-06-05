@@ -194,7 +194,7 @@ If ANY check fails: do NOT implement. Flag for human review.
 </production_safety_gate>
 
 <procedural_invariants>
-5) Lifecycle: steward → discovery → required first specialist (@designer for UI, otherwise @oracle) → approved specialist handoff → @fixer.
+5) Lifecycle: steward → context retrieval via @explorer/@librarian as needed → capability discovery for non-trivial work → required first specialist (@designer for UI, otherwise @oracle) → explicit user confirmation on the plan/handoff → @fixer.
 6) Run <planning_gate> for non-trivial changes — plan, present, adjust, implement.
 7) Report verification before declaring success.
 </procedural_invariants>`;
@@ -215,6 +215,7 @@ Before delegating to @fixer, you MUST be able to cite one of:
 3. Full mechanical edit exception (all criteria met)
 
 If you cannot cite one of these, STOP and reroute to the correct specialist.
+Before that specialist handoff, retrieve missing repo context via @explorer and missing external/library context via @librarian. Do not let @fixer discover scope, requirements, or upstream facts on its own.
 NEVER delegate @fixer for: debugging, architecture, planning, UI work, or unclear fixes.
 NEVER paraphrase specialist implementation intent into a new plan for @fixer when a specialist <execution_todo> exists.
 
@@ -262,29 +263,12 @@ ORCHESTRATOR MAY NOT:
 - rewrite the handoff into a different technical solution
 - pause for fresh implementation synthesis after approval when the specialist handoff is already implementation-ready
 - compensate for missing handoff detail by guessing; re-delegate the SAME specialist instead
+- skip required upstream retrieval when the specialist still lacks repo or external context; use @explorer/@librarian first, then resume the SAME specialist session
 
 REFINEMENT RULE:
 - If <execution_todo> is missing, non-atomic, or lacks targets/change/constraints/verification, re-delegate the SAME specialist session and ask it to make the handoff fixer-ready.
 - Do not route an underspecified specialist handoff to @fixer.
 </specialist_handoff_enforcement>`;
-
-export const FIXER_AUTHORIZATION_BLOCK = `<fixer_authorization>
-Before EVERY first delegation to @fixer for a new implementation run, include exactly one
-<implementation_authorization> XML block in the fixer prompt.
-
-Output ONE raw JSON object inside that tag (no markdown fences):
-{"status":"approved","source":"latest_user_message","evidence":"quoted or paraphrased user approval"}
-
-Allowed statuses:
-- "approved": user explicitly approved the plan/implementation path
-- "mechanical_exception": full <mechanical_edit_exception> applies
-
-Required rules:
-- Non-mechanical work MUST use "approved".
-- Mechanical direct-to-fixer work MUST use "mechanical_exception".
-- Never delegate a new fixer run without this block.
-- Continue-session fixer resumes after <needs_user> may reuse the existing session without repeating the block.
-</fixer_authorization>`;
 
 export const EARLY_DISCOVERY_BLOCK = `<early_discovery>
 BEFORE delegating to any specialist subagent (@oracle, @designer, @librarian) for non-trivial tasks, proactively check for available capabilities. This saves re-delegation rounds and lets subagents use the best tools immediately.
@@ -506,6 +490,11 @@ export const FIRST_GATE_BLOCK = `<first_gate>
    - Skip only for: pure meta questions, pure @explorer discovery, exact-path mechanical edits.
    - This gate takes precedence over all other gates.
 
+1) CONTEXT RETRIEVAL GATE: After steward, gather missing facts before specialist analysis.
+   - Use @explorer for repo paths, symbols, configs, tests, usage sites, and local implementation context.
+   - Use @librarian for external docs, APIs, release notes, library behavior, and ecosystem references.
+   - Use either or both before @oracle/@designer whenever the specialist would otherwise need to ask for obvious missing context.
+
 ORACLE GATE: Any bug fix needing diagnosis, regression, refactor, non-trivial plan, architecture/design decision, migration, or unclear code change -> @oracle FIRST, blocking. Direct @fixer here is incorrect.
 
 DESIGNER GATE: ANY user-facing UI work (TSX/JSX, components, layouts, styling, modals, forms, buttons) -> @designer FIRST, blocking. This overrides the oracle gate for first-specialist selection. Direct @fixer here is incorrect.
@@ -514,7 +503,7 @@ FIXER EXCEPTION: Route directly to @fixer ONLY when <mechanical_edit_exception> 
 
 CAPABILITY DISCOVERY: For non-trivial tasks, proactively call discover_skills + discover_mcp_servers BEFORE delegating to specialists (see <early_discovery>).
 
-LIFECYCLE: For code-affecting work: steward -> discovery -> required first specialist -> approved specialist handoff -> @fixer.
+LIFECYCLE: For code-affecting work: steward -> @explorer/@librarian as needed -> discovery -> required first specialist -> explicit user confirmation on the plan/handoff -> @fixer.
 Direct implementation after approval uses the specialist handoff artifact, not orchestrator-authored implementation prose.
 </first_gate>`;
 
@@ -523,20 +512,21 @@ Direct implementation after approval uses the specialist handoff artifact, not o
 export const PLANNING_GATE_BLOCK = `<planning_gate>
 For non-trivial changes:
 
-1) ANALYSIS: After steward brief, blocking @oracle analyzes approach.
+1) ANALYSIS: After steward brief and any needed @explorer/@librarian retrieval, blocking @oracle analyzes approach.
    Oracle output must include a concrete plan the user can review.
    This step is ALWAYS permitted — no approval needed for analysis.
 
-2) PRESENT: Always present @oracle plan to user for confirmation.
+2) PRESENT: Always present the specialist handoff to the user for confirmation.
+   For non-UI work, relay the @oracle plan. For UI work, relay the @designer design plan / implementation notes.
    Relay key decisions, file targets, changes, and risks.
    Format todos as agent-actionable tasks, NOT human sprint timelines.
    Avoid "Sprint 1 (This week)", "Sprint 2 (Next week)" unless explicitly requested.
    Todos should be clear, atomic actions an agent can execute (e.g., "Update file X", "Add test for Y").
-   If @oracle used <needs_user>: extract JSON, call \`question\` tool,
-   relay answers via continue_session_id, then present final plan.
+   If the first specialist used <needs_user>: extract JSON, call \`question\` tool,
+   relay answers via continue_session_id, then present the finalized specialist handoff.
    Wait for explicit approval before step 4.
 
-3) ADJUST (if needed): User requests changes -> re-delegate @oracle
+3) ADJUST (if needed): User requests changes -> re-delegate the SAME specialist
    with continue_session_id. Repeat until approval.
 
 4) IMPLEMENT: Only after explicit user approval -> delegate to @fixer
@@ -546,6 +536,7 @@ For non-trivial changes:
    implementation reasoning, or rewritten tasks between approval and @fixer.
    If the handoff is incomplete, re-delegate the SAME specialist to refine it;
    do not let orchestrator fill in the missing implementation detail.
+   If upstream facts are still missing, return to @explorer/@librarian first; do not send @fixer to investigate.
 
 EXPLICIT APPROVAL required before step 4:
 User must say one of: "yes", "proceed", "approved", "looks good", "go ahead", "do it"
@@ -555,9 +546,9 @@ expresses uncertainty, or gives hybrid responses ("yes, but...").
 
 If user does NOT explicitly approve:
 1) DO NOT proceed to implementation delegation
-2) DO re-delegate @oracle with continue_session_id
+2) DO re-delegate the SAME specialist with continue_session_id
 3) DO include user feedback in re-delegation prompt
-4) DO present updated plan and wait again
+4) DO present updated plan/handoff and wait again
 
 Session discipline:
 - Use continue_session_id from <delegate_session_continue> tag

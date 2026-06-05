@@ -157,7 +157,7 @@ describe('createDelegateTools agent normalization', () => {
     expect(result).not.toContain('Unknown subagent');
   });
 
-  test('rejects new fixer delegations without implementation authorization', async () => {
+  test('allows new fixer delegations without implementation authorization hard-stop', async () => {
     const tools = createDelegateTools(
       {
         client: createClient() as never,
@@ -188,15 +188,10 @@ describe('createDelegateTools agent normalization', () => {
       { sessionID: 'parent-1' },
     );
 
-    expect(result).toContain(
-      'New @fixer delegations require <implementation_authorization>',
-    );
-    expect(result).toContain('<planning_gate>');
-    expect(result).toContain('<execution_todo>');
-    expect(result).toContain('<fixer_authorization>');
+    expect(result).toContain('**fixer**');
   });
 
-  test('allows new fixer delegations with explicit implementation authorization', async () => {
+  test('still allows fixer prompts that include implementation authorization markup', async () => {
     const tools = createDelegateTools(
       {
         client: createClient() as never,

@@ -120,22 +120,25 @@ describe('buildOrchestratorPrompt', () => {
       '2) STEWARD BRIEF: For code-affecting work, use <steward_protocol> before deciding whether the steward gate applies',
     );
     expect(prompt).toContain(
-      '3) CAPABILITY DISCOVERY (BLOCKING): For non-trivial tasks, use <early_discovery> before deciding whether to skip discovery.',
+      '3) CONTEXT RETRIEVAL: After steward and before the first reasoning specialist, retrieve missing facts.',
     );
     expect(prompt).toContain(
-      '4) REQUIRED FIRST SPECIALIST: @designer for ANY user-facing UI work.',
+      '4) CAPABILITY DISCOVERY (BLOCKING): For non-trivial tasks, use <early_discovery> before deciding whether to skip discovery.',
+    );
+    expect(prompt).toContain(
+      '5) REQUIRED FIRST SPECIALIST: @designer for ANY user-facing UI work.',
     );
     expect(prompt).toContain(
       'Use <oracle_model_and_variant_selection> immediately before every new @oracle delegation.',
     );
     expect(prompt).toContain(
-      '5) PLAN PRESENTATION: Use <planning_gate> before presenting any implementation plan or deciding whether approval is required.',
+      '6) PLAN PRESENTATION: Use <planning_gate> before presenting any implementation plan or deciding whether approval is required.',
     );
     expect(prompt).toContain(
-      '6) IMPLEMENTATION: Before any @fixer delegation, use <routing_enforcement> and <specialist_handoff_enforcement>',
+      '7) IMPLEMENTATION: Before any @fixer delegation, use <routing_enforcement> and <specialist_handoff_enforcement>',
     );
     expect(prompt).toContain(
-      '8) VERIFICATION AND REPORTING: Use <verification> before declaring success. Use <output_format> and <communication> immediately before the final user-facing response.',
+      '9) VERIFICATION AND REPORTING: Use <verification> before declaring success. Use <output_format> and <communication> immediately before the final user-facing response.',
     );
   });
 
