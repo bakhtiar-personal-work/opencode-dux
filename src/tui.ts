@@ -6,6 +6,7 @@ import type { JSX } from '@opentui/solid';
 import { createElement, insert, setProp } from '@opentui/solid';
 import { createSignal } from 'solid-js';
 import { AGENT_SIDEBAR_DESCRIPTIONS } from './agents/descriptions';
+import { deriveActiveNames } from './subscriptions/active-state';
 import { tuiProviderLabel } from './subscriptions/provider';
 import type {
   CodexUsageEntry,
@@ -803,7 +804,6 @@ function renderMiMoUsage(
       text({ fg: theme.textMuted }, [`   Plan: ${planName}`]),
     ]),
   );
-
 }
 
 function renderSubscriptionPanel(
@@ -822,13 +822,15 @@ function renderSubscriptionPanel(
   });
   if (usageEntries.length === 0) return [];
 
+  const activeNames = deriveActiveNames(
+    snapshot.activeSubscriptionByProvider ?? {},
+  );
   const rows: Child[] = [];
   let isFirstAccount = true;
 
   for (const [, entry] of usageEntries) {
     const name = entry.accountName;
-    const activeName = snapshot.activeSubscriptionByProvider?.[entry.provider];
-    const isActive = activeName === name;
+    const isActive = activeNames.has(name);
     const providerLabel = tuiProviderLabel(entry.provider);
 
     if (!isFirstAccount) {

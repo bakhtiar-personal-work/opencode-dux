@@ -3,6 +3,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { readTuiSnapshot } from '../tui-state';
+import { deriveActiveNames } from './active-state';
 import { UsageService } from './usage-service';
 
 let previousXdgDataHome: string | undefined;
@@ -233,5 +234,66 @@ describe('usage-service', () => {
     expect(usage).toHaveLength(1);
     expect(usage[0]?.accountName).toBe('broken-deepseek');
     expect(usage[0]?.error).toContain('Missing DeepSeek API key');
+  });
+
+  test('same-name accounts across providers all appear active when any is active', () => {
+    // Seed three providers with the same account name "Main"
+    writeSubscriptions({
+      version: 2,
+      accounts: [
+        {
+          provider: 'neuralwatt',
+          name: 'Main',
+          apiKey: 'nw-key',
+        },
+        {
+          provider: 'codex',
+          name: 'Main',
+          accessToken: 'cx-token',
+        },
+        {
+          provider: 'mimo',
+          name: 'Main',
+          apiKey: 'mimo-key',
+          platformPh: 'ph',
+          serviceToken: 'token',
+          slh: 'slh',
+          userId: 'uid',
+        },
+      ],
+    });
+
+    // Only neuralwatt has an active auth entry
+    fs.mkdirSync(path.dirname(getAuthPath()), { recursive: true });
+    fs.writeFileSync(
+      getAuthPath(),
+      `${JSON.stringify(
+        {
+          neuralwatt: { type: 'api', key: 'nw-key' },
+        },
+        null,
+        2,
+      )}\n`,
+    );
+
+    const service = createUsageService();
+    const activeByProvider = service.syncActiveAccounts();
+    service.dispose();
+
+    // Provider-scoped: only neuralwatt is active
+    expect(activeByProvider.neuralwatt).toBe('Main');
+    expect(activeByProvider.codex).toBeUndefined();
+    expect(activeByProvider.mimo).toBeUndefined();
+
+    // Name-derived: "Main" should be in the active names set
+    const activeNames = deriveActiveNames(activeByProvider);
+    expect(activeNames.has('Main')).toBe(true);
+
+    // TUI snapshot should also reflect name-level active state
+    const snapshot = readTuiSnapshot();
+    const snapshotActiveNames = deriveActiveNames(
+      snapshot.activeSubscriptionByProvider,
+    );
+    expect(snapshotActiveNames.has('Main')).toBe(true);
   });
 });

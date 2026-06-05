@@ -29,6 +29,7 @@ import {
   updateCodexTokens,
   validateAccountName,
 } from './accounts-store';
+import { deriveActiveNames } from './active-state';
 import {
   completeDeviceAuth,
   decodeCodexAccountId,
@@ -406,8 +407,7 @@ export class UsageService {
               if (account.provider !== provider) return false;
               if (account.provider === 'codex')
                 return account.accessToken === key;
-              if (account.provider === 'mimo')
-                return account.apiKey === key;
+              if (account.provider === 'mimo') return account.apiKey === key;
               return account.apiKey === key;
             })
           : undefined;
@@ -517,27 +517,25 @@ export class UsageService {
           authCookie,
         };
         saveAccount(account);
-        // Auto-activate if no active account for this provider
+        // Auto-activate: set this account as active for its provider
         {
-          const activeByProvider = this.syncActiveAccounts();
+          this.syncActiveAccounts();
           const pKey: string = account.provider;
-          if (!activeByProvider[pKey as SubscriptionProvider]) {
-            try {
-              const key: string =
-                pKey === 'codex'
-                  ? ((account as unknown as CodexAccount).accessToken ?? '')
-                  : ((account as OpenCodeGoAccount | NeuralwattAccount)
-                      .apiKey ?? '');
-              if (key) {
-                await this.client.auth.set({
-                  path: { id: pKey },
-                  body: { type: 'api', key },
-                });
-                this.syncActiveAccounts();
-              }
-            } catch {
-              // Non-fatal: account is saved but not activated
+          try {
+            const key: string =
+              pKey === 'codex'
+                ? ((account as unknown as CodexAccount).accessToken ?? '')
+                : ((account as OpenCodeGoAccount | NeuralwattAccount).apiKey ??
+                  '');
+            if (key) {
+              await this.client.auth.set({
+                path: { id: pKey },
+                body: { type: 'api', key },
+              });
+              this.syncActiveAccounts();
             }
+          } catch {
+            // Non-fatal: account is saved but not activated
           }
         }
         // Refresh to update sidebar immediately
@@ -577,27 +575,25 @@ export class UsageService {
           apiKey,
         };
         saveAccount(account);
-        // Auto-activate if no active account for this provider
+        // Auto-activate: set this account as active for its provider
         {
-          const activeByProvider = this.syncActiveAccounts();
+          this.syncActiveAccounts();
           const pKey: string = account.provider;
-          if (!activeByProvider[pKey as SubscriptionProvider]) {
-            try {
-              const key: string =
-                pKey === 'codex'
-                  ? ((account as unknown as CodexAccount).accessToken ?? '')
-                  : ((account as OpenCodeGoAccount | NeuralwattAccount)
-                      .apiKey ?? '');
-              if (key) {
-                await this.client.auth.set({
-                  path: { id: pKey },
-                  body: { type: 'api', key },
-                });
-                this.syncActiveAccounts();
-              }
-            } catch {
-              // Non-fatal: account is saved but not activated
+          try {
+            const key: string =
+              pKey === 'codex'
+                ? ((account as unknown as CodexAccount).accessToken ?? '')
+                : ((account as OpenCodeGoAccount | NeuralwattAccount).apiKey ??
+                  '');
+            if (key) {
+              await this.client.auth.set({
+                path: { id: pKey },
+                body: { type: 'api', key },
+              });
+              this.syncActiveAccounts();
             }
+          } catch {
+            // Non-fatal: account is saved but not activated
           }
         }
         // Refresh to update sidebar immediately
@@ -635,23 +631,21 @@ export class UsageService {
           apiKey,
         };
         saveAccount(account);
-        // Auto-activate if no active account for this provider
+        // Auto-activate: set this account as active for its provider
         {
-          const activeByProvider = this.syncActiveAccounts();
+          this.syncActiveAccounts();
           const pKey: string = account.provider;
-          if (!activeByProvider[pKey as SubscriptionProvider]) {
-            try {
-              const key = getApiKeyFromStoredAccount(account);
-              if (key) {
-                await this.client.auth.set({
-                  path: { id: pKey },
-                  body: { type: 'api', key },
-                });
-                this.syncActiveAccounts();
-              }
-            } catch {
-              // Non-fatal: account is saved but not activated
+          try {
+            const key = getApiKeyFromStoredAccount(account);
+            if (key) {
+              await this.client.auth.set({
+                path: { id: pKey },
+                body: { type: 'api', key },
+              });
+              this.syncActiveAccounts();
             }
+          } catch {
+            // Non-fatal: account is saved but not activated
           }
         }
         this.refresh(true).catch(() => {});
@@ -663,7 +657,14 @@ export class UsageService {
 
       case 'add-mimo': {
         const [_, name, apiKey, platformPh, serviceToken, slh, userId] = parts;
-        if (!name || !apiKey || !platformPh || !serviceToken || !slh || !userId) {
+        if (
+          !name ||
+          !apiKey ||
+          !platformPh ||
+          !serviceToken ||
+          !slh ||
+          !userId
+        ) {
           output.parts.push(
             createInternalAgentTextPart(
               'Usage: /subscriptions add-mimo <name> <api-key> <platform_ph> <serviceToken> <slh> <userId>\n' +
@@ -691,23 +692,21 @@ export class UsageService {
           userId,
         };
         saveAccount(account);
-        // Auto-activate if no active account for this provider
+        // Auto-activate: set this account as active for its provider
         {
-          const activeByProvider = this.syncActiveAccounts();
+          this.syncActiveAccounts();
           const pKey: string = account.provider;
-          if (!activeByProvider[pKey as SubscriptionProvider]) {
-            try {
-              const key = (account as MiMoAccount).apiKey ?? '';
-              if (key) {
-                await this.client.auth.set({
-                  path: { id: pKey },
-                  body: { type: 'api', key },
-                });
-                this.syncActiveAccounts();
-              }
-            } catch {
-              // Non-fatal: account is saved but not activated
+          try {
+            const key = (account as MiMoAccount).apiKey ?? '';
+            if (key) {
+              await this.client.auth.set({
+                path: { id: pKey },
+                body: { type: 'api', key },
+              });
+              this.syncActiveAccounts();
             }
+          } catch {
+            // Non-fatal: account is saved but not activated
           }
         }
         // Refresh to update sidebar immediately
@@ -764,46 +763,44 @@ export class UsageService {
                 idToken: tokens.idToken,
               };
               saveAccount(account);
-              // Auto-activate if no active account for this provider
+              // Auto-activate: set this account as active for its provider
               {
-                const activeByProvider = this.syncActiveAccounts();
+                this.syncActiveAccounts();
                 const pKey: string = account.provider;
-                if (!activeByProvider[pKey as SubscriptionProvider]) {
-                  try {
-                    if (pKey === 'codex') {
-                      const codexAcct = account as unknown as CodexAccount;
-                      const key = codexAcct.accessToken ?? '';
-                      if (key) {
-                        const oauthBody: OAuthAuthBody = {
-                          type: 'oauth',
-                          access: key,
-                          refresh: codexAcct.refreshToken ?? '',
-                          expires: codexAcct.expiresAt ?? 0,
-                          accountId: codexAcct.accountId ?? '',
-                        };
-                        await this.client.auth.set({
-                          path: { id: pKey },
-                          body: oauthBody,
-                        });
-                      }
-                    } else {
-                      const key =
-                        (
-                          account as unknown as
-                            | OpenCodeGoAccount
-                            | NeuralwattAccount
-                        ).apiKey ?? '';
-                      if (key) {
-                        await this.client.auth.set({
-                          path: { id: pKey },
-                          body: { type: 'api', key },
-                        });
-                      }
+                try {
+                  if (pKey === 'codex') {
+                    const codexAcct = account as unknown as CodexAccount;
+                    const key = codexAcct.accessToken ?? '';
+                    if (key) {
+                      const oauthBody: OAuthAuthBody = {
+                        type: 'oauth',
+                        access: key,
+                        refresh: codexAcct.refreshToken ?? '',
+                        expires: codexAcct.expiresAt ?? 0,
+                        accountId: codexAcct.accountId ?? '',
+                      };
+                      await this.client.auth.set({
+                        path: { id: pKey },
+                        body: oauthBody,
+                      });
                     }
-                    this.syncActiveAccounts();
-                  } catch {
-                    // Non-fatal: account is saved but not activated
+                  } else {
+                    const key =
+                      (
+                        account as unknown as
+                          | OpenCodeGoAccount
+                          | NeuralwattAccount
+                      ).apiKey ?? '';
+                    if (key) {
+                      await this.client.auth.set({
+                        path: { id: pKey },
+                        body: { type: 'api', key },
+                      });
+                    }
                   }
+                  this.syncActiveAccounts();
+                } catch {
+                  // Non-fatal: account is saved but not activated
                 }
               }
               this.refresh(true).catch(() => {});
@@ -897,9 +894,10 @@ export class UsageService {
           );
           return;
         }
+        const activeNames = deriveActiveNames(activeByProvider);
         const lines = ['### Subscription Accounts', ''];
         for (const acct of accounts) {
-          const isActive = activeByProvider[acct.provider] === acct.name;
+          const isActive = activeNames.has(acct.name);
           const star = isActive ? '★ ' : '  ';
           const providerLabel =
             acct.provider === 'opencode-go'
@@ -944,7 +942,9 @@ export class UsageService {
         );
         lines.push('  /subscriptions add-neuralwatt <name> <api-key>');
         lines.push('  /subscriptions add-deepseek <name> <api-key>');
-        lines.push('  /subscriptions add-mimo <name> <api-key> <platform_ph> <serviceToken> <slh> <userId>');
+        lines.push(
+          '  /subscriptions add-mimo <name> <api-key> <platform_ph> <serviceToken> <slh> <userId>',
+        );
         lines.push('  /subscriptions add-codex-device <name>');
         lines.push('  /subscriptions remove <provider> <name>');
         lines.push('  /subscriptions switch <provider> <name>');
