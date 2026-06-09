@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { TuiPluginModule } from '@opencode-ai/plugin/tui';
 import type { JSX } from '@opentui/solid';
@@ -1367,7 +1367,7 @@ function buildOrchestratingRows(
         [
           box({ flexDirection: 'row' }, [
             text({ fg: theme.accent }, [`${orchDot} `]),
-            text({ fg: theme.text }, [row1Title]),
+            text({ fg: theme.accent }, [row1Title]),
           ]),
           text({ fg: theme.text }, [
             orchNode.status === 'busy' || orchNode.status === 'retry'
@@ -1377,6 +1377,16 @@ function buildOrchestratingRows(
         ],
       ),
     );
+    const bundle = snapshot.sessions[orchId];
+    const projectName = bundle?.projectPath ? basename(bundle.projectPath) : undefined;
+    if (projectName) {
+      rows.push(
+        box({ width: '100%', flexDirection: 'row' }, [
+          text({ fg: theme.textMuted }, ['  ']),
+          text({ fg: theme.text }, [truncate(projectName, ORCH_ROOT_TITLE_DISPLAY_MAX)]),
+        ]),
+      );
+    }
     const orchStatusText = getStatusText(snapshot, orchId);
     rows.push(
       box(
@@ -1388,7 +1398,7 @@ function buildOrchestratingRows(
         [
           box({ flexDirection: 'row', flexShrink: 0 }, [
             text({ fg: theme.textMuted }, ['  ']),
-            text({ fg: theme.text }, [
+            text({ fg: theme.textMuted }, [
               truncate(orchId, ORCH_ROOT_SESSION_ID_DISPLAY_MAX),
             ]),
           ]),
