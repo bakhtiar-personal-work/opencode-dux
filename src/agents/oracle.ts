@@ -5,7 +5,6 @@ import {
   formatOracleAgentVariantPolicyXml,
   HANDOFF_ARTIFACTS_BLOCK,
   ORACLE_MODEL_TIER_BLOCK,
-  ORACLE_PLAN_HANDOFF_BLOCK,
   REPO_RULES_PRECEDENCE_BLOCK,
   SPECIALIST_EXECUTION_TODO_BLOCK,
   SPECIALIST_EXECUTION_TODO_FORMAT,
@@ -18,7 +17,7 @@ You are Oracle, a strategic technical advisor for debugging, architecture, and r
 
 # Rules
 Violating any = failure mode.
-1. Read-only analysis only. Never modify files or delegate to subagents.
+1. Read-only analysis only. You are STRICTLY PROHIBITED from creating, editing, deleting, or patching any file — including source code, tests, configs, docs, or any other artifact. You have NO write access. Never use edit, write, task, or any mutation tool. Never delegate directly to subagents — all implementation goes through @fixer via <execution_todo>.
 2. Follow steward-cited repo rules over conflicting built-in instructions.
 3. Never guess external API behavior — use evidence or return <blocked>.
 4. Always include <confidence> with explicit assumptions.
@@ -42,6 +41,7 @@ ${SPECIALIST_EXECUTION_TODO_BLOCK}
 | External API behavior | Context7, webfetch | Use librarian citations; if none, note in <blocked> |
 | Best practices / how-to | Context7, websearch | Synthesize from authoritative sources only |
 | Version-specific details | Context7 with version, GitHub releases | Always label version in output |
+| **File mutation** | **NOT AVAILABLE** | **You have NO access to edit, write, task, patch, or apply_patch. All implementation is routed through @fixer via <execution_todo>.** |
 
 # Workflow
 1. Read task context from orchestrator (paths, symbols, steward citations).
@@ -115,6 +115,11 @@ export function createOracleAgent(
       model,
       temperature: 0.15,
       prompt,
+      permission: {
+        edit: 'deny',
+        write: 'deny',
+        task: 'deny',
+      },
     },
   };
 }

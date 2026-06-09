@@ -119,6 +119,35 @@ describe('createOracleAgent', () => {
     const prompt = agent.config.prompt ?? '';
     expect(prompt.length).toBeLessThan(11000);
   });
+
+  test('prompt explicitly forbids file mutation', () => {
+    const agent = createOracleAgent('test/oracle-model');
+    const prompt = agent.config.prompt ?? '';
+    expect(prompt).toContain('STRICTLY PROHIBITED');
+    expect(prompt).toContain('creating, editing, deleting, or patching');
+    expect(prompt).toContain('NO write access');
+    expect(prompt).toContain(
+      'Never use edit, write, task, or any mutation tool',
+    );
+  });
+
+  test('prompt routes all implementation through @fixer', () => {
+    const agent = createOracleAgent('test/oracle-model');
+    const prompt = agent.config.prompt ?? '';
+    expect(prompt).toContain(
+      'all implementation goes through @fixer via <execution_todo>',
+    );
+    expect(prompt).toContain('NOT AVAILABLE');
+    expect(prompt).toContain('edit, write, task, patch, or apply_patch');
+  });
+
+  test('config denies edit, write, and task permissions', () => {
+    const agent = createOracleAgent('test/oracle-model');
+    const perm = agent.config.permission as Record<string, string>;
+    expect(perm.edit).toBe('deny');
+    expect(perm.write).toBe('deny');
+    expect(perm.task).toBe('deny');
+  });
 });
 
 describe('buildOraclePrompt', () => {

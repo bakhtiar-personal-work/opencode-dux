@@ -263,6 +263,34 @@ describe('getAgentConfigs', () => {
   });
 });
 
+describe('oracle read-only enforcement', () => {
+  test('oracle has edit, write, and task denied by default', async () => {
+    const agents = await createAgents();
+    const oracle = agents.find((a) => a.name === 'oracle');
+    expect(oracle).toBeDefined();
+    const perm = oracle?.config.permission as Record<string, string>;
+    expect(perm.edit).toBe('deny');
+    expect(perm.write).toBe('deny');
+    expect(perm.task).toBe('deny');
+  });
+
+  test('user config cannot re-enable oracle edit permission', async () => {
+    const config: PluginConfig = {
+      agents: {
+        oracle: {
+          model: 'test/model',
+        },
+      },
+    };
+    const agents = await createAgents(config);
+    const oracle = agents.find((a) => a.name === 'oracle');
+    const perm = oracle?.config.permission as Record<string, string>;
+    expect(perm.edit).toBe('deny');
+    expect(perm.write).toBe('deny');
+    expect(perm.task).toBe('deny');
+  });
+});
+
 describe('options passthrough', () => {
   test('options are applied to agent config via overrides', async () => {
     const config: PluginConfig = {

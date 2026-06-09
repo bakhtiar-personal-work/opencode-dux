@@ -208,6 +208,11 @@ export function createOrchestratorAgent(
       variant: undefined,
       temperature: 0.1,
       prompt,
+      permission: {
+        edit: 'deny',
+        write: 'deny',
+        task: 'deny',
+      },
     },
   };
 

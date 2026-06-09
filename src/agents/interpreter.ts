@@ -78,6 +78,11 @@ export function createInterpreterAgent(
       model,
       temperature: 0.15,
       prompt,
+      permission: {
+        edit: 'deny',
+        write: 'deny',
+        task: 'deny',
+      },
     },
   };
 }

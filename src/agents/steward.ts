@@ -73,6 +73,11 @@ export function createStewardAgent(
       model,
       temperature: 0.1,
       prompt,
+      permission: {
+        edit: 'deny',
+        write: 'deny',
+        task: 'deny',
+      },
     },
   };
 }

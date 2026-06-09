@@ -44,10 +44,12 @@ export async function applyDefaultPermissions(
 
   const questionPerm = existing.question === 'deny' ? 'deny' : 'allow';
 
-  // Orchestrator: block built-in Task tool (uses delegate_subagent instead)
-  const taskPerm = agent.name === 'orchestrator' ? 'deny' : undefined;
-  const editPerm = agent.name === 'orchestrator' ? 'deny' : undefined;
-  const writePerm = agent.name === 'orchestrator' ? 'deny' : undefined;
+  // Permission hardening: only fixer may use edit/write/task tools.
+  // All other agents are denied these mutation tools by default.
+  const isImplementationAgent = agent.name === 'fixer';
+  const taskPerm = isImplementationAgent ? undefined : 'deny';
+  const editPerm = isImplementationAgent ? undefined : 'deny';
+  const writePerm = isImplementationAgent ? undefined : 'deny';
 
   agent.config.permission = {
     ...existing,

@@ -117,6 +117,11 @@ export function createDesignerAgent(
       model,
       temperature: 0.3,
       prompt,
+      permission: {
+        edit: 'deny',
+        write: 'deny',
+        task: 'deny',
+      },
     },
   };
 }

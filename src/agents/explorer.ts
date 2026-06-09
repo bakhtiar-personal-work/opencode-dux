@@ -96,6 +96,11 @@ export function createExplorerAgent(
       model,
       temperature: 0.1,
       prompt,
+      permission: {
+        edit: 'deny',
+        write: 'deny',
+        task: 'deny',
+      },
     },
   };
 }
