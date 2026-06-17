@@ -3,6 +3,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { readTuiSnapshot } from '../tui-state';
+import { loadAccounts } from './accounts-store';
 import { deriveActiveNames } from './active-state';
 import { UsageService } from './usage-service';
 
@@ -154,6 +155,7 @@ describe('usage-service', () => {
           name: 'needs-key',
           workspaceId: 'wrk_123',
           authCookie: 'cookie',
+          apiKey: '',
         },
       ],
     });
@@ -295,5 +297,85 @@ describe('usage-service', () => {
       snapshot.activeSubscriptionByProvider,
     );
     expect(snapshotActiveNames.has('Main')).toBe(true);
+  });
+
+  test('add-opencode-go parses 4 args and stores apiKey', async () => {
+    const authSetCalls: unknown[] = [];
+    const service = createUsageService({
+      authSet: async (input) => {
+        authSetCalls.push(input);
+      },
+    });
+    const output = { parts: [] as Array<{ type: string; text?: string }> };
+    await service.handleCommandExecuteBefore(
+      {
+        command: 'subscriptions',
+        sessionID: 'ses_test',
+        arguments: 'add-opencode-go personal wrk_xxx cookie-value sk-api-key',
+      },
+      output,
+    );
+    service.dispose();
+
+    // Verify the saved account includes apiKey
+    const accounts = loadAccounts();
+    expect(accounts).toHaveLength(1);
+    const acct = accounts[0];
+    expect(acct.provider).toBe('opencode-go');
+    if (acct.provider === 'opencode-go') {
+      expect(acct.name).toBe('personal');
+      expect(acct.workspaceId).toBe('wrk_xxx');
+      expect(acct.authCookie).toBe('cookie-value');
+      expect(acct.apiKey).toBe('sk-api-key');
+    }
+
+    // Verify auto-activate called auth.set with the apiKey
+    expect(authSetCalls).toHaveLength(1);
+    expect(authSetCalls[0]).toEqual({
+      path: { id: 'opencode-go' },
+      body: { type: 'api', key: 'sk-api-key' },
+    });
+
+    // Verify success message
+    expect(output.parts).toHaveLength(1);
+    expect(output.parts[0].text).toContain('Added OpenCode Go account');
+  });
+
+  test('switch opencode-go account calls client.auth.set with stored apiKey', async () => {
+    writeSubscriptions({
+      version: 2,
+      accounts: [
+        {
+          provider: 'opencode-go',
+          name: 'go-switch',
+          workspaceId: 'wrk_456',
+          authCookie: 'cookie-switch',
+          apiKey: 'switch-key',
+        },
+      ],
+    });
+
+    const authSetCalls: unknown[] = [];
+    const service = createUsageService({
+      authSet: async (input) => {
+        authSetCalls.push(input);
+      },
+    });
+    const output = { parts: [] as Array<{ type: string; text?: string }> };
+    await service.handleCommandExecuteBefore(
+      {
+        command: 'subscriptions',
+        sessionID: 'ses_test',
+        arguments: 'switch opencode-go go-switch',
+      },
+      output,
+    );
+    service.dispose();
+
+    expect(authSetCalls).toHaveLength(1);
+    expect(authSetCalls[0]).toEqual({
+      path: { id: 'opencode-go' },
+      body: { type: 'api', key: 'switch-key' },
+    });
   });
 });

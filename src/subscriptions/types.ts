@@ -19,7 +19,7 @@ export interface OpenCodeGoAccount {
   name: string;
   workspaceId: string;
   authCookie: string;
-  apiKey?: string;
+  apiKey: string;
 }
 
 export interface NeuralwattAccount {

@@ -36,6 +36,7 @@ describe('accounts-store (subscriptions)', () => {
       name: 'personal',
       workspaceId: 'wrk_123',
       authCookie: 'cookie-abc',
+      apiKey: 'test-key',
     });
 
     const accounts = loadAccounts();
@@ -46,6 +47,7 @@ describe('accounts-store (subscriptions)', () => {
     if (acct.provider === 'opencode-go') {
       expect(acct.workspaceId).toBe('wrk_123');
       expect(acct.authCookie).toBe('cookie-abc');
+      expect(acct.apiKey).toBe('test-key');
     }
   });
 
@@ -60,7 +62,7 @@ describe('accounts-store (subscriptions)', () => {
     expect(accounts).toHaveLength(1);
     expect(accounts[0].provider).toBe('neuralwatt');
     expect(accounts[0].name).toBe('nwaccount');
-    expect(accounts[0].apiKey).toBe('sk-test-key');
+    expect((accounts[0] as any).apiKey).toBe('sk-test-key');
   });
 
   test('saveAccount overwrites existing account by name', () => {
@@ -69,12 +71,14 @@ describe('accounts-store (subscriptions)', () => {
       name: 'personal',
       workspaceId: 'wrk_123',
       authCookie: 'cookie-old',
+      apiKey: 'test-key',
     });
     saveAccount({
       provider: 'opencode-go',
       name: 'personal',
       workspaceId: 'wrk_456',
       authCookie: 'cookie-new',
+      apiKey: 'test-key',
     });
 
     const accounts = loadAccounts();
@@ -92,6 +96,7 @@ describe('accounts-store (subscriptions)', () => {
       name: 'personal',
       workspaceId: 'wrk_123',
       authCookie: 'cookie-abc',
+      apiKey: 'test-key',
     });
     saveAccount({
       provider: 'neuralwatt',
@@ -115,12 +120,14 @@ describe('accounts-store (subscriptions)', () => {
       name: 'personal',
       workspaceId: 'wrk_123',
       authCookie: 'cookie-old',
+      apiKey: 'test-key',
     });
     saveAccount({
       provider: 'opencode-go',
       name: 'personal',
       workspaceId: 'wrk_456',
       authCookie: 'cookie-new',
+      apiKey: 'test-key',
     });
 
     const accounts = loadAccounts();
@@ -138,6 +145,7 @@ describe('accounts-store (subscriptions)', () => {
       name: 'Main',
       workspaceId: 'wrk_123',
       authCookie: 'cookie-abc',
+      apiKey: 'test-key',
     });
     saveAccount({
       provider: 'neuralwatt',
@@ -185,6 +193,7 @@ describe('accounts-store (subscriptions)', () => {
       name: 'Main',
       workspaceId: 'wrk_123',
       authCookie: 'cookie-abc',
+      apiKey: 'test-key',
     });
     saveAccount({
       provider: 'neuralwatt',
@@ -208,6 +217,7 @@ describe('accounts-store (subscriptions)', () => {
       name: 'personal',
       workspaceId: 'wrk_123',
       authCookie: 'cookie-abc',
+      apiKey: 'test-key',
     });
     const removed = removeAccount('opencode-go', 'personal');
     expect(removed).toBe(true);
@@ -225,6 +235,7 @@ describe('accounts-store (subscriptions)', () => {
       name: 'personal',
       workspaceId: 'wrk_123',
       authCookie: 'cookie-abc',
+      apiKey: 'test-key',
     });
     const account = getAccount('opencode-go', 'personal');
     expect(account).toBeDefined();
@@ -242,6 +253,7 @@ describe('accounts-store (subscriptions)', () => {
       name: 'personal',
       workspaceId: 'wrk_123',
       authCookie: 'cookie-abc',
+      apiKey: 'test-key',
     });
     saveAccount({
       provider: 'neuralwatt',
@@ -253,6 +265,7 @@ describe('accounts-store (subscriptions)', () => {
       name: 'work',
       workspaceId: 'wrk_456',
       authCookie: 'cookie-def',
+      apiKey: 'test-key',
     });
 
     const goAccounts = getAccountsByProvider('opencode-go');

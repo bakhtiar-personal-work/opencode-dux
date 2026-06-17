@@ -490,13 +490,15 @@ export class UsageService {
       case 'add-opencode-go':
       case 'add': {
         // 'add' defaults to opencode-go for backward compat
-        const [_, name, workspaceId, ...cookieParts] = parts;
-        const authCookie = cookieParts.join(' ');
-        if (!name || !workspaceId || !authCookie) {
+        const name = parts[1];
+        const workspaceId = parts[2];
+        const apiKey = parts.at(-1) ?? '';
+        const authCookie = parts.slice(3, -1).join(' ');
+        if (!name || !workspaceId || !authCookie || !apiKey) {
           output.parts.push(
             createInternalAgentTextPart(
-              'Usage: /subscriptions add-opencode-go <name> <workspace-id> <auth-cookie>\n' +
-                'Example: /subscriptions add-opencode-go personal wrk_xxx Fe26.2...',
+              'Usage: /subscriptions add-opencode-go <name> <workspace-id> <auth-cookie> <api-key>\n' +
+                'Example: /subscriptions add-opencode-go personal wrk_xxx Fe26.2... sk-key',
             ),
           );
           return;
@@ -515,6 +517,7 @@ export class UsageService {
           name,
           workspaceId,
           authCookie,
+          apiKey,
         };
         saveAccount(account);
         // Auto-activate: set this account as active for its provider
@@ -938,7 +941,7 @@ export class UsageService {
         lines.push('');
         lines.push('Commands:');
         lines.push(
-          '  /subscriptions add-opencode-go <name> <workspace-id> <auth-cookie>',
+          '  /subscriptions add-opencode-go <name> <workspace-id> <auth-cookie> <api-key>',
         );
         lines.push('  /subscriptions add-neuralwatt <name> <api-key>');
         lines.push('  /subscriptions add-deepseek <name> <api-key>');
@@ -1002,7 +1005,7 @@ export class UsageService {
             output.parts.push(
               createInternalAgentTextPart(
                 account.provider === 'opencode-go'
-                  ? `Account "${name}" has no API key set. Re-add with /subscriptions add-opencode-go <name> <workspace-id> <cookie>.`
+                  ? `Account "${name}" has no API key set. Re-add with /subscriptions add-opencode-go <name> <workspace-id> <auth-cookie> <api-key>.`
                   : account.provider === 'deepseek'
                     ? `Account "${name}" has no API key set. Re-add with /subscriptions add-deepseek <name> <api-key>.`
                     : `Account "${name}" has no API key set. Re-add with /subscriptions add-neuralwatt <name> <api-key>.`,
@@ -1095,7 +1098,7 @@ export class UsageService {
           createInternalAgentTextPart(
             'Subscription Account Management\n\n' +
               'Commands:\n' +
-              '  /subscriptions add-opencode-go <name> <workspace-id> <auth-cookie>   Add an OpenCode Go account\n' +
+              '  /subscriptions add-opencode-go <name> <workspace-id> <auth-cookie> <api-key>   Add an OpenCode Go account\n' +
               '  /subscriptions add-neuralwatt <name> <api-key>                       Add a Neuralwatt account\n' +
               '  /subscriptions add-deepseek <name> <api-key>                         Add a DeepSeek account\n' +
               '  /subscriptions add-mimo <name> <api-key> <platform_ph> <serviceToken> <slh> <userId>  Add a MiMo account\n' +

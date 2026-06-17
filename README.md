@@ -152,7 +152,7 @@ Install new skills: `npx skills add <owner/repo> --skill <skill-name> -g -a open
 Manage API accounts from the OpenCode prompt with `/subscriptions`:
 
 - `/subscriptions list` - View all accounts and their usage
-- `/subscriptions add-opencode-go <name> <workspace-id> <auth-cookie>` - Add OpenCode Go account
+- `/subscriptions add-opencode-go <name> <workspace-id> <auth-cookie> <api-key>` - Add OpenCode Go account
 - `/subscriptions add-neuralwatt <name> <api-key>` - Add Neuralwatt account
 - `/subscriptions add-deepseek <name> <api-key>` - Add DeepSeek account
 - `/subscriptions add-mimo <name> <api-key> <platform_ph> <serviceToken> <slh> <userId>` - Add MiMo (Xiaomi) account (cookie values from browser DevTools)
@@ -165,7 +165,7 @@ Manage API accounts from the OpenCode prompt with `/subscriptions`:
 
 | Provider        | Provider ID   | Usage tracking                                        | Auth method                |
 | --------------- | ------------- | ----------------------------------------------------- | -------------------------- |
-| **OpenCode Go** | `opencode-go` | Dashboard scraping (rolling, weekly, monthly windows) | Workspace ID + auth cookie |
+| **OpenCode Go** | `opencode-go` | Dashboard scraping (rolling, weekly, monthly windows) | Workspace ID + auth cookie + API key |
 | **Neuralwatt**  | `neuralwatt`  | REST API (credits, kWh, token usage)                  | API key                    |
 | **DeepSeek**    | `deepseek`    | Official REST API (`/user/balance`)                   | API key                    |
 | **MiMo**        | `mimo`        | Platform API (balance, plan, AI Credits usage)        | API key + cookie values    |
