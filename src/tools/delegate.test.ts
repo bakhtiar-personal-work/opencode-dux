@@ -48,6 +48,15 @@ describe('resolveDelegatedAgentConfig', () => {
     expect(resolved.model).toBe('alias/explorer-model');
     expect(resolved.variant).toBe('medium');
   });
+
+  test('falls back to built-in default model when config has no agent override', () => {
+    const resolved = resolveDelegatedAgentConfig(undefined, 'explorer', {
+      variant: 'medium',
+    });
+
+    expect(resolved.model).toBe('neuralwatt/qwen3.5-397b-fast');
+    expect(resolved.variant).toBe('medium');
+  });
 });
 
 describe('createDelegateTools agent normalization', () => {

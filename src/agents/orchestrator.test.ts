@@ -1,5 +1,9 @@
 import { describe, expect, test } from 'bun:test';
-import { buildOrchestratorPrompt, resolvePrompt } from './orchestrator';
+import {
+  buildOrchestratorPrompt,
+  createOrchestratorAgent,
+  resolvePrompt,
+} from './orchestrator';
 
 describe('resolvePrompt', () => {
   test('returns base when neither custom nor append provided', () => {
@@ -181,5 +185,56 @@ describe('buildOrchestratorPrompt', () => {
     const prompt = buildOrchestratorPrompt('openai/gpt-5', 'openai/gpt-5-pro');
 
     expect(prompt.length).toBeLessThan(50000);
+  });
+});
+
+describe('createOrchestratorAgent - customInstruction', () => {
+  test('prepends multiline customInstruction to resolved prompt', () => {
+    const instruction = 'Line 1\nLine 2';
+    const agent = createOrchestratorAgent(
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      instruction,
+    );
+
+    expect(agent.config.prompt).toBe(`${instruction}\n\n${buildOrchestratorPrompt()}`);
+  });
+
+  test('omitting customInstruction leaves prompt byte-for-byte equivalent', () => {
+    const withUndefined = createOrchestratorAgent(
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+    );
+    const withoutParam = createOrchestratorAgent();
+
+    expect(withUndefined.config.prompt).toBe(withoutParam.config.prompt);
+    expect(withUndefined.config.prompt).toBe(buildOrchestratorPrompt());
+  });
+
+  test('customInstruction applies before custom prompt override', () => {
+    const instruction = 'PREFIX';
+    const agent = createOrchestratorAgent(
+      undefined,
+      'CUSTOM PROMPT',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      instruction,
+    );
+
+    expect(agent.config.prompt).toBe(`${instruction}\n\nCUSTOM PROMPT`);
   });
 });

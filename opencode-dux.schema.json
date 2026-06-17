@@ -12,6 +12,10 @@
       "description": "Disable automatic installation of plugin updates when false. Defaults to true.",
       "type": "boolean"
     },
+    "customInstruction": {
+      "description": "Text prepended verbatim to the orchestrator system prompt. Supports multiline content.",
+      "type": "string"
+    },
     "presets": {
       "type": "object",
       "propertyNames": {
@@ -19,8 +23,11 @@
       },
       "additionalProperties": {
         "type": "object",
-        "propertyNames": {
-          "type": "string"
+        "properties": {
+          "customInstruction": {
+            "description": "Optional orchestrator instruction applied when this preset is active. Root-level customInstruction overrides it.",
+            "type": "string"
+          }
         },
         "additionalProperties": {
           "type": "object",

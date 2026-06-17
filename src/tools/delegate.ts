@@ -1,7 +1,7 @@
 import type { ToolDefinition } from '@opencode-ai/plugin';
 import { tool } from '@opencode-ai/plugin';
 import type { AgentName, PluginConfig } from '../config';
-import { ALL_AGENT_NAMES } from '../config/constants';
+import { ALL_AGENT_NAMES, DEFAULT_MODELS } from '../config/constants';
 import { getAgentOverride } from '../config/utils';
 import {
   recordDelegatedSubagentSession,
@@ -377,7 +377,10 @@ export function resolveDelegatedAgentConfig(
   const agentOverride = getAgentOverride(config, agentName);
 
   return {
-    model: requested.model ?? agentOverride?.model,
+    model:
+      requested.model ??
+      agentOverride?.model ??
+      DEFAULT_MODELS[agentName as AgentName],
     variant: agentOverride?.variant ?? requested.variant,
   };
 }

@@ -3,6 +3,7 @@ import * as path from 'node:path';
 import { stripJsonComments } from '../cli/config-io';
 import { getConfigSearchDirs } from '../cli/paths';
 import { type PluginConfig, PluginConfigSchema } from './schema';
+import { getPresetAgentOverrides } from './utils';
 
 const PROMPTS_DIR_NAME = 'opencode-dux';
 
@@ -182,8 +183,17 @@ export function loadPluginConfig(directory: string): PluginConfig {
   if (config.preset) {
     const preset = config.presets?.[config.preset];
     if (preset) {
+      const presetAgents = getPresetAgentOverrides(preset);
+
+      if (
+        config.customInstruction === undefined &&
+        typeof preset.customInstruction === 'string'
+      ) {
+        config.customInstruction = preset.customInstruction;
+      }
+
       // Merge preset agents with root agents (root overrides)
-      config.agents = deepMerge(preset, config.agents);
+      config.agents = deepMerge(presetAgents, config.agents);
     } else {
       // Preset name specified but doesn't exist - warn user
       const presetSource =

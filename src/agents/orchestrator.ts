@@ -190,6 +190,7 @@ export function createOrchestratorAgent(
   oracleSmartModel?: string,
   enabledSubagentNames?: Set<string>,
   subagentModelRoster?: SubagentModelRoster,
+  customInstruction?: string,
 ): AgentDefinition {
   const basePrompt = buildOrchestratorPrompt(
     oracleDefaultModel,
@@ -197,7 +198,11 @@ export function createOrchestratorAgent(
     enabledSubagentNames,
     subagentModelRoster,
   );
-  const prompt = resolvePrompt(basePrompt, customPrompt, customAppendPrompt);
+  let prompt = resolvePrompt(basePrompt, customPrompt, customAppendPrompt);
+
+  if (customInstruction) {
+    prompt = `${customInstruction}\n\n${prompt}`;
+  }
 
   const definition: AgentDefinition = {
     name: 'orchestrator',

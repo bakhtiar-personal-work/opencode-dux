@@ -13,7 +13,16 @@ export const AgentOverrideConfigSchema = z
 
 export type AgentOverrideConfig = z.infer<typeof AgentOverrideConfigSchema>;
 
-export const PresetSchema = z.record(z.string(), AgentOverrideConfigSchema);
+export const PresetSchema = z
+  .object({
+    customInstruction: z
+      .string()
+      .optional()
+      .describe(
+        'Optional orchestrator instruction applied when this preset is active. Root-level customInstruction overrides it.',
+      ),
+  })
+  .catchall(AgentOverrideConfigSchema);
 
 export type Preset = z.infer<typeof PresetSchema>;
 
@@ -98,6 +107,13 @@ export const PluginConfigSchema = z.object({
     .optional()
     .describe(
       'Disable automatic installation of plugin updates when false. Defaults to true.',
+    ),
+
+  customInstruction: z
+    .string()
+    .optional()
+    .describe(
+      'Text prepended verbatim to the orchestrator system prompt. Supports multiline content.',
     ),
 
   presets: z.record(z.string(), PresetSchema).optional(),

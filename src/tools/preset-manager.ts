@@ -1,5 +1,10 @@
 import type { PluginInput } from '@opencode-ai/plugin';
-import type { AgentOverrideConfig, PluginConfig, Preset } from '../config';
+import {
+  type AgentOverrideConfig,
+  getPresetAgentOverrides,
+  type PluginConfig,
+  type Preset,
+} from '../config';
 import { AGENT_ALIASES } from '../config/constants';
 import {
   getActiveRuntimePreset,
@@ -128,7 +133,9 @@ export function createPresetManager(ctx: PluginInput, config: PluginConfig) {
         options?: Record<string, unknown>;
       }
     > = {};
-    for (const [agentName, override] of Object.entries(preset)) {
+    for (const [agentName, override] of Object.entries(
+      getPresetAgentOverrides(preset),
+    )) {
       const resolvedName = AGENT_ALIASES[agentName] ?? agentName;
       const agentConfig = mapOverrideToAgentConfig(override);
       if (Object.keys(agentConfig).length > 0) {

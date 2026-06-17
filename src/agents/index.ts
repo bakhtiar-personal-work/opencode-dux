@@ -203,6 +203,7 @@ export async function createAgents(
     oracleSmartModelOrFallback,
     enabledSubagentNames.size > 0 ? enabledSubagentNames : undefined,
     subagentModelRoster,
+    config?.customInstruction,
   );
   if (orchestratorOverride) {
     applyOverrides(orchestrator, orchestratorOverride);

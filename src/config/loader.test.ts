@@ -3,6 +3,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { loadAgentPrompt, loadPluginConfig } from './loader';
+import { PluginConfigSchema } from './schema';
 
 // Test deepMerge indirectly through loadPluginConfig behavior
 // since deepMerge is not exported
@@ -345,6 +346,52 @@ describe('preset resolution', () => {
     );
 
     const config = loadPluginConfig(projectDir);
+    expect(config.agents?.oracle?.model).toBe('dev-model');
+  });
+
+  test('active preset can provide customInstruction without becoming fake agent config', () => {
+    const projectDir = path.join(tempDir, 'project');
+    const projectConfigDir = path.join(projectDir, '.opencode');
+    fs.mkdirSync(projectConfigDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(projectConfigDir, 'opencode-dux.json'),
+      JSON.stringify({
+        preset: 'dev',
+        presets: {
+          dev: {
+            customInstruction: 'Use terse output.',
+            oracle: { model: 'dev-model' },
+          },
+        },
+      }),
+    );
+
+    const config = loadPluginConfig(projectDir);
+    expect(config.customInstruction).toBe('Use terse output.');
+    expect(config.agents?.oracle?.model).toBe('dev-model');
+    expect(config.agents?.customInstruction).toBeUndefined();
+  });
+
+  test('root customInstruction overrides active preset customInstruction', () => {
+    const projectDir = path.join(tempDir, 'project');
+    const projectConfigDir = path.join(projectDir, '.opencode');
+    fs.mkdirSync(projectConfigDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(projectConfigDir, 'opencode-dux.json'),
+      JSON.stringify({
+        preset: 'dev',
+        customInstruction: 'Root instruction',
+        presets: {
+          dev: {
+            customInstruction: 'Preset instruction',
+            oracle: { model: 'dev-model' },
+          },
+        },
+      }),
+    );
+
+    const config = loadPluginConfig(projectDir);
+    expect(config.customInstruction).toBe('Root instruction');
     expect(config.agents?.oracle?.model).toBe('dev-model');
   });
 
@@ -812,6 +859,21 @@ describe('JSONC config support', () => {
     expect(config.preset).toBe('dev');
     expect(config.agents?.oracle?.model).toBe('dev-oracle');
     expect(config.agents?.explorer?.model).toBe('dev-explorer');
+  });
+
+  test('loads multiline customInstruction from .jsonc preserving newlines', () => {
+    const projectDir = path.join(tempDir, 'project');
+    const projectConfigDir = path.join(projectDir, '.opencode');
+    fs.mkdirSync(projectConfigDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(projectConfigDir, 'opencode-dux.jsonc'),
+      `{
+        "customInstruction": "Line 1\\nLine 2\\nLine 3"
+      }`,
+    );
+
+    const config = loadPluginConfig(projectDir);
+    expect(config.customInstruction).toBe('Line 1\nLine 2\nLine 3');
   });
 });
 

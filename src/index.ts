@@ -14,6 +14,7 @@ import {
   ALL_AGENT_NAMES,
   DEFAULT_MODELS,
   deepMerge,
+  getPresetAgentOverrides,
   loadPluginConfig,
 } from './config';
 import { AGENT_ALIASES } from './config/constants';
@@ -424,7 +425,7 @@ const OpenCodeDux: Plugin = async (ctx) => {
       // Re-merge runtime preset into config.agents (loadPluginConfig
       // already merged the config-file preset, not the runtime one).
       // Runtime preset is override so it wins over config-file preset.
-      const presetAgents = config.presets[runtimePreset];
+      const presetAgents = getPresetAgentOverrides(config.presets[runtimePreset]);
       config.agents = deepMerge(config.agents, presetAgents);
     } else if (runtimePreset) {
       // Preset was deleted from config since last switch - clear stale state
@@ -886,7 +887,9 @@ const OpenCodeDux: Plugin = async (ctx) => {
       const runtimePresetName = getActiveRuntimePreset();
       if (runtimePresetName && config.presets?.[runtimePresetName]) {
         const runtimePreset = config.presets[runtimePresetName];
-        for (const [agentName, override] of Object.entries(runtimePreset)) {
+        for (const [agentName, override] of Object.entries(
+          getPresetAgentOverrides(runtimePreset),
+        )) {
           // Resolve legacy alias keys (e.g. "explore" → "explorer")
           // so presets using aliases work in this path.
           const resolvedName = AGENT_ALIASES[agentName] ?? agentName;
@@ -937,9 +940,13 @@ const OpenCodeDux: Plugin = async (ctx) => {
           // Build resolved key set from new preset for correct comparison
           // (handles alias keys like "explore" → "explorer")
           const newPresetResolved = new Set(
-            Object.keys(runtimePreset).map((k) => AGENT_ALIASES[k] ?? k),
+            Object.keys(getPresetAgentOverrides(runtimePreset)).map(
+              (k) => AGENT_ALIASES[k] ?? k,
+            ),
           );
-          for (const agentName of Object.keys(prevPreset)) {
+          for (const agentName of Object.keys(
+            getPresetAgentOverrides(prevPreset),
+          )) {
             const resolvedName = AGENT_ALIASES[agentName] ?? agentName;
             if (newPresetResolved.has(resolvedName)) continue; // new preset handles it
             const entry = configAgent[resolvedName] as

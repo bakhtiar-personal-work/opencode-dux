@@ -87,6 +87,7 @@ Merged from two locations, project overrides user:
 | Field                                | Type       | Default | Description                                   |
 | ------------------------------------ | ---------- | ------- | --------------------------------------------- |
 | `preset`                             | `string`   | -       | Active preset name                            |
+| `customInstruction`                  | `string`   | -       | Text prepended verbatim to orchestrator system prompt. Can live at root or inside active preset; root wins. |
 | `presets`                            | `object`   | `{}`    | Named model configurations per agent          |
 | `agents`                             | `object`   | `{}`    | Per-agent overrides on top of active preset   |
 | `sessionManager.maxSessionsPerAgent` | `number`   | `2`     | Max concurrent sessions per agent type (1-10) |
