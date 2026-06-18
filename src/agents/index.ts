@@ -56,6 +56,17 @@ function injectDisplayNames(
   orchestrator.config.prompt = prompt;
 }
 
+function prependCustomInstruction(
+  agent: AgentDefinition,
+  customInstruction?: string,
+): void {
+  if (!customInstruction || !agent.config.prompt) {
+    return;
+  }
+
+  agent.config.prompt = `${customInstruction}\n\n${agent.config.prompt}`;
+}
+
 function buildSubagentModelRoster(
   agents: AgentDefinition[],
   oracleSmartModel?: string,
@@ -152,6 +163,7 @@ export async function createAgents(
   // 2. Apply overrides and default permissions to built-in subagents
   const builtInSubAgents = await Promise.all(
     protoSubAgents.map(async (agent) => {
+      prependCustomInstruction(agent, config?.customInstruction);
       const override = getAgentOverride(config, agent.name);
       if (override) {
         applyOverrides(agent, override);

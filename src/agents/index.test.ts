@@ -167,6 +167,23 @@ describe('orchestrator agent', () => {
       '- @oracle: default=openai/gpt-5.5; smart=openai/gpt-5.5-pro',
     );
   });
+
+  test('customInstruction is prepended to orchestrator and delegated subagents', async () => {
+    const config: PluginConfig = {
+      customInstruction: 'Start every reply with [CI-OK].',
+    };
+
+    const agents = await createAgents(config);
+    const orchestrator = agents.find((a) => a.name === 'orchestrator');
+    const oracle = agents.find((a) => a.name === 'oracle');
+
+    expect(orchestrator?.config.prompt?.startsWith(`${config.customInstruction}\n\n`)).toBe(
+      true,
+    );
+    expect(oracle?.config.prompt?.startsWith(`${config.customInstruction}\n\n`)).toBe(
+      true,
+    );
+  });
 });
 
 describe('skill permissions', () => {
