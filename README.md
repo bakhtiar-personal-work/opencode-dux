@@ -117,7 +117,7 @@ Merged from two locations, project overrides user:
 The orchestrator discovers skills and MCPs before delegating to subagents:
 
 - **Skills**: Before @oracle, @designer, or @librarian runs on a non-trivial task, the orchestrator calls `discover_skills` and `discover_mcp_servers` in parallel. Results are cached for 24 hours.
-- **Installed capabilities**: Relevant installed skills and MCPs are injected into the delegation prompt with their name, description, relevance, and usage instructions. Subagents can reference them right away.
+- **Installed capabilities**: Relevant installed skills and MCPs are injected into the delegation prompt with their name, description, relevance, and explicit usage instructions. For high-relevance matches, orchestrator names exact skills/MCPs, states why they apply, and tells subagents to use them directly instead of treating them as optional context.
 - **Missing capabilities**: If a useful capability is found but not yet installed, the orchestrator shows the install command before moving on.
 - **Approval gate**: For any new non-mechanical `@fixer` run, the orchestrator must include an explicit implementation-authorization block derived from the latest user approval. The delegate runtime rejects missing authorization, so prompt-only drift cannot silently bypass confirmation.
 

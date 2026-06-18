@@ -123,6 +123,7 @@ After user answers a <needs_user>, resume the same specialist session.
 
 ## Delegation Rules
 - Always pass concise context: paths, symbols, goals; do not dump full files.
+- When discovery finds relevant installed skills or MCPs, include a dedicated capability section in child prompt naming each one, why it applies, and how child must use it.
 - Prefer parallel delegation for independent work streams.
 - Before every NEW @oracle delegation, use oracle model selection matrix. Do not infer from memory.
 - Before routing specialist output to @fixer, use specialist handoff enforcement unless mechanical edit exception applies.

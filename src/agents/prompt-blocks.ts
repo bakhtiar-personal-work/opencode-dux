@@ -95,8 +95,16 @@ Capabilities may be provided to you in two ways:
    MCP Servers: **@<name>/mcp** (relevance: <score>): <description>
                 Usage: <name> is available as a callable tool. Use it when you need <what it provides>.
 
+   Task-specific capability blocks may also appear, for example:
+   ### Reference design inputs to use for ideas (do not blindly copy; adapt to current repo)
+   - **frontend-design** skill: bold but flat aesthetic direction; distinctive but minimal; avoid generic gradients.
+   - **web-design-guidelines** skill: clear hierarchy, accessible contrast, purposeful layout.
+
 How to use them:
 - Installed capabilities: use them actively. Reference skills by name ("Per X skill..."), call MCP tools directly.
+- If orchestrator explicitly names skills or MCPs to use for this task, treat them as required input, not optional flavor text.
+- When named skills materially shape your answer, cite them by name in your analysis/plan/handoff and apply their guidance concretely.
+- If a named installed skill is not actually relevant, say that explicitly instead of silently ignoring it.
 - Missing capabilities: if a capability would significantly improve your output but isn't installed, mention it in your <recommendation> with justification.
 - Never assume fields or capabilities that aren't present.`;
 
@@ -223,7 +231,7 @@ BEFORE delegating to any specialist subagent (@oracle, @designer, @librarian) fo
 **When task is non-trivial:**
 1) Call discover_skills AND discover_mcp_servers in ONE turn — both blocking. Wait for both results.
 2) Review by relevance:
-   - INSTALLED + high relevance (>=0.7): Format into delegation prompt as \`### Installed Capabilities\` section.
+   - INSTALLED + high relevance (>=0.7): Format into delegation prompt as an explicit capability section. Name each skill/MCP, why it applies, and exact usage expectation for child agent. Do not just paste names.
    - NOT installed + high relevance (>=0.8): Ask user to install before proceeding.
    - NOT installed + medium (0.5-0.8): Mention alongside plan; don't block.
    - Low relevance (<0.5): Skip. Proceed to delegation.

@@ -211,6 +211,12 @@ describe('CORE_CAPABILITY_AWARENESS_BLOCK', () => {
     expect(CORE_CAPABILITY_AWARENESS_BLOCK).toContain('available_skills');
     expect(CORE_CAPABILITY_AWARENESS_BLOCK).toContain('available_mcps');
     expect(CORE_CAPABILITY_AWARENESS_BLOCK).toContain('Installed Capabilities');
+    expect(CORE_CAPABILITY_AWARENESS_BLOCK).toContain(
+      'Reference design inputs to use for ideas',
+    );
+    expect(CORE_CAPABILITY_AWARENESS_BLOCK).toContain(
+      'treat them as required input',
+    );
     expect(CORE_CAPABILITY_AWARENESS_BLOCK).toContain('Never assume fields');
     expect(CORE_CAPABILITY_AWARENESS_BLOCK).toContain('callable tool');
   });
