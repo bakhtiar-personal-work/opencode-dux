@@ -99,6 +99,14 @@ function buildSubagentModelRoster(
   return roster;
 }
 
+function resolveOracleSmartModel(config?: PluginConfig): string {
+  const oracleOverride = getAgentOverride(config, 'oracle');
+  const oracleOptions = oracleOverride?.options as
+    | Record<string, unknown>
+    | undefined;
+  return typeof oracleOptions?.smart === 'string' ? oracleOptions.smart : '';
+}
+
 // Agent Classification
 
 export type SubagentName = (typeof SUBAGENT_NAMES)[number];
@@ -131,14 +139,9 @@ const SUBAGENT_FACTORIES = {
 export async function createAgents(
   config?: PluginConfig,
 ): Promise<AgentDefinition[]> {
-  // 0. Resolve oracle smart model for conditional prompt injection
   const oracleOverride = getAgentOverride(config, 'oracle');
-  const oracleOptions = oracleOverride?.options as
-    | Record<string, unknown>
-    | undefined;
-  const hasSmartModel =
-    typeof oracleOptions?.smart === 'string' &&
-    (oracleOptions.smart as string).length > 0;
+  const oracleSmartModel = resolveOracleSmartModel(config);
+  const hasSmartModel = oracleSmartModel.length > 0;
 
   // 1. Gather all sub-agent definitions with custom prompts
   const protoSubAgents = (
@@ -193,13 +196,10 @@ export async function createAgents(
 
   // 3a. Resolve oracle model names for prompt injection
   // (avoids hardcoding model IDs in the prompt text)
-  // oracleOverride and oracleOptions are already resolved in step 0 above
   const oracleDefaultModel =
     typeof oracleOverride?.model === 'string'
       ? oracleOverride.model
       : DEFAULT_MODELS.oracle;
-  const oracleSmartModel =
-    typeof oracleOptions?.smart === 'string' ? oracleOptions.smart : '';
   const oracleSmartModelOrFallback =
     oracleSmartModel.length > 0 ? oracleSmartModel : (oracleDefaultModel ?? '');
   const subagentModelRoster = buildSubagentModelRoster(

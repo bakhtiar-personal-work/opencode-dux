@@ -17,9 +17,15 @@ export function applyOverrides(
   if (override.temperature !== undefined)
     agent.config.temperature = override.temperature;
   if (override.options) {
+    const options =
+      agent.name === 'oracle' && 'smart' in override.options
+        ? Object.fromEntries(
+            Object.entries(override.options).filter(([key]) => key !== 'smart'),
+          )
+        : override.options;
     agent.config.options = {
       ...agent.config.options,
-      ...override.options,
+      ...options,
     };
   }
   if (override.displayName) {

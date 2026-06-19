@@ -387,6 +387,22 @@ describe('options passthrough', () => {
     expect(configs.oracle.options).toEqual({ textVerbosity: 'low' });
   });
 
+  test('oracle options.smart stays outside provider options', async () => {
+    const config: PluginConfig = {
+      agents: {
+        oracle: {
+          model: 'openai/gpt-5.5',
+          options: {
+            smart: 'openai/gpt-5.5-pro',
+            textVerbosity: 'low',
+          },
+        },
+      },
+    };
+    const configs = await getAgentConfigs(config);
+    expect(configs.oracle.options).toEqual({ textVerbosity: 'low' });
+  });
+
   test('options are shallow-merged with existing agent config options', async () => {
     // Simulate an agent factory setting default options
     const config: PluginConfig = {
@@ -431,11 +447,17 @@ describe('AgentOverrideConfigSchema options validation', () => {
       model: 'openai/gpt-5.5',
       variant: 'high',
       temperature: 0.7,
-      options: { textVerbosity: 'low' },
+      options: {
+        smart: 'openai/gpt-5.5-pro',
+        textVerbosity: 'low',
+      },
     });
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.options).toEqual({ textVerbosity: 'low' });
+      expect(result.data.options).toEqual({
+        smart: 'openai/gpt-5.5-pro',
+        textVerbosity: 'low',
+      });
     }
   });
 

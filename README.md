@@ -112,6 +112,21 @@ Merged from two locations, project overrides user:
 | `options`     | `object`       | Provider-specific model options        |
 | `displayName` | `string`       | Custom agent display name              |
 
+Oracle dual-model example:
+
+```jsonc
+{
+  "agents": {
+    "oracle": {
+      "model": "opencode-go/glm-5.2",
+      "options": {
+        "smart": "openai/gpt-5.5"
+      }
+    }
+  }
+}
+```
+
 ### Automatic Skill & MCP Discovery
 
 The orchestrator discovers skills and MCPs before delegating to subagents:
