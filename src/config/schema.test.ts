@@ -48,9 +48,9 @@ describe('PluginConfigSchema - customInstruction', () => {
   });
 
   test('rejects non-string values', () => {
-    expect(PluginConfigSchema.safeParse({ customInstruction: 123 }).success).toBe(
-      false,
-    );
+    expect(
+      PluginConfigSchema.safeParse({ customInstruction: 123 }).success,
+    ).toBe(false);
     expect(
       PluginConfigSchema.safeParse({ customInstruction: true }).success,
     ).toBe(false);
@@ -78,5 +78,43 @@ describe('PluginConfigSchema - customInstruction', () => {
     if (result.success) {
       expect(result.data.customInstruction).toBe('');
     }
+  });
+});
+
+describe('PluginConfigSchema - smart tier', () => {
+  test('accepts smart tier for oracle', () => {
+    expect(
+      PluginConfigSchema.safeParse({
+        agents: {
+          oracle: {
+            default: { model: 'test/default' },
+            smart: { model: 'test/smart', variants: ['max'] },
+          },
+        },
+      }).success,
+    ).toBe(true);
+  });
+
+  test('rejects smart tier for other agents', () => {
+    expect(
+      PluginConfigSchema.safeParse({
+        agents: {
+          fixer: {
+            default: { model: 'test/default' },
+            smart: { model: 'test/smart' },
+          },
+        },
+      }).success,
+    ).toBe(false);
+  });
+
+  test('rejects non-oracle smart tier inside presets', () => {
+    expect(
+      PluginConfigSchema.safeParse({
+        presets: {
+          dev: { designer: { smart: { model: 'test/smart' } } },
+        },
+      }).success,
+    ).toBe(false);
   });
 });

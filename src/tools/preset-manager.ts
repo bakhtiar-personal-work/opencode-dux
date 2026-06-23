@@ -248,15 +248,16 @@ export function createPresetManager(ctx: PluginInput, config: PluginConfig) {
       options?: Record<string, unknown>;
     } = {};
 
-    if (typeof override.model === 'string') {
-      agentConfig.model = override.model;
+    const model = override.default?.model ?? override.model;
+    if (typeof model === 'string') {
+      agentConfig.model = model;
     }
 
     if (typeof override.temperature === 'number') {
       agentConfig.temperature = override.temperature;
     }
 
-    if (typeof override.variant === 'string') {
+    if (!override.default && typeof override.variant === 'string') {
       agentConfig.variant = override.variant;
     }
 
@@ -265,7 +266,9 @@ export function createPresetManager(ctx: PluginInput, config: PluginConfig) {
       typeof override.options === 'object' &&
       !Array.isArray(override.options)
     ) {
-      agentConfig.options = override.options;
+      agentConfig.options = Object.fromEntries(
+        Object.entries(override.options).filter(([key]) => key !== 'smart'),
+      );
     }
 
     return agentConfig;

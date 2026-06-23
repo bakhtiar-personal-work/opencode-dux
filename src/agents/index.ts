@@ -3,8 +3,10 @@ import {
   ALL_AGENT_NAMES,
   DEFAULT_MODELS,
   getAgentOverride,
+  getAgentTier,
   loadAgentPrompt,
   type PluginConfig,
+  resolveAgentTier,
   SUBAGENT_NAMES,
 } from '../config';
 import { createDesignerAgent } from './designer';
@@ -67,28 +69,39 @@ function prependCustomInstruction(
   agent.config.prompt = `${customInstruction}\n\n${agent.config.prompt}`;
 }
 
+function formatTier(
+  name: 'default' | 'smart',
+  tier: ReturnType<typeof resolveAgentTier>,
+): string {
+  const thinking =
+    tier.thinking === false
+      ? 'thinking=off'
+      : tier.variants?.length
+        ? `variants=${tier.variants.join(' < ')}`
+        : 'variant=provider-default';
+  return `${name}=${tier.model} (${thinking})`;
+}
+
 function buildSubagentModelRoster(
   agents: AgentDefinition[],
-  oracleSmartModel?: string,
+  config?: PluginConfig,
 ): SubagentModelRoster {
   const roster: SubagentModelRoster = {};
 
   for (const agent of agents) {
     const configuredModels: string[] = [];
-    if (typeof agent.config.model === 'string' && agent.config.model) {
-      if (agent.name === 'oracle') {
-        configuredModels.push(`default=${agent.config.model}`);
-      } else {
-        configuredModels.push(agent.config.model);
-      }
+    const configuredDefault = getAgentTier(config, agent.name) ?? {
+      model: agent.config.model as string,
+    };
+    if (configuredDefault.model) {
+      configuredModels.push(
+        formatTier('default', resolveAgentTier(configuredDefault)),
+      );
     }
 
-    if (
-      agent.name === 'oracle' &&
-      typeof oracleSmartModel === 'string' &&
-      oracleSmartModel.length > 0
-    ) {
-      configuredModels.push(`smart=${oracleSmartModel}`);
+    const smart = getAgentTier(config, agent.name, 'smart');
+    if (smart) {
+      configuredModels.push(formatTier('smart', resolveAgentTier(smart)));
     }
 
     if (configuredModels.length > 0) {
@@ -100,11 +113,7 @@ function buildSubagentModelRoster(
 }
 
 function resolveOracleSmartModel(config?: PluginConfig): string {
-  const oracleOverride = getAgentOverride(config, 'oracle');
-  const oracleOptions = oracleOverride?.options as
-    | Record<string, unknown>
-    | undefined;
-  return typeof oracleOptions?.smart === 'string' ? oracleOptions.smart : '';
+  return getAgentTier(config, 'oracle', 'smart')?.model ?? '';
 }
 
 // Agent Classification
@@ -139,9 +148,7 @@ const SUBAGENT_FACTORIES = {
 export async function createAgents(
   config?: PluginConfig,
 ): Promise<AgentDefinition[]> {
-  const oracleOverride = getAgentOverride(config, 'oracle');
   const oracleSmartModel = resolveOracleSmartModel(config);
-  const hasSmartModel = oracleSmartModel.length > 0;
 
   // 1. Gather all sub-agent definitions with custom prompts
   const protoSubAgents = (
@@ -153,7 +160,6 @@ export async function createAgents(
         DEFAULT_MODELS[name] as string,
         customPrompts.prompt,
         customPrompts.appendPrompt,
-        hasSmartModel,
       );
     }
     return factory(
@@ -197,14 +203,12 @@ export async function createAgents(
   // 3a. Resolve oracle model names for prompt injection
   // (avoids hardcoding model IDs in the prompt text)
   const oracleDefaultModel =
-    typeof oracleOverride?.model === 'string'
-      ? oracleOverride.model
-      : DEFAULT_MODELS.oracle;
+    getAgentTier(config, 'oracle')?.model ?? DEFAULT_MODELS.oracle;
   const oracleSmartModelOrFallback =
     oracleSmartModel.length > 0 ? oracleSmartModel : (oracleDefaultModel ?? '');
   const subagentModelRoster = buildSubagentModelRoster(
     builtInSubAgents,
-    oracleSmartModel,
+    config,
   );
 
   const orchestrator = createOrchestratorAgent(

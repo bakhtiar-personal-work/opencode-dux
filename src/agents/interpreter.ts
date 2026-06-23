@@ -1,8 +1,8 @@
 import type { AgentDefinition } from './orchestrator';
 import { resolvePrompt } from './orchestrator';
 import {
+  DYNAMIC_VARIANT_POLICY_BLOCK,
   formatBlockedOutputBlock,
-  INTERPRETER_VARIANT_SCOPE_LINES,
   NEEDS_USER_OUTPUT_FORMAT_BLOCK,
   SUBAGENT_NEEDS_USER_FORMAT,
 } from './prompt-blocks';
@@ -26,9 +26,7 @@ You are Interpreter, a visual-context specialist. Translate screenshots, diagram
 4. Suggest appropriate next agent(s) with one-line rationale each.
 5. Rate confidence and note unreadable or ambiguous regions.
 
-## Variant Policy
-${INTERPRETER_VARIANT_SCOPE_LINES.map((l) => `- ${l}`).join('\n')}
-- max: not supported — interpreter provides context; orchestrator routes to @oracle for in-depth analysis.
+${DYNAMIC_VARIANT_POLICY_BLOCK}
 
 ${SUBAGENT_NEEDS_USER_FORMAT}
 

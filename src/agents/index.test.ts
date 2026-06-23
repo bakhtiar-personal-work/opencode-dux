@@ -161,10 +161,10 @@ describe('orchestrator agent', () => {
 
     expect(orchestrator?.config.prompt).toContain('## Agent Models');
     expect(orchestrator?.config.prompt).toContain(
-      '- @explorer: github-copilot/grok-code-fast-1',
+      '- @explorer: default=github-copilot/grok-code-fast-1 (variant=provider-default)',
     );
     expect(orchestrator?.config.prompt).toContain(
-      '- @oracle: default=openai/gpt-5.5; smart=openai/gpt-5.5-pro',
+      '- @oracle: default=openai/gpt-5.5 (variant=provider-default); smart=openai/gpt-5.5-pro (variant=provider-default)',
     );
   });
 
@@ -177,12 +177,14 @@ describe('orchestrator agent', () => {
     const orchestrator = agents.find((a) => a.name === 'orchestrator');
     const oracle = agents.find((a) => a.name === 'oracle');
 
-    expect(orchestrator?.config.prompt?.startsWith(`${config.customInstruction}\n\n`)).toBe(
-      true,
-    );
-    expect(oracle?.config.prompt?.startsWith(`${config.customInstruction}\n\n`)).toBe(
-      true,
-    );
+    expect(
+      orchestrator?.config.prompt?.startsWith(
+        `${config.customInstruction}\n\n`,
+      ),
+    ).toBe(true);
+    expect(
+      oracle?.config.prompt?.startsWith(`${config.customInstruction}\n\n`),
+    ).toBe(true);
   });
 });
 
@@ -421,6 +423,49 @@ describe('options passthrough', () => {
 });
 
 describe('AgentOverrideConfigSchema options validation', () => {
+  test('accepts dynamic default and smart tiers', () => {
+    const result = AgentOverrideConfigSchema.safeParse({
+      default: {
+        model: 'opencode-go/glm-5.2',
+        thinking: true,
+        variants: ['high', 'max'],
+      },
+      smart: {
+        model: 'opencode-go/glm-5.2',
+        thinking: true,
+        variants: ['max'],
+      },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  test('rejects variants when thinking is false', () => {
+    const result = AgentOverrideConfigSchema.safeParse({
+      default: {
+        model: 'test/model',
+        thinking: false,
+        variants: ['high'],
+      },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  test('new default tier wins over legacy model and variant', async () => {
+    const config: PluginConfig = {
+      agents: {
+        oracle: {
+          default: { model: 'new/default', variants: ['max'] },
+          model: 'legacy/default',
+          variant: 'high',
+        },
+      },
+    };
+    const agents = await createAgents(config);
+    const oracle = agents.find((agent) => agent.name === 'oracle');
+    expect(oracle?.config.model).toBe('new/default');
+    expect(oracle?.config.variant).toBeUndefined();
+  });
+
   test('accepts valid options object', () => {
     const result = AgentOverrideConfigSchema.safeParse({
       options: { textVerbosity: 'low' },

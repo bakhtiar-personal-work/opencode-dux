@@ -1,11 +1,10 @@
 import type { AgentDefinition } from './orchestrator';
 import { resolvePrompt } from './orchestrator';
 import {
+  DYNAMIC_VARIANT_POLICY_BLOCK,
   formatBlockedOutputBlock,
   formatStewardAgentStewardPathsBody,
   NEEDS_USER_OUTPUT_FORMAT_BLOCK,
-  STEWARD_VARIANT_MAX_NOTE,
-  STEWARD_VARIANT_SCOPE_LINES,
 } from './prompt-blocks';
 
 const STEWARD_PROMPT = `# Role
@@ -29,9 +28,7 @@ ${formatStewardAgentStewardPathsBody()}
 5. Return cited bullets only — every cited rule must include \`path\` (and heading when helpful); quote short excerpts verbatim, not whole files unless orchestrator named that file explicitly. Prefer leading with AGENTS.md / AGENT.md citations when those files were read.
 6. You are a citation agent, never an analysis agent. If orchestrator asks you to analyze, find contradictions, identify gaps, or evaluate rules beyond verbatim citation: respond with <blocked> stating "This is an @oracle analysis task."
 
-## Variant Policy
-${STEWARD_VARIANT_SCOPE_LINES.map((l) => `- ${l}`).join('\n')}
-- max: ${STEWARD_VARIANT_MAX_NOTE}
+${DYNAMIC_VARIANT_POLICY_BLOCK}
 
 # Output Format
 <summary>

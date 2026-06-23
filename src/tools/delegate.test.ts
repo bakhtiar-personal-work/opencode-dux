@@ -57,6 +57,74 @@ describe('resolveDelegatedAgentConfig', () => {
     expect(resolved.model).toBe('neuralwatt/qwen3.5-397b-fast');
     expect(resolved.variant).toBe('medium');
   });
+
+  test('uses configured tier variants in declared order', () => {
+    const config: PluginConfig = {
+      agents: {
+        oracle: {
+          default: {
+            model: 'test/glm',
+            thinking: true,
+            variants: ['high', 'max'],
+          },
+        },
+      },
+    };
+    expect(
+      resolveDelegatedAgentConfig(config, 'oracle', { variant: 'max' }),
+    ).toMatchObject({
+      model: 'test/glm',
+      variant: 'max',
+      allowedVariants: ['high', 'max'],
+    });
+  });
+
+  test('selects default tier variant when smart tier shares model id', () => {
+    const config: PluginConfig = {
+      agents: {
+        oracle: {
+          default: { model: 'test/glm', variants: ['high', 'max'] },
+          smart: { model: 'test/glm', variants: ['max'] },
+        },
+      },
+    };
+
+    expect(
+      resolveDelegatedAgentConfig(config, 'oracle', { variant: 'high' }),
+    ).toMatchObject({ variant: 'high', allowedVariants: ['high', 'max'] });
+  });
+
+  test('omits variant when thinking is disabled', () => {
+    const config: PluginConfig = {
+      agents: {
+        explorer: {
+          default: { model: 'test/plain', thinking: false },
+        },
+      },
+    };
+
+    expect(
+      resolveDelegatedAgentConfig(config, 'explorer', { variant: 'turbo' }),
+    ).toMatchObject({ model: 'test/plain', variant: undefined });
+  });
+
+  test('reports requested variant outside configured capability', () => {
+    const config: PluginConfig = {
+      agents: {
+        oracle: {
+          default: { model: 'test/glm', variants: ['high', 'max'] },
+        },
+      },
+    };
+
+    expect(
+      resolveDelegatedAgentConfig(config, 'oracle', { variant: 'medium' }),
+    ).toMatchObject({
+      variant: undefined,
+      variantError:
+        'Variant "medium" is not allowed for oracle model "test/glm". Allowed: high, max',
+    });
+  });
 });
 
 describe('createDelegateTools agent normalization', () => {

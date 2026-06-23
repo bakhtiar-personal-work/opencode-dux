@@ -25,9 +25,7 @@ describe('buildOrchestratorPrompt', () => {
 
     expect(prompt.startsWith('# Role')).toBe(true);
     expect(prompt).toContain('# Rules');
-    expect(prompt).toContain(
-      'You route and delegate.',
-    );
+    expect(prompt).toContain('You route and delegate.');
   });
 
   test('keeps routing gates and agent roster near the top', () => {
@@ -59,13 +57,9 @@ describe('buildOrchestratorPrompt', () => {
     expect(prompt).toContain('## Routing Enforcement');
     expect(prompt).toContain('**Good routing:**');
     expect(prompt).toContain('## Specialist Handoff');
-    expect(prompt).toContain(
-      'Do not route underspecified handoffs to @fixer.',
-    );
+    expect(prompt).toContain('Do not route underspecified handoffs to @fixer.');
     expect(prompt).toContain('## Verification');
-    expect(prompt).toContain(
-      "Prioritize evidence from delegated agents'",
-    );
+    expect(prompt).toContain("Prioritize evidence from delegated agents'");
   });
 
   test('inlines steward, interpreter, discovery, recovery, output, and communication blocks', () => {
@@ -82,18 +76,14 @@ describe('buildOrchestratorPrompt', () => {
       'BEFORE delegating to any specialist subagent (@oracle, @designer, @librarian)',
     );
     expect(prompt).toContain('## Recovery');
-    expect(prompt).toContain(
-      'Preserve session context',
-    );
+    expect(prompt).toContain('Preserve session context');
     expect(prompt).toContain('<output_format>');
     expect(prompt).toContain('When reporting final results to the user:');
     expect(prompt).toContain('# Communication');
-    expect(prompt).toContain(
-      'Lead with the answer or status, not the process',
-    );
+    expect(prompt).toContain('Lead with the answer or status, not the process');
   });
 
-  test('inlines the oracle model matrix with configured models', () => {
+  test('inlines dynamic oracle model guidance with configured models', () => {
     const prompt = buildOrchestratorPrompt(
       'openai/gpt-5.5',
       'openai/gpt-5.5-pro',
@@ -102,33 +92,20 @@ describe('buildOrchestratorPrompt', () => {
     expect(prompt).toContain('# Oracle Model Selection');
     expect(prompt).toContain('openai/gpt-5.5');
     expect(prompt).toContain('openai/gpt-5.5-pro');
-    expect(prompt).toContain('Scenario -> model+variant:');
+    expect(prompt).toContain('Read allowed variants from **Agent Models**');
+    expect(prompt).not.toContain('Scenario -> model+variant:');
   });
 
   test('execution flow references inline policy blocks', () => {
     const prompt = buildOrchestratorPrompt();
 
-    expect(prompt).toContain(
-      '2) **STEWARD BRIEF:**',
-    );
-    expect(prompt).toContain(
-      '3) **CONTEXT RETRIEVAL:**',
-    );
-    expect(prompt).toContain(
-      '4) **DISCOVERY:**',
-    );
-    expect(prompt).toContain(
-      '5) **FIRST SPECIALIST:**',
-    );
-    expect(prompt).toContain(
-      '6) **PLAN PRESENTATION:**',
-    );
-    expect(prompt).toContain(
-      '7) **IMPLEMENTATION:**',
-    );
-    expect(prompt).toContain(
-      '9) **VERIFICATION:**',
-    );
+    expect(prompt).toContain('2) **STEWARD BRIEF:**');
+    expect(prompt).toContain('3) **CONTEXT RETRIEVAL:**');
+    expect(prompt).toContain('4) **DISCOVERY:**');
+    expect(prompt).toContain('5) **FIRST SPECIALIST:**');
+    expect(prompt).toContain('6) **PLAN PRESENTATION:**');
+    expect(prompt).toContain('7) **IMPLEMENTATION:**');
+    expect(prompt).toContain('9) **VERIFICATION:**');
   });
 
   test('includes subagent model roster when provided', () => {
@@ -137,15 +114,18 @@ describe('buildOrchestratorPrompt', () => {
       'openai/gpt-5.5-pro',
       undefined,
       {
-        explorer: ['github-copilot/grok-code-fast-1'],
-        oracle: ['default=openai/gpt-5.5', 'smart=openai/gpt-5.5-pro'],
+        explorer: ['default=github-copilot/grok-code-fast-1 (thinking=off)'],
+        oracle: [
+          'default=openai/gpt-5.5 (variants=high < max)',
+          'smart=openai/gpt-5.5-pro (variants=max)',
+        ],
       },
     );
 
     expect(prompt).toContain('## Agent Models');
-    expect(prompt).toContain('- @explorer: github-copilot/grok-code-fast-1');
+    expect(prompt).toContain('thinking=off');
     expect(prompt).toContain(
-      '- @oracle: default=openai/gpt-5.5; smart=openai/gpt-5.5-pro',
+      'default=openai/gpt-5.5 (variants=high < max); smart=openai/gpt-5.5-pro (variants=max)',
     );
   });
 
@@ -202,7 +182,9 @@ describe('createOrchestratorAgent - customInstruction', () => {
       instruction,
     );
 
-    expect(agent.config.prompt).toBe(`${instruction}\n\n${buildOrchestratorPrompt()}`);
+    expect(agent.config.prompt).toBe(
+      `${instruction}\n\n${buildOrchestratorPrompt()}`,
+    );
   });
 
   test('omitting customInstruction leaves prompt byte-for-byte equivalent', () => {

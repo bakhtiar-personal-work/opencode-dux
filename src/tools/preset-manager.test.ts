@@ -497,6 +497,36 @@ describe('createPresetManager', () => {
       });
     });
 
+    test('switches to preset with dynamic default tier', async () => {
+      const ctx = createMockContext();
+      const config: PluginConfig = {
+        presets: {
+          thinker: {
+            oracle: {
+              default: {
+                model: 'opencode-go/glm-5.2',
+                thinking: true,
+                variants: ['high', 'max'],
+              },
+            },
+          },
+        },
+      };
+      const manager = createPresetManager(ctx, config);
+      const output = createOutput();
+
+      await manager.handleCommandExecuteBefore(
+        { command: 'preset', sessionID: 's1', arguments: 'thinker' },
+        output,
+      );
+
+      expect(ctx.client.config.update).toHaveBeenCalledWith({
+        body: {
+          agent: { oracle: { model: 'opencode-go/glm-5.2' } },
+        },
+      });
+    });
+
     test('shows variant and options in switch summary', async () => {
       const ctx = createMockContext();
       const config: PluginConfig = {

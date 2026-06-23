@@ -1,8 +1,28 @@
 import { z } from 'zod';
 
+export const AgentTierConfigSchema = z
+  .object({
+    model: z.string().min(1),
+    thinking: z.boolean().optional(),
+    variants: z.array(z.string().min(1)).min(1).optional(),
+  })
+  .superRefine((tier, ctx) => {
+    if (tier.thinking === false && tier.variants?.length) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'variants cannot be set when thinking is false',
+        path: ['variants'],
+      });
+    }
+  });
+
+export type AgentTierConfig = z.infer<typeof AgentTierConfigSchema>;
+
 // Agent override configuration (distinct from SDK's AgentConfig)
 export const AgentOverrideConfigSchema = z
   .object({
+    default: AgentTierConfigSchema.optional(),
+    smart: AgentTierConfigSchema.optional(),
     model: z.string().optional(),
     temperature: z.number().min(0).max(2).optional(),
     variant: z.string().optional().catch(undefined),
@@ -98,31 +118,53 @@ export const ContextPressureConfigSchema = z.object({
 
 export type ContextPressureConfig = z.infer<typeof ContextPressureConfigSchema>;
 
-export const PluginConfigSchema = z.object({
-  preset: z.string().optional(),
-  setDefaultAgent: z.boolean().optional(),
+export const PluginConfigSchema = z
+  .object({
+    preset: z.string().optional(),
+    setDefaultAgent: z.boolean().optional(),
 
-  autoUpdate: z
-    .boolean()
-    .optional()
-    .describe(
-      'Disable automatic installation of plugin updates when false. Defaults to true.',
-    ),
+    autoUpdate: z
+      .boolean()
+      .optional()
+      .describe(
+        'Disable automatic installation of plugin updates when false. Defaults to true.',
+      ),
 
-  customInstruction: z
-    .string()
-    .optional()
-    .describe(
-      'Text prepended verbatim to the orchestrator system prompt. Supports multiline content.',
-    ),
+    customInstruction: z
+      .string()
+      .optional()
+      .describe(
+        'Text prepended verbatim to the orchestrator system prompt. Supports multiline content.',
+      ),
 
-  presets: z.record(z.string(), PresetSchema).optional(),
-  agents: z.record(z.string(), AgentOverrideConfigSchema).optional(),
-  websearch: WebsearchConfigSchema.optional(),
-  sessionManager: SessionManagerConfigSchema.optional(),
-  todoContinuation: TodoContinuationConfigSchema.optional(),
-  contextPressure: ContextPressureConfigSchema.optional(),
-});
+    presets: z.record(z.string(), PresetSchema).optional(),
+    agents: z.record(z.string(), AgentOverrideConfigSchema).optional(),
+    websearch: WebsearchConfigSchema.optional(),
+    sessionManager: SessionManagerConfigSchema.optional(),
+    todoContinuation: TodoContinuationConfigSchema.optional(),
+    contextPressure: ContextPressureConfigSchema.optional(),
+  })
+  .superRefine((config, ctx) => {
+    const rejectNonOracleSmart = (
+      overrides: Record<string, AgentOverrideConfig> | undefined,
+      path: (string | number)[],
+    ) => {
+      for (const [name, override] of Object.entries(overrides ?? {})) {
+        if (name !== 'oracle' && override.smart) {
+          ctx.addIssue({
+            code: 'custom',
+            message: 'smart tier is only supported for oracle',
+            path: [...path, name, 'smart'],
+          });
+        }
+      }
+    };
+
+    rejectNonOracleSmart(config.agents, ['agents']);
+    for (const [presetName, preset] of Object.entries(config.presets ?? {})) {
+      rejectNonOracleSmart(preset, ['presets', presetName]);
+    }
+  });
 
 export type PluginConfig = z.infer<typeof PluginConfigSchema>;
 

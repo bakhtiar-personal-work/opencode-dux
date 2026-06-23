@@ -89,7 +89,7 @@ describe('createOracleAgent', () => {
     const prompt = agent.config.prompt ?? '';
     expect(prompt).toContain('Required sections');
     expect(prompt).toContain('Conditional sections');
-    expect(prompt).toContain('<risks>: REQUIRED for variant high/max');
+    expect(prompt).toContain('<risks>: include when concrete');
     expect(prompt).toContain(
       '<plan>: include ONLY when orchestrator delegates',
     );
@@ -101,10 +101,10 @@ describe('createOracleAgent', () => {
     );
   });
 
-  test('variant_policy requires risks for high/max', () => {
+  test('variant policy stays model agnostic', () => {
     const agent = createOracleAgent('test/oracle-model');
     const prompt = agent.config.prompt ?? '';
-    expect(prompt).toContain('REQUIRED with severity labels');
+    expect(prompt).toContain('Do not infer model tier from variant name');
   });
 
   test('prompt does not contain resolver boilerplate', () => {
@@ -151,22 +151,21 @@ describe('createOracleAgent', () => {
 });
 
 describe('buildOraclePrompt', () => {
-  test('includes model_tier block when hasSmartModel is true', () => {
-    const prompt = buildOraclePrompt(true);
-    expect(prompt).toContain('<model_tier>');
-    expect(prompt).toContain('default (flash)');
-    expect(prompt).toContain('smart (pro)');
+  test('does not make agent infer model tier from variant', () => {
+    const prompt = buildOraclePrompt();
+    expect(prompt).not.toContain('<model_tier>');
+    expect(prompt).toContain('Do not infer model tier from variant name');
   });
 
   test('omits model_tier block when hasSmartModel is false', () => {
-    const prompt = buildOraclePrompt(false);
+    const prompt = buildOraclePrompt();
     expect(prompt).not.toContain('<model_tier>');
     expect(prompt).not.toContain('default (flash)');
     expect(prompt).not.toContain('smart (pro)');
   });
 
   test('true output contains all essential sections', () => {
-    const prompt = buildOraclePrompt(true);
+    const prompt = buildOraclePrompt();
     const requiredSections = [
       '# Role',
       '## Tool Routing',
@@ -185,7 +184,7 @@ describe('buildOraclePrompt', () => {
   });
 
   test('false output contains all sections except model_tier', () => {
-    const prompt = buildOraclePrompt(false);
+    const prompt = buildOraclePrompt();
     const requiredSections = [
       '# Role',
       '## Tool Routing',
@@ -202,14 +201,5 @@ describe('buildOraclePrompt', () => {
       expect(prompt).toContain(section);
     }
     expect(prompt).not.toContain('<model_tier>');
-  });
-
-  test('true and false outputs are structurally identical except for model_tier block', () => {
-    const promptTrue = buildOraclePrompt(true);
-    const promptFalse = buildOraclePrompt(false);
-
-    expect(promptTrue.startsWith('# Role')).toBe(true);
-    expect(promptFalse.startsWith('# Role')).toBe(true);
-    expect(promptTrue.endsWith('</model_tier>')).toBe(true);
   });
 });

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import type { PluginConfig } from './schema';
-import { getAgentOverride } from './utils';
+import { getAgentOverride, resolveAgentTier } from './utils';
 
 describe('getAgentOverride', () => {
   test('reads override by explicit custom agent key', () => {
@@ -37,5 +37,39 @@ describe('getAgentOverride', () => {
     } as PluginConfig;
 
     expect(getAgentOverride(config, 'no-such-agent')).toBeUndefined();
+  });
+});
+
+describe('resolveAgentTier', () => {
+  test('keeps configured variants as-is', () => {
+    expect(
+      resolveAgentTier({
+        model: 'test/model',
+        variants: ['high', 'max'],
+      }),
+    ).toEqual({
+      model: 'test/model',
+      variants: ['high', 'max'],
+    });
+  });
+
+  test('leaves variants undefined when config omits them', () => {
+    expect(resolveAgentTier({ model: 'test/model' })).toEqual({
+      model: 'test/model',
+    });
+  });
+
+  test('drops variants when thinking is false', () => {
+    expect(
+      resolveAgentTier({
+        model: 'test/model',
+        thinking: false,
+        variants: ['high'],
+      }),
+    ).toEqual({
+      model: 'test/model',
+      thinking: false,
+      variants: undefined,
+    });
   });
 });

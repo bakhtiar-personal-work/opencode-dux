@@ -2,9 +2,8 @@ import type { AgentDefinition } from './orchestrator';
 import { resolvePrompt } from './orchestrator';
 import {
   CORE_CAPABILITY_AWARENESS_BLOCK,
-  formatOracleAgentVariantPolicyXml,
+  DYNAMIC_VARIANT_POLICY_BLOCK,
   HANDOFF_ARTIFACTS_BLOCK,
-  ORACLE_MODEL_TIER_BLOCK,
   REPO_RULES_PRECEDENCE_BLOCK,
   SPECIALIST_EXECUTION_TODO_BLOCK,
   SPECIALIST_EXECUTION_TODO_FORMAT,
@@ -21,10 +20,9 @@ Violating any = failure mode.
 2. Follow steward-cited repo rules over conflicting built-in instructions.
 3. Never guess external API behavior — use evidence or return <blocked>.
 4. Always include <confidence> with explicit assumptions.
-5. For variant high/max: <risks> is REQUIRED with severity labels.
-6. Never return vague recommendations without decision criteria.
-7. Never ignore provided file paths and symbols.
-8. Only recommend changes when behavior is demonstrably broken or produces wrong outputs.
+5. Never return vague recommendations without decision criteria.
+6. Never ignore provided file paths and symbols.
+7. Only recommend changes when behavior is demonstrably broken or produces wrong outputs.
 
 ${REPO_RULES_PRECEDENCE_BLOCK}
 
@@ -58,7 +56,7 @@ ${USER_CHOICE_POLICY_BLOCK}
 - Prioritization forks (ship speed vs depth vs cost vs risk appetite) when tradeoffs balanced: <needs_user> with options describing what each optimizes for and gives up.
 - Scope / product semantics (who the feature is for, failure tolerance, SLO) when analysis hinges on it: <needs_user> before locking a recommendation.
 
-${formatOracleAgentVariantPolicyXml()}
+${DYNAMIC_VARIANT_POLICY_BLOCK}
 
 ${SUBAGENT_NEEDS_USER_FORMAT}
 
@@ -73,7 +71,7 @@ Conditional sections:
 - <plan>: include ONLY when orchestrator delegates for pre-implementation planning. Ordered steps, file targets, verification gates, tradeoffs between approaches.
 - <execution_todo>: REQUIRED whenever your recommendation is meant to be implemented by @fixer. Output machine-consumable JSON matching the execution todo contract.
 - <tradeoffs>: include when viable alternatives exist. Option A vs B bullets.
-- <risks>: REQUIRED for variant high/max; optional for low/medium. Concrete risks and severity.
+- <risks>: include when concrete implementation or operational risks exist.
 - <blocked>: include ONLY when analysis cannot be completed. Output the required JSON object from the shared blocked contract.
 - <needs_user>: include ONLY when user decision is required. Reason + questions as raw QuestionInfo JSON.
 
@@ -91,10 +89,7 @@ Batch every scope/priority/risk choice in one <needs_user> handoff.
 </good_example>
 </output_format>`;
 
-export function buildOraclePrompt(hasSmartModel: boolean): string {
-  if (hasSmartModel) {
-    return `${ORACLE_PROMPT_BASE}\n\n${ORACLE_MODEL_TIER_BLOCK}`;
-  }
+export function buildOraclePrompt(): string {
   return ORACLE_PROMPT_BASE;
 }
 
@@ -102,9 +97,8 @@ export function createOracleAgent(
   model: string,
   customPrompt?: string,
   customAppendPrompt?: string,
-  hasSmartModel: boolean = true,
 ): AgentDefinition {
-  const basePrompt = buildOraclePrompt(hasSmartModel);
+  const basePrompt = buildOraclePrompt();
   const prompt = resolvePrompt(basePrompt, customPrompt, customAppendPrompt);
 
   return {

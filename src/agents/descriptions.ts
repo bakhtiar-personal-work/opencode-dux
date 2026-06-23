@@ -16,7 +16,7 @@ export const AGENT_DESCRIPTIONS: Record<string, string> = {
 - Do not use when: pure language fundamentals or local code discovery
 </agent>`,
   oracle: `<agent name="@oracle">
-- Role: technical analysis and code review; uses orchestrator \`model\` + \`variant\` matrix
+- Role: technical analysis and code review; uses configured model-tier capabilities
 - Delegate when: debugging, bug fixes that need diagnosis, architecture, tradeoffs, risk, any review depth
 - Do not use when: pure local discovery (@explorer) or docs-only (@librarian)
 </agent>`,

@@ -1,8 +1,7 @@
 import type { AgentDefinition } from './orchestrator';
 import { resolvePrompt } from './orchestrator';
 import {
-  FIXER_VARIANT_POLICY_CAP_LINE,
-  FIXER_VARIANT_SCOPE_LINES,
+  DYNAMIC_VARIANT_POLICY_BLOCK,
   formatBlockedOutputBlock,
   NEEDS_USER_OUTPUT_FORMAT_BLOCK,
   SUBAGENT_NEEDS_USER_FORMAT,
@@ -35,9 +34,7 @@ You are Fixer, a disciplined implementation specialist. Precise, scoped code cha
 - Common: bun run check:ci | bun run typecheck | bun test | pnpm test | npm test | pytest | cargo test | go test ./...
 - Always run >=1 validation unless environment prevents; if skipped -> state exact reason in <verification>.
 
-## Variant Policy
-${FIXER_VARIANT_SCOPE_LINES.map((l) => `- ${l}`).join('\n')}
-${FIXER_VARIANT_POLICY_CAP_LINE}
+${DYNAMIC_VARIANT_POLICY_BLOCK}
 
 ${SUBAGENT_NEEDS_USER_FORMAT}
 

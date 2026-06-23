@@ -106,11 +106,16 @@ Merged from two locations, project overrides user:
 
 | Field         | Type           | Description                            |
 | ------------- | -------------- | -------------------------------------- |
-| `model`       | `string`       | Model ID (`provider/model`)            |
+| `default`     | `object`       | Default tier: `model`, optional `thinking` and ordered `variants` |
+| `smart`       | `object`       | Oracle-only higher-capability tier with the same fields |
 | `temperature` | `number` (0-2) | Model temperature                      |
-| `variant`     | `string`       | Variant hint (e.g. `"pro"`, `"flash"`) |
 | `options`     | `object`       | Provider-specific model options        |
 | `displayName` | `string`       | Custom agent display name              |
+
+`variants` are ordered from lower to higher thinking effort. When omitted,
+opencode-dux leaves variant selection to orchestrator/provider default.
+`thinking: false` suppresses variant field. Legacy `model`, `variant`, and
+`options.smart` remain supported.
 
 Oracle dual-model example:
 
@@ -118,9 +123,15 @@ Oracle dual-model example:
 {
   "agents": {
     "oracle": {
-      "model": "opencode-go/glm-5.2",
-      "options": {
-        "smart": "openai/gpt-5.5"
+      "default": {
+        "model": "opencode-go/glm-5.2",
+        "thinking": true,
+        "variants": ["high", "max"]
+      },
+      "smart": {
+        "model": "openai/gpt-5.5",
+        "thinking": true,
+        "variants": ["max"]
       }
     }
   }

@@ -32,6 +32,52 @@
         "additionalProperties": {
           "type": "object",
           "properties": {
+            "default": {
+              "type": "object",
+              "properties": {
+                "model": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "thinking": {
+                  "type": "boolean"
+                },
+                "variants": {
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              },
+              "required": [
+                "model"
+              ]
+            },
+            "smart": {
+              "type": "object",
+              "properties": {
+                "model": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "thinking": {
+                  "type": "boolean"
+                },
+                "variants": {
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              },
+              "required": [
+                "model"
+              ]
+            },
             "model": {
               "type": "string"
             },
@@ -67,6 +113,52 @@
       "additionalProperties": {
         "type": "object",
         "properties": {
+          "default": {
+            "type": "object",
+            "properties": {
+              "model": {
+                "type": "string",
+                "minLength": 1
+              },
+              "thinking": {
+                "type": "boolean"
+              },
+              "variants": {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            },
+            "required": [
+              "model"
+            ]
+          },
+          "smart": {
+            "type": "object",
+            "properties": {
+              "model": {
+                "type": "string",
+                "minLength": 1
+              },
+              "thinking": {
+                "type": "boolean"
+              },
+              "variants": {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            },
+            "required": [
+              "model"
+            ]
+          },
           "model": {
             "type": "string"
           },

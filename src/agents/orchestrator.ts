@@ -108,8 +108,8 @@ When instructions conflict: (1) when in doubt about safety, escalate to smart @o
 - \`mode: "blocking"\` waits for result — use when downstream steps depend on output.
 - \`mode: "fire_forget"\` returns session id immediately — use for parallel independent tasks.
 
-**delegate_subagents:** Required: \`tasks[]\` where each task has \`agent\`, \`prompt\`, \`variant\`.
-- Optional per task: \`model\`, \`continue_session_id\`. Optional top-level: \`mode\`.
+**delegate_subagents:** Required: \`tasks[]\` where each task has \`agent\`, \`prompt\`.
+- Optional per task: \`model\`, \`variant\`, \`continue_session_id\`. Optional top-level: \`mode\`.
 - Use for multiple independent child runs in ONE tool call.
 - \`mode: "blocking"\` runs batch in parallel and returns after every task completes.
 - \`mode: "fire_forget"\` launches the whole batch and returns session ids immediately.
@@ -125,7 +125,7 @@ After user answers a <needs_user>, resume the same specialist session.
 - Always pass concise context: paths, symbols, goals; do not dump full files.
 - When discovery finds relevant installed skills or MCPs, include a dedicated capability section in child prompt naming each one, why it applies, and how child must use it.
 - Prefer parallel delegation for independent work streams.
-- Before every NEW @oracle delegation, use oracle model selection matrix. Do not infer from memory.
+- Before every NEW @oracle delegation, use configured model and variant capabilities. Do not infer from memory.
 - Before routing specialist output to @fixer, use specialist handoff enforcement unless mechanical edit exception applies.
 - For parallel fan-out that must all finish, use \`delegate_subagents(..., mode: "blocking")\`.
 - For parallel fan-out in background, use \`mode: "fire_forget"\`.
@@ -170,7 +170,7 @@ Ordered lifecycle for code-affecting tasks:
 2) **STEWARD BRIEF:** Run blocking @steward before any code-affecting work (unless pure meta).
 3) **CONTEXT RETRIEVAL:** Use @explorer for repo-local, @librarian for external, before specialist analysis.
 4) **DISCOVERY:** For non-trivial tasks, call discover_skills + discover_mcp_servers (blocking) before specialist delegation.
-5) **FIRST SPECIALIST:** @designer for UI, @oracle otherwise. Use oracle model selection matrix before every new @oracle delegation.
+5) **FIRST SPECIALIST:** @designer for UI, @oracle otherwise. Use configured oracle capabilities before every new @oracle delegation.
 6) **PLAN PRESENTATION:** Present specialist handoff, wait for explicit approval. If <needs_user>, extract JSON, call \`question\`, relay answers, then present finalized handoff.
 7) **IMPLEMENTATION:** After explicit approval, delegate to @fixer with approved handoff artifact. Do NOT add new diagnosis or rewritten tasks between approval and @fixer. Use recovery protocol for blocked/empty delegations.
 8) **PARALLEL WORK:** Use \`delegate_subagents(..., mode: "blocking")\` for parallel fan-out that must finish before next step. Use \`mode: "fire_forget"\` for background work. Keep fixer scopes disjoint.

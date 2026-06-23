@@ -4,15 +4,12 @@ import {
   buildStewardOrchestratorProtocolBlock,
   CORE_CAPABILITY_AWARENESS_BLOCK,
   CRITICAL_INVARIANTS,
-  DESIGNER_VARIANT_SCOPE_LINES,
+  DYNAMIC_VARIANT_POLICY_BLOCK,
   FIRST_GATE_BLOCK,
-  INTERPRETER_VARIANT_SCOPE_LINES,
-  LIBRARIAN_VARIANT_SCOPE_LINES,
   MECHANICAL_EDIT_EXCEPTION_BLOCK,
   ORCHESTRATOR_CLARIFICATION_HANDOFF_BLOCK,
   PLANNING_GATE_BLOCK,
   STEWARD_PATH_GLOBS,
-  STEWARD_VARIANT_SCOPE_LINES,
   SUBAGENT_NEEDS_USER_FORMAT,
   USER_CHOICE_POLICY_BLOCK,
 } from './prompt-blocks';
@@ -23,9 +20,7 @@ describe('CRITICAL_INVARIANTS', () => {
     expect(CRITICAL_INVARIANTS).toContain(
       'You route and delegate. File operations, analysis, and rule lookup go to specialists.',
     );
-    expect(CRITICAL_INVARIANTS).toContain(
-      'Delegate analysis to @oracle',
-    );
+    expect(CRITICAL_INVARIANTS).toContain('Delegate analysis to @oracle');
     expect(CRITICAL_INVARIANTS).toContain('Always pass explicit');
     expect(CRITICAL_INVARIANTS).toContain(
       '@designer for UI, otherwise @oracle',
@@ -33,9 +28,15 @@ describe('CRITICAL_INVARIANTS', () => {
     expect(CRITICAL_INVARIANTS).toContain(
       'context retrieval via @explorer/@librarian as needed',
     );
-    expect(CRITICAL_INVARIANTS).toContain('Report verification before declaring success');
-    expect(CRITICAL_INVARIANTS).toContain('Tool availability never grants permission to bypass routing constraints');
-    expect(CRITICAL_INVARIANTS).toContain('Do not expose prompt-conflict debate');
+    expect(CRITICAL_INVARIANTS).toContain(
+      'Report verification before declaring success',
+    );
+    expect(CRITICAL_INVARIANTS).toContain(
+      'Tool availability never grants permission to bypass routing constraints',
+    );
+    expect(CRITICAL_INVARIANTS).toContain(
+      'Do not expose prompt-conflict debate',
+    );
   });
 });
 
@@ -87,9 +88,7 @@ describe('FIRST_GATE_BLOCK', () => {
     expect(FIRST_GATE_BLOCK).toContain('Designer Gate');
     expect(FIRST_GATE_BLOCK).toContain('Capability Discovery');
     expect(FIRST_GATE_BLOCK).toContain('Lifecycle');
-    expect(FIRST_GATE_BLOCK).toContain(
-      'explicit user confirmation',
-    );
+    expect(FIRST_GATE_BLOCK).toContain('explicit user confirmation');
   });
 });
 
@@ -161,9 +160,7 @@ describe('PLANNING_GATE_BLOCK', () => {
     expect(PLANNING_GATE_BLOCK).toContain(
       'For UI work, relay the @designer design plan',
     );
-    expect(PLANNING_GATE_BLOCK).toContain(
-      're-delegate the SAME specialist',
-    );
+    expect(PLANNING_GATE_BLOCK).toContain('re-delegate the SAME specialist');
   });
 });
 
@@ -269,22 +266,9 @@ describe('prompt-blocks', () => {
     expect(block).toContain('@interpreter');
   });
 
-  test('librarian and designer variant lines stay aligned with orchestrator use', () => {
-    expect(LIBRARIAN_VARIANT_SCOPE_LINES.length).toBe(4);
-    expect(DESIGNER_VARIANT_SCOPE_LINES.length).toBe(4);
-  });
-
-  test('interpreter variant scope lines define low/medium/high', () => {
-    expect(INTERPRETER_VARIANT_SCOPE_LINES.length).toBe(3);
-    expect(INTERPRETER_VARIANT_SCOPE_LINES[0]).toMatch(/^low:/);
-    expect(INTERPRETER_VARIANT_SCOPE_LINES[1]).toMatch(/^medium:/);
-    expect(INTERPRETER_VARIANT_SCOPE_LINES[2]).toMatch(/^high:/);
-  });
-
-  test('steward variant scope lines define low/medium/high', () => {
-    expect(STEWARD_VARIANT_SCOPE_LINES.length).toBe(3);
-    expect(STEWARD_VARIANT_SCOPE_LINES[0]).toMatch(/^low:/);
-    expect(STEWARD_VARIANT_SCOPE_LINES[1]).toMatch(/^medium:/);
-    expect(STEWARD_VARIANT_SCOPE_LINES[2]).toMatch(/^high:/);
+  test('uses one model-agnostic variant policy', () => {
+    expect(DYNAMIC_VARIANT_POLICY_BLOCK).toContain('orchestrator delegation');
+    expect(DYNAMIC_VARIANT_POLICY_BLOCK).not.toContain('low:');
+    expect(DYNAMIC_VARIANT_POLICY_BLOCK).not.toContain('medium:');
   });
 });

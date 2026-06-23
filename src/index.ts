@@ -14,8 +14,10 @@ import {
   ALL_AGENT_NAMES,
   DEFAULT_MODELS,
   deepMerge,
+  getAgentTier,
   getPresetAgentOverrides,
   loadPluginConfig,
+  resolveAgentTier,
 } from './config';
 import { AGENT_ALIASES } from './config/constants';
 import {
@@ -40,7 +42,6 @@ import {
   createTaskSessionManagerHook,
   createTodoContinuationHook,
 } from './hooks';
-import { getLatestVersion } from './hooks/auto-update-checker';
 import { createBuiltinMcps } from './mcp';
 import type { UsageService } from './subscriptions';
 import { createUsageService } from './subscriptions';
@@ -85,7 +86,6 @@ import {
 import { initLogger, log } from './utils/logger';
 import { SubagentDepthTracker } from './utils/subagent-depth';
 import { collapseSystemInPlace } from './utils/system-collapse';
-import { VERSION_CACHE_STALE_MS, writeVersionCache } from './version-store';
 
 /**
  * Best-effort log to opencode's app logger.
@@ -193,6 +193,32 @@ function readTokenTelemetry(message: unknown): {
 // limit. Populated lazily via ensureModelContextLimits().
 const _modelContextLimitCache = new Map<string, number>();
 let _modelLimitFetchPromise: Promise<void> | null = null;
+const MODEL_METADATA_FETCH_TIMEOUT_MS = 3000;
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(`Timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
+
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
+function warmModelContextLimits(
+  client: Parameters<typeof ensureModelContextLimits>[0],
+): void {
+  void ensureModelContextLimits(client).catch(() => {});
+}
 
 async function ensureModelContextLimits(client: {
   provider: {
@@ -208,14 +234,20 @@ async function ensureModelContextLimits(client: {
 
   _modelLimitFetchPromise = (async () => {
     try {
-      const result = await client.provider.list();
+      const result = await withTimeout(
+        client.provider.list(),
+        MODEL_METADATA_FETCH_TIMEOUT_MS,
+      );
       const providers =
         (result.data?.all as
           | Array<{
               id?: string;
               models?: Record<
                 string,
-                { id?: string; limit?: { context?: number } }
+                {
+                  id?: string;
+                  limit?: { context?: number };
+                }
               >;
             }>
           | undefined) ?? [];
@@ -237,6 +269,8 @@ async function ensureModelContextLimits(client: {
       }
     } catch {
       // Non-critical - cache stays empty, percentage shows 0
+    } finally {
+      _modelLimitFetchPromise = null;
     }
   })();
 
@@ -274,7 +308,7 @@ async function computeSessionUsageForReconcile(
     let contextPct = 0;
 
     // Ensure context limit cache is populated before recording usage
-    await ensureModelContextLimits(ctx.client).catch(() => {});
+    warmModelContextLimits(ctx.client);
 
     const lastTokenMsg = [...assistantMsgs]
       .reverse()
@@ -425,7 +459,9 @@ const OpenCodeDux: Plugin = async (ctx) => {
       // Re-merge runtime preset into config.agents (loadPluginConfig
       // already merged the config-file preset, not the runtime one).
       // Runtime preset is override so it wins over config-file preset.
-      const presetAgents = getPresetAgentOverrides(config.presets[runtimePreset]);
+      const presetAgents = getPresetAgentOverrides(
+        config.presets[runtimePreset],
+      );
       config.agents = deepMerge(config.agents, presetAgents);
     } else if (runtimePreset) {
       // Preset was deleted from config since last switch - clear stale state
@@ -434,7 +470,9 @@ const OpenCodeDux: Plugin = async (ctx) => {
 
     // Validate all agents have models configured
     for (const agentName of ALL_AGENT_NAMES) {
-      const override = config?.agents?.[agentName]?.model;
+      const override =
+        config?.agents?.[agentName]?.default?.model ??
+        config?.agents?.[agentName]?.model;
       const defaultModel =
         DEFAULT_MODELS[agentName as keyof typeof DEFAULT_MODELS];
       const effectiveModel = override ?? defaultModel;
@@ -471,8 +509,24 @@ const OpenCodeDux: Plugin = async (ctx) => {
     agents = await getAgentConfigs(config);
 
     if (isFirstInit) {
-      console.log(`  \u{1F916} agents: ${Object.keys(agents).join(', ')}`);
-      log(`[init] agents: ${Object.keys(agents).join(', ')}`);
+      const fmtVariants = (v?: string[]) =>
+        v?.length ? `[${v.join(', ')}]` : 'provider-default';
+      console.log('  🤖 agents:');
+      log('[init] agents:');
+      for (const name of ALL_AGENT_NAMES) {
+        const tier = getAgentTier(config, name) ?? {
+          model: DEFAULT_MODELS[name] ?? '?',
+        };
+        const resolved = resolveAgentTier(tier);
+        const configured =
+          resolved.thinking === false ? 'off' : fmtVariants(resolved.variants);
+        console.log(
+          `    • ${name.padEnd(12)} model=${resolved.model}  configured=${configured}`,
+        );
+        log(
+          `[init]   ${name.padEnd(12)} model=${resolved.model}  configured=${configured}`,
+        );
+      }
     }
 
     depthTracker = new SubagentDepthTracker();
@@ -531,11 +585,6 @@ const OpenCodeDux: Plugin = async (ctx) => {
     autoUpdateChecker = createAutoUpdateCheckerHook(ctx, {
       autoUpdate: config.autoUpdate ?? true,
     });
-
-    // Trigger auto-update check after init completes.
-    // setTimeout(0) defers to next microtask, ensuring plugin factory
-    // has fully returned before the update check starts.
-    setTimeout(() => autoUpdateChecker.trigger(), 0);
 
     // Initialize phase reminder hook for workflow compliance
     phaseReminderHook = createPhaseReminderHook();
@@ -746,89 +795,6 @@ const OpenCodeDux: Plugin = async (ctx) => {
     }
   });
 
-  async function scheduleVersionDisplay(
-    currentVersion: string,
-  ): Promise<boolean> {
-    try {
-      // 1. Get saved version (for "just updated" detection)
-      const snapshot = readTuiSnapshot();
-      const savedVersion = snapshot.pluginVersion ?? null;
-
-      // 2. Always fetch latest version from npm on every startup
-      console.log('📦 Checking for updates...');
-      log('[version] Checking for updates...');
-      const latestVersion = await getLatestVersion('latest');
-      console.log(`  📦 Fetched latest version: ${latestVersion ?? 'failed'}`);
-      log(`[version] Fetched latest version: ${latestVersion ?? 'failed'}`);
-      let lastChecked: number | null = null;
-
-      // Persist to cache for background check reference
-      if (latestVersion) {
-        lastChecked = Date.now();
-        writeVersionCache({ latestVersion, lastChecked });
-        updateSnapshot((s) => {
-          s.versionCheck = {
-            latestVersion,
-            lastChecked,
-          };
-        });
-      }
-
-      // 3. Display version with fresh npm data
-      if (savedVersion && savedVersion !== currentVersion) {
-        console.log(
-          `  \u{1F4E6} Current version: \x1b[31mv${savedVersion}\x1b[0m \u2192 \x1b[32mv${currentVersion} (Updated)\x1b[0m`,
-        );
-        log(
-          `[version] Current version: v${savedVersion} \u2192 v${currentVersion} (Updated)`,
-        );
-      } else {
-        const cacheFresh =
-          latestVersion !== null &&
-          lastChecked !== null &&
-          Date.now() - lastChecked < VERSION_CACHE_STALE_MS;
-
-        if (cacheFresh && latestVersion !== currentVersion) {
-          console.log(
-            `  \u{1F4E6} Current version: \x1b[31mv${currentVersion}\x1b[0m \u2192 \x1b[33mv${latestVersion}\x1b[0m`,
-          );
-          log(
-            `[version] Current version: v${currentVersion} \u2192 v${latestVersion}`,
-          );
-        } else {
-          const latestIndicator =
-            cacheFresh && latestVersion === currentVersion ? ' (latest)' : '';
-          console.log(
-            `  \u{1F4E6} Current version: \x1b[32mv${currentVersion}${latestIndicator}\x1b[0m`,
-          );
-          log(
-            `[version] Current version: v${currentVersion}${latestIndicator}`,
-          );
-        }
-      }
-
-      // If a newer version is available, notify the user. The auto-update
-      // checker handles installation in the background.
-      if (
-        latestVersion &&
-        lastChecked &&
-        Date.now() - lastChecked < VERSION_CACHE_STALE_MS &&
-        latestVersion !== currentVersion
-      ) {
-        log(
-          `[auto-update-checker] Update available: v${currentVersion} → v${latestVersion}`,
-        );
-      }
-
-      return true;
-    } catch (err) {
-      const verErrMsg = err instanceof Error ? err.message : String(err);
-      console.log('  📦 Version check failed:', verErrMsg);
-      log(`[version] Version check failed: ${verErrMsg}`);
-      return false;
-    }
-  }
-
   return {
     name: 'opencode-dux',
 
@@ -898,13 +864,16 @@ const OpenCodeDux: Plugin = async (ctx) => {
             | undefined;
           if (!entry) continue;
 
-          if (typeof override.model === 'string') {
-            entry.model = override.model;
+          const overrideModel = override.default?.model ?? override.model;
+          if (typeof overrideModel === 'string') {
+            entry.model = overrideModel;
           }
           // Explicitly set or clear scalar fields so switching from
           // Preset A (which sets a field) to Preset B (which doesn't)
           // doesn't leave stale values behind.
-          if (typeof override.variant === 'string') {
+          if (override.default) {
+            delete entry.variant;
+          } else if (typeof override.variant === 'string') {
             entry.variant = override.variant;
           } else if ('variant' in override) {
             delete entry.variant;
@@ -960,10 +929,13 @@ const OpenCodeDux: Plugin = async (ctx) => {
             const prevOverride = prevPreset[agentName] as
               | AgentOverrideConfig
               | undefined;
-            if (typeof baseline?.model === 'string') {
-              entry.model = baseline.model;
+            const baselineModel = baseline?.default?.model ?? baseline?.model;
+            if (typeof baselineModel === 'string') {
+              entry.model = baselineModel;
             }
-            if (typeof baseline?.variant === 'string') {
+            if (baseline?.default) {
+              delete entry.variant;
+            } else if (typeof baseline?.variant === 'string') {
               entry.variant = baseline.variant;
             } else if (prevOverride && 'variant' in prevOverride) {
               delete entry.variant;
@@ -1084,16 +1056,6 @@ const OpenCodeDux: Plugin = async (ctx) => {
           }
         } catch (err) {
           log('[startup] Failed to list skills directory:', String(err));
-        }
-
-        const currentVersion = readPluginVersion();
-        if (currentVersion) {
-          scheduleVersionDisplay(currentVersion).catch((err) => {
-            const versionErrMsg =
-              err instanceof Error ? err.message : String(err);
-            console.log('  📦 Version check failed:', versionErrMsg);
-            log(`[version] Version check failed: ${versionErrMsg}`);
-          });
         }
       }
     },

@@ -1,5 +1,14 @@
 import { AGENT_ALIASES } from './constants';
-import type { AgentOverrideConfig, PluginConfig, Preset } from './schema';
+import type {
+  AgentOverrideConfig,
+  AgentTierConfig,
+  PluginConfig,
+  Preset,
+} from './schema';
+
+export type ResolvedAgentTier = AgentTierConfig & {
+  variants?: string[];
+};
 
 /**
  * Get agent override config by name, supporting backward-compatible aliases.
@@ -20,6 +29,34 @@ export function getAgentOverride(
       Object.keys(AGENT_ALIASES).find((k) => AGENT_ALIASES[k] === name) ?? ''
     ]
   );
+}
+
+export function getAgentTier(
+  config: PluginConfig | undefined,
+  name: string,
+  tier: 'default' | 'smart' = 'default',
+): AgentTierConfig | undefined {
+  if (tier === 'smart' && name !== 'oracle') return undefined;
+  const override = getAgentOverride(config, name);
+  const configured = override?.[tier];
+  if (configured) return configured;
+
+  if (tier === 'default' && override?.model) {
+    return {
+      model: override.model,
+      variants: override.variant ? [override.variant] : undefined,
+    };
+  }
+
+  const legacySmart = override?.options?.smart;
+  return tier === 'smart' && typeof legacySmart === 'string'
+    ? { model: legacySmart }
+    : undefined;
+}
+
+export function resolveAgentTier(tier: AgentTierConfig): ResolvedAgentTier {
+  if (tier.thinking === false) return { ...tier, variants: undefined };
+  return tier;
 }
 
 export function getPresetAgentOverrides(

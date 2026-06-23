@@ -1,8 +1,8 @@
 import type { AgentDefinition } from './orchestrator';
 import { resolvePrompt } from './orchestrator';
 import {
+  DYNAMIC_VARIANT_POLICY_BLOCK,
   formatBlockedOutputBlock,
-  LIBRARIAN_VARIANT_SCOPE_LINES,
   NEEDS_USER_OUTPUT_FORMAT_BLOCK,
   SUBAGENT_NEEDS_USER_FORMAT,
   USER_CHOICE_POLICY_BLOCK,
@@ -40,8 +40,7 @@ ${USER_CHOICE_POLICY_BLOCK}
 - Competing libraries/versions when user didn't specify → <needs_user> with tradeoff descriptions.
 - Never crown a winner when choice depends on user preference or unknown constraints.
 
-## Variant Policy
-${LIBRARIAN_VARIANT_SCOPE_LINES.map((l) => `- ${l}`).join('\n')}
+${DYNAMIC_VARIANT_POLICY_BLOCK}
 
 ${SUBAGENT_NEEDS_USER_FORMAT}
 

@@ -2,7 +2,11 @@ import type { ToolDefinition } from '@opencode-ai/plugin';
 import { tool } from '@opencode-ai/plugin';
 import type { AgentName, PluginConfig } from '../config';
 import { ALL_AGENT_NAMES, DEFAULT_MODELS } from '../config/constants';
-import { getAgentOverride } from '../config/utils';
+import {
+  getAgentOverride,
+  getAgentTier,
+  resolveAgentTier,
+} from '../config/utils';
 import {
   recordDelegatedSubagentSession,
   recordSessionDone,
@@ -69,12 +73,11 @@ type SubagentRuntimeName = Exclude<AgentName, 'orchestrator'>;
 type DelegationTaskInput = {
   agent: string;
   prompt: string;
-  variant: (typeof VARIANT_OPTIONS)[number];
+  variant?: string;
   model?: string;
   continue_session_id?: string;
 };
 
-const VARIANT_OPTIONS = ['low', 'medium', 'high', 'max'] as const;
 const MODE_OPTIONS = ['blocking', 'fire_forget'] as const;
 const INLINE_SECTION_TAGS_BY_AGENT = {
   oracle: ['plan'],
@@ -373,15 +376,51 @@ export function resolveDelegatedAgentConfig(
 ): {
   model?: string;
   variant?: string;
+  allowedVariants?: string[];
+  variantError?: string;
 } {
   const agentOverride = getAgentOverride(config, agentName);
+  const defaultTier = getAgentTier(config, agentName) ?? {
+    model: DEFAULT_MODELS[agentName as AgentName],
+  };
+  const smartTier = getAgentTier(config, agentName, 'smart');
+  const model = requested.model ?? defaultTier.model;
+  if (!model) return {};
+  const matchingTiers = [
+    defaultTier.model === model ? { ...defaultTier, model } : undefined,
+    smartTier?.model === model ? smartTier : undefined,
+  ].filter((tier): tier is NonNullable<typeof tier> => Boolean(tier));
+  const configuredTier = (requested.variant
+    ? matchingTiers.find((tier) =>
+        tier.variants?.includes(requested.variant as string),
+      )
+    : undefined) ??
+    matchingTiers[0] ?? { model };
+  const resolvedTier = resolveAgentTier(configuredTier);
+  const allowedVariants = resolvedTier.variants;
+  const legacyVariant =
+    !agentOverride?.default && agentOverride?.variant
+      ? agentOverride.variant
+      : undefined;
+  const requestedVariant = legacyVariant ?? requested.variant;
+  const variantError =
+    requestedVariant &&
+    allowedVariants?.length &&
+    !allowedVariants.includes(requestedVariant)
+      ? `Variant "${requestedVariant}" is not allowed for ${agentName} model "${model}". Allowed: ${allowedVariants.join(', ')}`
+      : undefined;
 
   return {
-    model:
-      requested.model ??
-      agentOverride?.model ??
-      DEFAULT_MODELS[agentName as AgentName],
-    variant: agentOverride?.variant ?? requested.variant,
+    model,
+    variant: variantError
+      ? undefined
+      : allowedVariants?.includes(requestedVariant ?? '')
+        ? requestedVariant
+        : resolvedTier.thinking !== false
+          ? requestedVariant
+          : undefined,
+    allowedVariants,
+    variantError,
   };
 }
 
@@ -402,10 +441,9 @@ export function createDelegateTools(
       .string()
       .describe('Detailed task description for the subagent'),
     variant: tool.schema
-      .enum(VARIANT_OPTIONS)
-      .describe(
-        'Reasoning depth: low (simple), medium (typical), high (complex), max (critical)',
-      ),
+      .string()
+      .optional()
+      .describe('Optional model variant listed in the agent capability roster'),
     model: tool.schema
       .string()
       .optional()
@@ -661,6 +699,9 @@ export function createDelegateTools(
       model: args.model,
       variant,
     });
+    if (resolvedConfig.variantError) {
+      return `Error: ${resolvedConfig.variantError}`;
+    }
     const effectiveVariant = resolvedConfig.variant;
     const model = resolvedConfig.model;
 
@@ -916,8 +957,7 @@ export function createDelegateTools(
 
   const delegateSubagent: ToolDefinition = tool({
     description:
-      'Delegate a task to a specialist subagent with explicit variant control. ' +
-      'Always specify variant based on task complexity. ' +
+      'Delegate a task to a specialist subagent with optional variant control. ' +
       'Blocking mode waits for the result; fire_forget returns a session_id to collect later. ' +
       'If the result includes <delegate_session_continue/>, the child session stayed open for ' +
       'continue_session_id (same transcript after user clarification).',
@@ -929,9 +969,10 @@ export function createDelegateTools(
         .string()
         .describe('Detailed task description for the subagent'),
       variant: tool.schema
-        .enum(VARIANT_OPTIONS)
+        .string()
+        .optional()
         .describe(
-          'Reasoning depth: low (simple), medium (typical), high (complex), max (critical)',
+          'Optional model variant listed in the agent capability roster',
         ),
       mode: tool.schema
         .enum(MODE_OPTIONS)

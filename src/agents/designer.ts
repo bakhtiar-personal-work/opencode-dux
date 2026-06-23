@@ -2,7 +2,7 @@ import type { AgentDefinition } from './orchestrator';
 import { resolvePrompt } from './orchestrator';
 import {
   CORE_CAPABILITY_AWARENESS_BLOCK,
-  DESIGNER_VARIANT_SCOPE_LINES,
+  DYNAMIC_VARIANT_POLICY_BLOCK,
   formatBlockedOutputBlock,
   HANDOFF_ARTIFACTS_BLOCK,
   NEEDS_USER_OUTPUT_FORMAT_BLOCK,
@@ -63,8 +63,7 @@ ${USER_CHOICE_POLICY_BLOCK}
 - Layout/pattern forks (primary action position, modal vs inline, tabs vs stepper, dense vs spacious) when task doesn't mandate one: <needs_user> with UX consequence description.
 - User-visible copy/tone when multiple wordings change meaning: <needs_user>.
 
-## Variant Policy
-${DESIGNER_VARIANT_SCOPE_LINES.map((l) => `- ${l}`).join('\n')}
+${DYNAMIC_VARIANT_POLICY_BLOCK}
 
 ${SUBAGENT_NEEDS_USER_FORMAT}
 

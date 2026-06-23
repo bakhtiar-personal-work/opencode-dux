@@ -1,7 +1,7 @@
 import type { AgentDefinition } from './orchestrator';
 import { resolvePrompt } from './orchestrator';
 import {
-  EXPLORER_VARIANT_SCOPE_LINES,
+  DYNAMIC_VARIANT_POLICY_BLOCK,
   formatBlockedOutputBlock,
   NEEDS_USER_OUTPUT_FORMAT_BLOCK,
   SUBAGENT_NEEDS_USER_FORMAT,
@@ -39,17 +39,16 @@ You are Explorer, a fast codebase navigation specialist. Find files, locate code
 4. Read a file only when surrounding context necessary to confirm match intent.
 5. Expand to adjacent files only when user question requires it.
 6. Return concise map with file:line references. Format as \`path:line - what exists there\`. Group by file.
-7. Batch budget (low/medium variants): prefer <=6 batches.
+7. Prefer <=6 batches unless delegated scope explicitly requires exhaustive coverage.
    One batch = one message-response turn. Parallel reads count as 1 batch; sequential calls count individually.
-   For variant high (exhaustive): state estimated batch count upfront.
+   For exhaustive work: state estimated batch count upfront.
 8. Provide brief updates as you search, explaining what context you're gathering and what you've learned. Vary your sentence structure — don't start each update the same way.
 
 ## Stale Codemap
 - Use codemap as fast orientation aid only.
 - If codemap and live search disagree: trust live search, call out discrepancy.
 
-## Variant Policy
-${EXPLORER_VARIANT_SCOPE_LINES.map((l) => `- ${l}`).join('\n')}
+${DYNAMIC_VARIANT_POLICY_BLOCK}
 
 ${SUBAGENT_NEEDS_USER_FORMAT}
 

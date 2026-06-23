@@ -306,50 +306,21 @@ export function buildOracleModelAndVariantSelectionBlock(
   const oracleSmart =
     oracleSmartResolved || oracleDefaultResolved || '<oracle-smart>';
   const modelPoolLines = singleTierMode
-    ? `- single tier: ${oracleDefault} (no separate smart model configured; raise variant by one step where smart would apply)`
+    ? `- single tier: ${oracleDefault}`
     : `- default: ${oracleDefault}\n- smart: ${oracleSmart}`;
 
-  return `<model_tier>
-Orchestrator operates two oracle tiers:
-- default (flash): standard debugging, scoped reviews, bounded analysis — variant medium-max.
-- smart (pro): novel architecture, unclear root cause, security/concurrency risk, or escalation after flash attempt — variant low-max.
-
-You cannot observe your own model name. Infer tier from variant:
-- variant low -> almost certainly smart tier (flash+low is misconfiguration).
-- variant max -> high-stakes; calibrate for security/systemic risk regardless of tier.
-- variant medium/high on focused task -> likely default tier.
-</model_tier>
-
-# Oracle Model Selection
-Only @oracle does analysis. VARIANT = depth; MODEL = tier.
+  return `# Oracle Model Selection
+Only @oracle does analysis. MODEL selects tier; VARIANT selects available thinking effort.
 
 **Policy:** Use this immediately before every NEW @oracle delegation or escalation.
 
 **Model pool:**
 ${modelPoolLines}
 
-**Scenario -> model+variant:**
-| Scenario | Model | Variant |
-|---|---|---|
-| Default starting point | default | medium |
-| Multi-file or moderate ambiguity | default | high |
-| Systemic non-security issue | default | max |
-| Flash output was insufficient | smart | medium |
-| Novel/unclear domain | smart | high |
-| Auth, security, exploit, data-integrity | smart | max |
-| Quick smart follow-up | smart | low |
-
-**Never:** default + low. Never default for security-critical analysis.
-If smart not configured: raise variant one step (e.g., default+high instead of smart+medium).
-
-**Escalation sequence:**
-1. default + medium → 2. smart + medium → 3. smart + max.
-Must change model or variant at each step. If smart unavailable: default+medium → default+high → default+max.
-
-**Example:**
-User: "Trace why this retry counter drifts."
-\`delegate_subagent(agent: "oracle", prompt: "...", model: "${oracleDefault}", variant: "medium", mode: "blocking")\`
-Default starting point. If oracle identifies security implications, escalate per scenario table.`;
+Read allowed variants from **Agent Models**. Values are ordered from lower to
+higher effort. Choose the lowest effort adequate for task scope, ambiguity, and
+risk. Never invent or send an unlisted variant. Omit variant when capability
+says provider default or thinking off.`;
 }
 
 // --- Mechanical Edit Exception ---
@@ -529,97 +500,8 @@ export function buildInterpreterOrchestratorProtocolBlock(): string {
 `;
 }
 
-// --- Variant scope lines ---
-
-export const LIBRARIAN_VARIANT_SCOPE_LINES = [
-  'low: answer one focused question with minimal but direct citations',
-  'medium: synthesize multiple sources and explain one key caveat',
-  'high: deep multi-source comparison with explicit version matrix and conflict resolution',
-  'max: exhaustive cross-source research with full version matrix, competing implementations, ecosystem-wide context',
-] as const;
-
-export const INTERPRETER_VARIANT_SCOPE_LINES = [
-  'low: single image — identify key elements and suggest one routing agent',
-  'medium: multi-image or complex diagram — cross-reference visible artifacts, structured routing recommendation',
-  'high: detailed technical breakdown of multiple screenshots with annotated findings and ordered routing chain',
-] as const;
-
-export const STEWARD_VARIANT_SCOPE_LINES = [
-  'low: read and cite AGENTS.md / AGENT.md only; stop after root anchor files',
-  'medium: root anchor files plus remaining steward_paths in priority order (up to ~6 whole-file reads)',
-  'high: read and cite all steward_paths including .cursor/rules, .opencode, .docs, and secondary convention shards — cite verbatim only, do not analyze',
-] as const;
-
-export const STEWARD_VARIANT_MAX_NOTE =
-  'not supported — steward is citation-only; deep analysis belongs to @oracle';
-
-// --- Designer ---
-
-export const DESIGNER_VARIANT_SCOPE_LINES = [
-  'low: focused tweaks and small style corrections',
-  'medium: full-page redesign or new section layout',
-  'high: multi-page system-level UI patterns',
-  'max: design-system-wide audit, cross-page consistency, comprehensive accessibility validation',
-] as const;
-
-// --- Explorer ---
-
-export const EXPLORER_VARIANT_SCOPE_LINES = [
-  'low: locate one file/pattern in a known directory; single-concept search',
-  'medium: multi-directory cross-reference; find all callers/usages of a symbol',
-  'high: exhaustive codebase-wide usage analysis across all directories; comprehensive dependency mapping',
-  'max: not supported — explorer is search and location; use @oracle for deep analysis',
-] as const;
-
-// --- Fixer ---
-
-export const FIXER_ORCHESTRATOR_DELEGATION_VARIANT_RULE =
-  '- Only use low or medium variant when delegating to @fixer. For high/max scope, split into multiple low/medium @fixer sessions.';
-
-export const FIXER_VARIANT_POLICY_CAP_LINE =
-  '- high/max: NOT supported — orchestrator constrains fixer to low/medium. Split into multiple sessions.';
-
-export const FIXER_VARIANT_SCOPE_LINES = [
-  'low: single-file, single-function edit; bounded scope change',
-  'medium: multi-file change within one module; small refactor across 2-3 files',
-] as const;
-
-// --- Oracle ---
-
-const ORACLE_VARIANT_OMITTED_DEFAULT_RULE =
-  '- If variant is omitted, default to medium.';
-
-const ORACLE_VARIANT_DEPTH_LINES = [
-  'low: minimal rationale — smart model only (narrow follow-up)',
-  'medium: bounded analysis; 1-3 files; clear problem statement (default for flash)',
-  'high: multi-file, moderate ambiguity, or flash+medium was insufficient',
-  'max: security-critical, data-integrity, systemic risk, or last resort before giving up',
-] as const;
-
-const ORACLE_SELF_AWARENESS_NOTE =
-  '- If you receive variant: low and your session model is flash tier (not smart/pro), depth may be insufficient. Proceed at minimal depth and note limitation in <confidence>. If you infer you are smart tier but capabilities feel limited, surface discrepancy in <confidence>.';
-
-export const ORACLE_MODEL_TIER_BLOCK = `<model_tier>
-Orchestrator operates two oracle tiers:
-- default (flash): standard debugging, scoped reviews, bounded analysis — variant medium-max.
-- smart (pro): novel architecture, unclear root cause, security/concurrency risk, or escalation after flash attempt — variant low-max.
-
-You cannot observe your own model name. Infer tier from variant:
-- variant low -> almost certainly smart tier (flash+low is misconfiguration).
-- variant max -> high-stakes; calibrate for security/systemic risk regardless of tier.
-- variant medium/high on focused task -> likely default tier.
-</model_tier>`;
-
-export function formatOracleAgentVariantPolicyXml(): string {
-  const depth = ORACLE_VARIANT_DEPTH_LINES.map((l) => `- ${l}`).join('\n');
-  return `## Variant Policy
-${ORACLE_VARIANT_OMITTED_DEFAULT_RULE}
-${depth}
-${ORACLE_SELF_AWARENESS_NOTE}
-
-Variant output:
-- low/medium: concise sections; omit <tradeoffs> or <risks> if no meaningful content.
-- high/max: all sections MUST be detailed and risk-oriented; <risks> is REQUIRED with severity labels.`;
-}
+export const DYNAMIC_VARIANT_POLICY_BLOCK = `## Variant Policy
+Variant and thinking capability come from orchestrator delegation. Match response
+depth to requested task scope. Do not infer model tier from variant name.`;
 
 // Discovery Guidance is now merged into EARLY_DISCOVERY_BLOCK

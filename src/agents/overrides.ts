@@ -10,10 +10,13 @@ export function applyOverrides(
   agent: AgentDefinition,
   override: AgentOverrideConfig,
 ): void {
-  if (override.model) {
-    agent.config.model = override.model;
+  const model = override.default?.model ?? override.model;
+  if (model) {
+    agent.config.model = model;
   }
-  if (override.variant) agent.config.variant = override.variant;
+  if (override.default) {
+    agent.config.variant = undefined;
+  } else if (override.variant) agent.config.variant = override.variant;
   if (override.temperature !== undefined)
     agent.config.temperature = override.temperature;
   if (override.options) {
