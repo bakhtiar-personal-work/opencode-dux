@@ -70,18 +70,14 @@ function createDelegateFixture(input: {
         input.onPromptEnd?.(pathArg.id);
       },
       messages: async ({ path: pathArg }: { path: { id: string } }) => {
-        const promptIndex = Math.max(
-          (promptCounts.get(pathArg.id) ?? 1) - 1,
-          0,
-        );
-        const output = input.outputsBySession[pathArg.id]?.[promptIndex] ?? '';
+        const promptCount = Math.max(promptCounts.get(pathArg.id) ?? 0, 0);
         return {
-          data: [
-            {
+          data: (input.outputsBySession[pathArg.id] ?? [])
+            .slice(0, promptCount)
+            .map((output) => ({
               info: { role: 'assistant' },
               parts: [{ type: 'text', text: output }],
-            },
-          ],
+            })),
         };
       },
       status: async ({ path: pathArg }: { path: { id: string } }) => {
@@ -118,6 +114,7 @@ function createDelegateFixture(input: {
   );
 
   return {
+    artifactStore: store,
     delegateSubagent: tools.delegate_subagent as {
       execute: (
         args: Record<string, unknown>,
@@ -306,6 +303,7 @@ describe('delegate artifact flow', () => {
     );
 
     expect(parseEnvelopeField(second, 'Artifact')).toBe(artifactPath);
+    expect(second).not.toContain('<delegate_session_continue');
 
     const artifactBody = fs.readFileSync(
       path.join(workspace, artifactPath),
@@ -314,6 +312,197 @@ describe('delegate artifact flow', () => {
     expect(artifactBody).toContain('## Turn 1');
     expect(artifactBody).toContain('## Turn 2');
     expect(artifactBody).toContain('Resolved plan');
+  });
+
+  test('continuation prompt omits upstream artifact block when nothing new exists', async () => {
+    const workspace = makeTempDir();
+    const promptTexts: string[] = [];
+    const { artifactStore, delegateSubagent } = createDelegateFixture({
+      workspace,
+      sessionIds: ['oracle-1'],
+      outputsBySession: {
+        'oracle-1': [
+          '<needs_user><reason>pick one</reason></needs_user>',
+          '<plan>Resolved plan</plan>',
+        ],
+      },
+      onPromptBody: ({ body }) => {
+        const parts = Array.isArray(body.parts)
+          ? (body.parts as Array<Record<string, unknown>>)
+          : [];
+        const textPart = parts.find((part) => part.type === 'text');
+        if (typeof textPart?.text === 'string') {
+          promptTexts.push(textPart.text);
+        }
+      },
+    });
+
+    artifactStore.setTimeline(1, 'v0');
+    await delegateSubagent.execute(
+      {
+        agent: 'oracle',
+        prompt: 'Oracle pass that needs clarification',
+        variant: 'high',
+      },
+      { sessionID: 'parent-1' },
+    );
+
+    artifactStore.setTimeline(2, 'v0');
+    await delegateSubagent.execute(
+      {
+        agent: 'oracle',
+        prompt: 'User answered: choose option A',
+        variant: 'high',
+        continue_session_id: 'oracle-1',
+      },
+      { sessionID: 'parent-1' },
+    );
+
+    expect(promptTexts).toHaveLength(2);
+    const continuationPrompt = promptTexts[1] ?? '';
+    expect(continuationPrompt).not.toContain('<upstream_handoff_artifacts>');
+  });
+
+  test('continuation prompt forwards only newer relevant artifacts', async () => {
+    const workspace = makeTempDir();
+    const promptTexts: string[] = [];
+    const { artifactStore, delegateSubagent } = createDelegateFixture({
+      workspace,
+      sessionIds: ['oracle-1'],
+      outputsBySession: {
+        'oracle-1': [
+          '<needs_user><reason>pick one</reason></needs_user>',
+          '<plan>Resolved plan</plan>',
+        ],
+      },
+      onPromptBody: ({ body }) => {
+        const parts = Array.isArray(body.parts)
+          ? (body.parts as Array<Record<string, unknown>>)
+          : [];
+        const textPart = parts.find((part) => part.type === 'text');
+        if (typeof textPart?.text === 'string') {
+          promptTexts.push(textPart.text);
+        }
+      },
+    });
+
+    artifactStore.setTimeline(1, 'v0');
+    artifactStore.seedArtifact({
+      agent: 'steward',
+      childSessionId: 'steward-1',
+      parentSessionId: 'parent-1',
+      model: 'test/steward',
+      mode: 'blocking',
+      purpose: 'Repo rules',
+      promptText: 'Repo rules',
+    });
+    artifactStore.markStatus('steward-1', 'completed');
+
+    await delegateSubagent.execute(
+      {
+        agent: 'oracle',
+        prompt: 'Oracle pass that needs clarification',
+        variant: 'high',
+      },
+      { sessionID: 'parent-1' },
+    );
+
+    const oldArtifactPath = artifactStore.getArtifactPath('steward-1');
+
+    artifactStore.setTimeline(2, 'v0');
+    artifactStore.seedArtifact({
+      agent: 'explorer',
+      childSessionId: 'explorer-1',
+      parentSessionId: 'parent-1',
+      model: 'test/explorer',
+      mode: 'blocking',
+      purpose: 'New code scan',
+      promptText: 'New code scan',
+    });
+    artifactStore.markStatus('explorer-1', 'completed');
+
+    const newArtifactPath = artifactStore.getArtifactPath('explorer-1');
+
+    await delegateSubagent.execute(
+      {
+        agent: 'oracle',
+        prompt: 'User answered: choose option A',
+        variant: 'high',
+        continue_session_id: 'oracle-1',
+      },
+      { sessionID: 'parent-1' },
+    );
+
+    expect(promptTexts).toHaveLength(2);
+    const continuationPrompt = promptTexts[1] ?? '';
+    expect(continuationPrompt).toContain('<upstream_handoff_artifacts>');
+    expect(continuationPrompt).toContain('explorer-1');
+    expect(continuationPrompt).toContain(newArtifactPath ?? '');
+    expect(continuationPrompt).not.toContain('steward-1');
+    expect(continuationPrompt).not.toContain(oldArtifactPath ?? '');
+  });
+
+  test('continuation prompt keeps explicit artifact paths even without new auto-selected artifacts', async () => {
+    const workspace = makeTempDir();
+    const promptTexts: string[] = [];
+    const { artifactStore, delegateSubagent } = createDelegateFixture({
+      workspace,
+      sessionIds: ['oracle-1'],
+      outputsBySession: {
+        'oracle-1': [
+          '<needs_user><reason>pick one</reason></needs_user>',
+          '<plan>Resolved plan</plan>',
+        ],
+      },
+      onPromptBody: ({ body }) => {
+        const parts = Array.isArray(body.parts)
+          ? (body.parts as Array<Record<string, unknown>>)
+          : [];
+        const textPart = parts.find((part) => part.type === 'text');
+        if (typeof textPart?.text === 'string') {
+          promptTexts.push(textPart.text);
+        }
+      },
+    });
+
+    artifactStore.setTimeline(1, 'v0');
+    artifactStore.seedArtifact({
+      agent: 'steward',
+      childSessionId: 'steward-1',
+      parentSessionId: 'parent-1',
+      model: 'test/steward',
+      mode: 'blocking',
+      purpose: 'Repo rules',
+      promptText: 'Repo rules',
+    });
+    artifactStore.markStatus('steward-1', 'completed');
+    const explicitArtifactPath = artifactStore.getArtifactPath('steward-1');
+
+    await delegateSubagent.execute(
+      {
+        agent: 'oracle',
+        prompt: 'Oracle pass that needs clarification',
+        variant: 'high',
+      },
+      { sessionID: 'parent-1' },
+    );
+
+    artifactStore.setTimeline(2, 'v0');
+    await delegateSubagent.execute(
+      {
+        agent: 'oracle',
+        prompt: `Artifact path: ${explicitArtifactPath}\nUser answered: choose option A`,
+        variant: 'high',
+        continue_session_id: 'oracle-1',
+      },
+      { sessionID: 'parent-1' },
+    );
+
+    expect(promptTexts).toHaveLength(2);
+    const continuationPrompt = promptTexts[1] ?? '';
+    expect(continuationPrompt).toContain('<upstream_handoff_artifacts>');
+    expect(continuationPrompt).toContain('steward-1');
+    expect(continuationPrompt).toContain(explicitArtifactPath ?? '');
   });
 
   test('fire_forget collect writes compact result and preserves inline fixer sections', async () => {

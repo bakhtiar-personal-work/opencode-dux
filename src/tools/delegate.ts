@@ -17,6 +17,7 @@ import {
   extractAssistantTextAfterPrompt,
   extractLatestUserImageParts,
   extractSessionResult,
+  getAssistantMessageCount,
   normalizeImagePartsForChildPrompt,
   type PromptBody,
   type PromptBodyPart,
@@ -492,6 +493,7 @@ export function createDelegateTools(
     let sessionId: string | undefined;
     let keepChildSessionOpen = false;
     const isContinuation = Boolean(options.continueSessionId?.trim());
+    let assistantMessageOffset = 0;
 
     try {
       if (isContinuation) {
@@ -499,6 +501,11 @@ export function createDelegateTools(
         if (!sessionId) {
           throw new Error('continue_session_id was empty');
         }
+        assistantMessageOffset = await getAssistantMessageCount(
+          ctx.client,
+          sessionId,
+          directory,
+        );
       } else {
         const session = await ctx.client.session.create({
           body: {
@@ -566,6 +573,7 @@ export function createDelegateTools(
         ctx.client,
         sessionId,
         directory,
+        { assistantMessageOffset },
       );
 
       if (extraction.empty) {
@@ -705,6 +713,7 @@ export function createDelegateTools(
       parentSessionId,
       {
         excludeChildSessionId: continueSessionId || undefined,
+        continueChildSessionId: continueSessionId,
         targetAgent: agentName,
         explicitPaths: referencedArtifactPaths,
       },

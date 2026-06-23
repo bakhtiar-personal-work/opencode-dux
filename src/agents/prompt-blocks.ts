@@ -27,7 +27,10 @@ Nine invariants for question workflow:
    with array as \`questions\` param (no markdown wrapping, no re-serialization).
 
 2) After user answers: delegate_subagent with \`continue_session_id\` from prior
-   result. Copy "User answered:" verbatim into prompt. Same agent/model/variant.
+   result. Copy "User answered:" and answer text verbatim into prompt. Same
+   agent/model/variant.
+   Do NOT resend prior artifact/context block unless prompt explicitly names new
+   artifact paths or newer relevant artifacts were created since that child turn.
 
 3) Never substitute your own analysis after \`question\` - resume specialist.
 

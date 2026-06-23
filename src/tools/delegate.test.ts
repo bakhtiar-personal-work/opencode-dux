@@ -129,19 +129,31 @@ describe('resolveDelegatedAgentConfig', () => {
 
 describe('createDelegateTools agent normalization', () => {
   function createClient() {
+    const promptCounts = new Map<string, number>();
     return {
       session: {
         create: async () => ({ data: { id: 'child-1' } }),
-        prompt: async ({ body }: { body: { agent: string } }) => {
+        prompt: async ({
+          path,
+          body,
+        }: {
+          path: { id: string };
+          body: { agent: string };
+        }) => {
+          const previous = promptCounts.get(path.id) ?? 0;
+          promptCounts.set(path.id, previous + 1);
           return body.agent;
         },
-        messages: async () => ({
-          data: [
-            {
-              info: { role: 'assistant' },
-              parts: [{ type: 'text', text: '<summary>done</summary>' }],
-            },
-          ],
+        messages: async ({ path }: { path: { id: string } }) => ({
+          data:
+            (promptCounts.get(path.id) ?? 0) > 0
+              ? [
+                  {
+                    info: { role: 'assistant' },
+                    parts: [{ type: 'text', text: '<summary>done</summary>' }],
+                  },
+                ]
+              : [],
         }),
         abort: async () => undefined,
       },

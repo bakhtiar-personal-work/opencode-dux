@@ -35,6 +35,11 @@ export type PromptBodyPart = SessionPromptBody['parts'][number];
 /** Prompt body including optional variant (supported by the host at runtime). */
 export type PromptBody = SessionPromptBody & { variant?: string };
 
+type SessionMessage = {
+  info?: { role?: string };
+  parts?: Array<{ type?: string; text?: string }>;
+};
+
 /**
  * Parse a model reference string into provider and model IDs.
  * @param model - Model string in format "provider/model"
@@ -92,11 +97,11 @@ export async function extractLatestUserImageParts(
   sessionId: string,
   directory: string,
 ): Promise<PromptBodyPart[]> {
-  const messagesResult = await client.session.messages({
-    path: { id: sessionId },
-    query: { directory },
-  });
-  const messages = (messagesResult.data ?? []) as Array<{
+  const messages = (await readSessionMessages(
+    client,
+    sessionId,
+    directory,
+  )) as Array<{
     info?: { role?: string };
     parts?: Array<Record<string, unknown>>;
   }>;
@@ -106,6 +111,18 @@ export async function extractLatestUserImageParts(
     return [];
   }
   return lastUser.parts.filter(isForwardableImagePart) as PromptBodyPart[];
+}
+
+async function readSessionMessages(
+  client: OpencodeClient,
+  sessionId: string,
+  directory?: string,
+): Promise<SessionMessage[]> {
+  const messagesResult = await client.session.messages({
+    path: { id: sessionId },
+    ...(directory ? { query: { directory } } : {}),
+  });
+  return (messagesResult.data ?? []) as SessionMessage[];
 }
 
 function fileUrlFromSource(
@@ -240,6 +257,22 @@ export interface SessionExtractionResult {
   empty: boolean;
 }
 
+interface SessionExtractionOptions {
+  includeReasoning?: boolean;
+  directory?: string;
+  assistantMessageOffset?: number;
+}
+
+export async function getAssistantMessageCount(
+  client: OpencodeClient,
+  sessionId: string,
+  directory?: string,
+): Promise<number> {
+  const messages = await readSessionMessages(client, sessionId, directory);
+  return messages.filter((message) => message.info?.role === 'assistant')
+    .length;
+}
+
 /**
  * Extract the result text from a session.
  * Collects all assistant messages and concatenates their text parts.
@@ -253,22 +286,18 @@ export interface SessionExtractionResult {
 export async function extractSessionResult(
   client: OpencodeClient,
   sessionId: string,
-  options?: { includeReasoning?: boolean; directory?: string },
+  options?: SessionExtractionOptions,
 ): Promise<SessionExtractionResult> {
   const includeReasoning = options?.includeReasoning ?? true;
   const directory = options?.directory;
-
-  const messagesResult = await client.session.messages({
-    path: { id: sessionId },
-    ...(directory ? { query: { directory } } : {}),
-  });
-  const messages = (messagesResult.data ?? []) as Array<{
-    info?: { role: string };
-    parts?: Array<{ type: string; text?: string }>;
-  }>;
-  const assistantMessages = messages.filter(
-    (m) => m.info?.role === 'assistant',
+  const assistantMessageOffset = Math.max(
+    0,
+    options?.assistantMessageOffset ?? 0,
   );
+  const messages = await readSessionMessages(client, sessionId, directory);
+  const assistantMessages = messages
+    .filter((message) => message.info?.role === 'assistant')
+    .slice(assistantMessageOffset);
 
   const extractedContent: string[] = [];
   for (const message of assistantMessages) {
@@ -350,12 +379,14 @@ export async function extractAssistantTextAfterPrompt(
   client: OpencodeClient,
   sessionId: string,
   workspaceDirectory: string,
+  options?: { assistantMessageOffset?: number },
 ): Promise<SessionExtractionResult> {
   await waitUntilSessionIdle(client, sessionId, workspaceDirectory);
 
   let result = await extractSessionResult(client, sessionId, {
     includeReasoning: false,
     directory: workspaceDirectory,
+    assistantMessageOffset: options?.assistantMessageOffset,
   });
 
   for (
@@ -367,6 +398,7 @@ export async function extractAssistantTextAfterPrompt(
     result = await extractSessionResult(client, sessionId, {
       includeReasoning: false,
       directory: workspaceDirectory,
+      assistantMessageOffset: options?.assistantMessageOffset,
     });
   }
 
@@ -374,6 +406,7 @@ export async function extractAssistantTextAfterPrompt(
     result = await extractSessionResult(client, sessionId, {
       includeReasoning: true,
       directory: workspaceDirectory,
+      assistantMessageOffset: options?.assistantMessageOffset,
     });
   }
 

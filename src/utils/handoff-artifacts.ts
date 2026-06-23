@@ -125,7 +125,7 @@ export interface RelevanceSelectionOptions {
   explicitPaths?: string[];
   /** Target subagent name — prerequisite-agent artifacts are preferred. */
   targetAgent?: string;
-  /** Child session ID for continuation — when set, 'open' status artifacts are not excluded. */
+  /** Child session ID being resumed — when set, auto-selected artifacts are limited to newer delta context. */
   continueChildSessionId?: string;
   /** Maximum number of artifacts to return (default 5). */
   cap?: number;
@@ -137,6 +137,7 @@ export interface RelevanceSelectionOptions {
 
 interface DelegationContextOptions {
   excludeChildSessionId?: string;
+  continueChildSessionId?: string;
 }
 
 function pad(value: number): string {
@@ -216,7 +217,9 @@ function derivePurpose(raw: string, fallback: string): string {
 export function slugifyArtifactPurpose(value: string): string {
   const ascii = value
     .normalize('NFKD')
-    .replace(/[^\x00-\x7F]/g, '')
+    .split('')
+    .filter((char) => char.charCodeAt(0) <= 0x7f)
+    .join('')
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '');
@@ -698,10 +701,8 @@ export class HandoffArtifactStore {
       );
     }
 
-    // Exclude 'open' status by default unless continuing the same child session
-    if (!options.continueChildSessionId) {
-      artifacts = artifacts.filter((r) => r.latestStatus !== 'open');
-    }
+    // Exclude 'open' status from auto-selected context.
+    artifacts = artifacts.filter((r) => r.latestStatus !== 'open');
 
     // Exclude a specific child session ID (for continuation to avoid self-reference)
     if (options.excludeChildSessionId) {
@@ -720,6 +721,24 @@ export class HandoffArtifactStore {
         explicit.push(r);
       } else {
         remaining.push(r);
+      }
+    }
+
+    if (options.continueChildSessionId) {
+      const continueRecord = this.childRecords.get(
+        options.continueChildSessionId,
+      );
+      const continuationPromptSequence = continueRecord?.promptSequence;
+      if (continuationPromptSequence != null) {
+        const deltaArtifacts = remaining.filter(
+          (record) =>
+            record.promptSequence != null &&
+            record.promptSequence > continuationPromptSequence,
+        );
+        remaining.length = 0;
+        remaining.push(...deltaArtifacts);
+      } else {
+        remaining.length = 0;
       }
     }
 
@@ -774,6 +793,7 @@ export class HandoffArtifactStore {
       context: 'delegation',
       targetAgent: options.targetAgent,
       explicitPaths: options.explicitPaths,
+      continueChildSessionId: options.continueChildSessionId,
       excludeChildSessionId: options.excludeChildSessionId,
     });
     if (artifacts.length === 0) {
@@ -899,16 +919,16 @@ export function extractArtifactPathsFromPrompt(promptText: string): string[] {
     }
   }
 
-  return unique(
-    [
-      ...extracted,
-      ...((promptText.match(
+  return unique([
+    ...extracted,
+    ...(
+      promptText.match(
         /(?:^|[\s`(])((?:\.opencode-dux\/|[A-Za-z]:\/|\/)[^`\r\n]+?\.md)(?=$|[\s`)])/gm,
-      ) ?? [])
-        .map((match) => match.replace(/^[\s`(]+/, '').replace(/[\s`)]+$/, ''))
-        .filter(Boolean)),
-    ],
-  );
+      ) ?? []
+    )
+      .map((match) => match.replace(/^[\s`(]+/, '').replace(/[\s`)]+$/, ''))
+      .filter(Boolean),
+  ]);
 }
 
 export function summarizeArtifactOutput(text: string): string {

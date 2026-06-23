@@ -1,5 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 import {
+  extractAssistantTextAfterPrompt,
+  extractSessionResult,
+  getAssistantMessageCount,
   isForwardableImagePart,
   normalizeImagePartsForChildPrompt,
   type PromptBodyPart,
@@ -106,5 +109,70 @@ describe('normalizeImagePartsForChildPrompt', () => {
         url: 'data:image/gif;base64,R0lGODlhAQABAAAAACw=',
       },
     ]);
+  });
+});
+
+describe('session extraction', () => {
+  function createClient(messages: Array<Record<string, unknown>>) {
+    return {
+      session: {
+        messages: async () => ({
+          data: messages,
+        }),
+      },
+    };
+  }
+
+  test('extractSessionResult slices assistant output after baseline offset', async () => {
+    const client = createClient([
+      {
+        info: { role: 'assistant' },
+        parts: [{ type: 'text', text: '<needs_user>old</needs_user>' }],
+      },
+      {
+        info: { role: 'assistant' },
+        parts: [{ type: 'text', text: '<plan>new</plan>' }],
+      },
+    ]);
+
+    const result = await extractSessionResult(client as never, 'child-1', {
+      includeReasoning: false,
+      assistantMessageOffset: 1,
+    });
+
+    expect(result.empty).toBe(false);
+    expect(result.text).toBe('<plan>new</plan>');
+  });
+
+  test('extractAssistantTextAfterPrompt reads latest assistant turn on resumed session', async () => {
+    const messages = [
+      {
+        info: { role: 'assistant' },
+        parts: [{ type: 'text', text: '<needs_user>old</needs_user>' }],
+      },
+      {
+        info: { role: 'assistant' },
+        parts: [{ type: 'text', text: '<plan>new</plan>' }],
+      },
+    ];
+    const client = createClient(messages);
+    const firstMessage = messages[0];
+    if (!firstMessage) {
+      throw new Error('expected prior assistant message');
+    }
+    const assistantMessageOffset = await getAssistantMessageCount(
+      createClient([firstMessage]) as never,
+      'child-1',
+    );
+
+    const result = await extractAssistantTextAfterPrompt(
+      client as never,
+      'child-1',
+      '/workspace',
+      { assistantMessageOffset },
+    );
+
+    expect(result.empty).toBe(false);
+    expect(result.text).toBe('<plan>new</plan>');
   });
 });
