@@ -42,6 +42,7 @@ import {
   createTaskSessionManagerHook,
   createTodoContinuationHook,
 } from './hooks';
+import { getLatestVersion } from './hooks/auto-update-checker';
 import { createBuiltinMcps } from './mcp';
 import type { UsageService } from './subscriptions';
 import { createUsageService } from './subscriptions';
@@ -86,6 +87,7 @@ import {
 import { initLogger, log } from './utils/logger';
 import { SubagentDepthTracker } from './utils/subagent-depth';
 import { collapseSystemInPlace } from './utils/system-collapse';
+import { VERSION_CACHE_STALE_MS, writeVersionCache } from './version-store';
 
 /**
  * Best-effort log to opencode's app logger.
@@ -585,6 +587,7 @@ const OpenCodeDux: Plugin = async (ctx) => {
     autoUpdateChecker = createAutoUpdateCheckerHook(ctx, {
       autoUpdate: config.autoUpdate ?? true,
     });
+    setTimeout(() => autoUpdateChecker.trigger(), 0);
 
     // Initialize phase reminder hook for workflow compliance
     phaseReminderHook = createPhaseReminderHook();
@@ -745,6 +748,12 @@ const OpenCodeDux: Plugin = async (ctx) => {
         updateSnapshot((s) => {
           s.pluginVersion = currentVersion;
         });
+        scheduleVersionDisplay(currentVersion).catch((err) => {
+          const versionErrMsg =
+            err instanceof Error ? err.message : String(err);
+          console.log('📦 Version check failed:', versionErrMsg);
+          log('[version] Version check failed: ' + versionErrMsg);
+        });
       }
     }
   } catch (err) {
@@ -794,6 +803,83 @@ const OpenCodeDux: Plugin = async (ctx) => {
       appLog(ctx, 'warn', msg).catch(() => {});
     }
   });
+
+  async function scheduleVersionDisplay(
+    currentVersion: string,
+  ): Promise<boolean> {
+    try {
+      const snapshot = readTuiSnapshot();
+      const savedVersion = snapshot.pluginVersion ?? null;
+
+      console.log('📦 Checking for updates...');
+      log('[version] Checking for updates...');
+      const latestVersion = await getLatestVersion('latest');
+      console.log(`📦 Fetched latest version: ${latestVersion ?? 'failed'}`);
+      log(`[version] Fetched latest version: ${latestVersion ?? 'failed'}`);
+
+      let lastChecked: number | null = null;
+      if (latestVersion) {
+        lastChecked = Date.now();
+        writeVersionCache({ latestVersion, lastChecked });
+        updateSnapshot((s) => {
+          s.versionCheck = {
+            latestVersion,
+            lastChecked,
+          };
+        });
+      }
+
+      if (savedVersion && savedVersion !== currentVersion) {
+        console.log(
+          `📦 Current version: \x1b[31mv${savedVersion}\x1b[0m \u2192 \x1b[32mv${currentVersion} (Updated)\x1b[0m`,
+        );
+        log(
+          `[version] Current version: v${savedVersion} \u2192 v${currentVersion} (Updated)`,
+        );
+      } else {
+        const cacheFresh =
+          latestVersion !== null &&
+          lastChecked !== null &&
+          Date.now() - lastChecked < VERSION_CACHE_STALE_MS;
+
+        if (cacheFresh && latestVersion !== currentVersion) {
+          console.log(
+            `📦 Current version: \x1b[31mv${currentVersion}\x1b[0m \u2192 \x1b[33mv${latestVersion}\x1b[0m`,
+          );
+          log(
+            `[version] Current version: v${currentVersion} \u2192 v${latestVersion}`,
+          );
+        } else {
+          const latestIndicator =
+            cacheFresh && latestVersion === currentVersion ? ' (latest)' : '';
+          console.log(
+            `📦 Current version: \x1b[32mv${currentVersion}${latestIndicator}\x1b[0m`,
+          );
+          log(
+            `[version] Current version: v${currentVersion}${latestIndicator}`,
+          );
+        }
+      }
+
+      if (
+        latestVersion &&
+        lastChecked &&
+        Date.now() - lastChecked < VERSION_CACHE_STALE_MS &&
+        latestVersion !== currentVersion
+      ) {
+        log(
+          `[auto-update-checker] Update available: v${currentVersion} → v${latestVersion}`,
+        );
+      }
+
+      return true;
+    } catch (err) {
+      const versionErrMsg = err instanceof Error ? err.message : String(err);
+      console.log('📦 Version check failed:', versionErrMsg);
+      log('[version] Version check failed: ' + versionErrMsg);
+      return false;
+    }
+  }
 
   return {
     name: 'opencode-dux',

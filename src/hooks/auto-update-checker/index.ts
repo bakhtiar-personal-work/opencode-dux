@@ -3,6 +3,7 @@ import * as path from 'node:path';
 import type { PluginInput } from '@opencode-ai/plugin';
 import { crossSpawn } from '../../utils/compat';
 import { log } from '../../utils/logger';
+import { updateSnapshot } from '../../tui-state';
 import { writeVersionCache } from '../../version-store';
 import { preparePackageUpdate, resolveInstallContext } from './cache';
 import {
@@ -134,7 +135,11 @@ async function runBackgroundUpdateCheck(
   }
 
   // Persist latest version to cache for startup display
-  writeVersionCache({ latestVersion, lastChecked: Date.now() });
+  const lastChecked = Date.now();
+  writeVersionCache({ latestVersion, lastChecked });
+  updateSnapshot((snapshot) => {
+    snapshot.versionCheck = { latestVersion, lastChecked };
+  });
 
   if (currentVersion === latestVersion) {
     log(

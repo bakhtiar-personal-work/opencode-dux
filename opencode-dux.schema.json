@@ -81,13 +81,21 @@
             "model": {
               "type": "string"
             },
+            "thinking": {
+              "type": "boolean"
+            },
+            "variants": {
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
             "temperature": {
               "type": "number",
               "minimum": 0,
               "maximum": 2
-            },
-            "variant": {
-              "type": "string"
             },
             "options": {
               "type": "object",
@@ -162,13 +170,21 @@
           "model": {
             "type": "string"
           },
+          "thinking": {
+            "type": "boolean"
+          },
+          "variants": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
           "temperature": {
             "type": "number",
             "minimum": 0,
             "maximum": 2
-          },
-          "variant": {
-            "type": "string"
           },
           "options": {
             "type": "object",

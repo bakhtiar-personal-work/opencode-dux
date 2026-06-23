@@ -53,7 +53,7 @@ function getPluginVersionInfo(): {
   return {
     installed,
     latest,
-    isLatest: !latest || installed === latest,
+    isLatest: latest !== undefined && installed === latest,
   };
 }
 
@@ -1707,6 +1707,9 @@ function renderSidebar(
           text({ fg: theme.accent }, ['opencode-dux']),
           (() => {
             const versionInfo = getPluginVersionInfo();
+            if (!versionInfo.latest) {
+              return text({ fg: theme.accent }, [`v${versionInfo.installed}`]);
+            }
             if (versionInfo.isLatest) {
               return text({ fg: theme.accent }, [
                 `v${versionInfo.installed} (latest)`,

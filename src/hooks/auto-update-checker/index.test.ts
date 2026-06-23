@@ -20,6 +20,10 @@ const versionStoreMocks = {
   writeVersionCache: mock(() => {}),
 };
 
+const tuiStateMocks = {
+  updateSnapshot: mock(() => {}),
+};
+
 const crossSpawnMock = mock((_command: string[]) => ({
   exited: Promise.resolve(0),
   exitCode: 0,
@@ -38,6 +42,8 @@ mock.module('./checker', () => checkerMocks);
 mock.module('./cache', () => cacheMocks);
 
 mock.module('../../version-store', () => versionStoreMocks);
+
+mock.module('../../tui-state', () => tuiStateMocks);
 
 mock.module('../../utils/compat', () => ({
   crossSpawn: crossSpawnMock,
@@ -109,6 +115,9 @@ describe('auto-update-checker/index', () => {
       stderr: () => Promise.resolve(''),
       proc: {} as never,
     }));
+
+    tuiStateMocks.updateSnapshot.mockReset();
+    tuiStateMocks.updateSnapshot.mockImplementation(() => {});
   });
 
   afterEach(() => {
@@ -223,6 +232,7 @@ describe('auto-update-checker/index', () => {
       latestVersion: '0.9.11',
       lastChecked: expect.any(Number),
     });
+    expect(tuiStateMocks.updateSnapshot).toHaveBeenCalledTimes(1);
   });
 
   test('logs message when auto-update is disabled', async () => {
