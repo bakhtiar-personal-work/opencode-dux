@@ -129,7 +129,8 @@ export function createPresetManager(ctx: PluginInput, config: PluginConfig) {
       {
         model?: string;
         temperature?: number;
-        variant?: string;
+        thinking?: boolean;
+        variants?: string[];
         options?: Record<string, unknown>;
       }
     > = {};
@@ -153,7 +154,8 @@ export function createPresetManager(ctx: PluginInput, config: PluginConfig) {
       {
         model?: string;
         temperature?: number;
-        variant?: string;
+        thinking?: boolean;
+        variants?: string[];
         options?: Record<string, unknown>;
       }
     > = {};
@@ -199,7 +201,8 @@ export function createPresetManager(ctx: PluginInput, config: PluginConfig) {
       for (const [name, cfg] of Object.entries(agentUpdates)) {
         const parts: string[] = [name];
         if (cfg.model) parts.push(`model: ${cfg.model}`);
-        if (cfg.variant) parts.push(`variant: ${cfg.variant}`);
+        if (cfg.variants?.length) parts.push(`variants: ${cfg.variants.join(', ')}`);
+        if (cfg.thinking !== undefined) parts.push(`thinking: ${cfg.thinking}`);
         if (cfg.temperature !== undefined)
           parts.push(`temp: ${cfg.temperature}`);
         if (cfg.options) parts.push('options: yes');
@@ -238,27 +241,36 @@ export function createPresetManager(ctx: PluginInput, config: PluginConfig) {
   function mapOverrideToAgentConfig(override: AgentOverrideConfig): {
     model?: string;
     temperature?: number;
-    variant?: string;
+    thinking?: boolean;
+    variants?: string[];
     options?: Record<string, unknown>;
   } {
     const agentConfig: {
       model?: string;
       temperature?: number;
-      variant?: string;
+      thinking?: boolean;
+      variants?: string[];
       options?: Record<string, unknown>;
     } = {};
 
-    const model = override.default?.model ?? override.model;
+    const defaultTier = override.default;
+    const model = defaultTier?.model ?? override.model;
     if (typeof model === 'string') {
       agentConfig.model = model;
     }
 
-    if (typeof override.temperature === 'number') {
-      agentConfig.temperature = override.temperature;
+    const thinking = defaultTier?.thinking ?? override.thinking;
+    if (typeof thinking === 'boolean') {
+      agentConfig.thinking = thinking;
     }
 
-    if (!override.default && typeof override.variant === 'string') {
-      agentConfig.variant = override.variant;
+    const variants = defaultTier?.variants ?? override.variants;
+    if (Array.isArray(variants) && variants.length > 0) {
+      agentConfig.variants = variants;
+    }
+
+    if (typeof override.temperature === 'number') {
+      agentConfig.temperature = override.temperature;
     }
 
     if (

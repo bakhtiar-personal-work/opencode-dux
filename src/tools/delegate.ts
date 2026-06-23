@@ -2,11 +2,7 @@ import type { ToolDefinition } from '@opencode-ai/plugin';
 import { tool } from '@opencode-ai/plugin';
 import type { AgentName, PluginConfig } from '../config';
 import { ALL_AGENT_NAMES, DEFAULT_MODELS } from '../config/constants';
-import {
-  getAgentOverride,
-  getAgentTier,
-  resolveAgentTier,
-} from '../config/utils';
+import { getAgentTier, resolveAgentTier } from '../config/utils';
 import {
   recordDelegatedSubagentSession,
   recordSessionDone,
@@ -379,7 +375,6 @@ export function resolveDelegatedAgentConfig(
   allowedVariants?: string[];
   variantError?: string;
 } {
-  const agentOverride = getAgentOverride(config, agentName);
   const defaultTier = getAgentTier(config, agentName) ?? {
     model: DEFAULT_MODELS[agentName as AgentName],
   };
@@ -398,11 +393,7 @@ export function resolveDelegatedAgentConfig(
     matchingTiers[0] ?? { model };
   const resolvedTier = resolveAgentTier(configuredTier);
   const allowedVariants = resolvedTier.variants;
-  const legacyVariant =
-    !agentOverride?.default && agentOverride?.variant
-      ? agentOverride.variant
-      : undefined;
-  const requestedVariant = legacyVariant ?? requested.variant;
+  const requestedVariant = requested.variant;
   const variantError =
     requestedVariant &&
     allowedVariants?.length &&

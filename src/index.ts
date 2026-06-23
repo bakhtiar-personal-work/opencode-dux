@@ -868,16 +868,26 @@ const OpenCodeDux: Plugin = async (ctx) => {
           if (typeof overrideModel === 'string') {
             entry.model = overrideModel;
           }
+          const overrideThinking = override.default?.thinking ?? override.thinking;
+          if (typeof overrideThinking === 'boolean') {
+            entry.thinking = overrideThinking;
+          } else if ('thinking' in override || override.default) {
+            delete entry.thinking;
+          }
+          const overrideVariants =
+            override.default?.variants ?? override.variants;
+          if (
+            Array.isArray(overrideVariants) &&
+            overrideVariants.length > 0
+          ) {
+            entry.variants = [...overrideVariants];
+          } else if ('variants' in override || override.default) {
+            delete entry.variants;
+          }
           // Explicitly set or clear scalar fields so switching from
           // Preset A (which sets a field) to Preset B (which doesn't)
           // doesn't leave stale values behind.
-          if (override.default) {
-            delete entry.variant;
-          } else if (typeof override.variant === 'string') {
-            entry.variant = override.variant;
-          } else if ('variant' in override) {
-            delete entry.variant;
-          }
+          delete entry.variant;
           if (typeof override.temperature === 'number') {
             entry.temperature = override.temperature;
           } else if ('temperature' in override) {
@@ -933,13 +943,30 @@ const OpenCodeDux: Plugin = async (ctx) => {
             if (typeof baselineModel === 'string') {
               entry.model = baselineModel;
             }
-            if (baseline?.default) {
-              delete entry.variant;
-            } else if (typeof baseline?.variant === 'string') {
-              entry.variant = baseline.variant;
-            } else if (prevOverride && 'variant' in prevOverride) {
-              delete entry.variant;
+            const baselineThinking =
+              baseline?.default?.thinking ?? baseline?.thinking;
+            if (typeof baselineThinking === 'boolean') {
+              entry.thinking = baselineThinking;
+            } else if (
+              (baseline && ('thinking' in baseline || baseline.default)) ||
+              (prevOverride && ('thinking' in prevOverride || prevOverride.default))
+            ) {
+              delete entry.thinking;
             }
+            const baselineVariants =
+              baseline?.default?.variants ?? baseline?.variants;
+            if (
+              Array.isArray(baselineVariants) &&
+              baselineVariants.length > 0
+            ) {
+              entry.variants = [...baselineVariants];
+            } else if (
+              (baseline && ('variants' in baseline || baseline.default)) ||
+              (prevOverride && ('variants' in prevOverride || prevOverride.default))
+            ) {
+              delete entry.variants;
+            }
+            delete entry.variant;
             if (typeof baseline?.temperature === 'number') {
               entry.temperature = baseline.temperature;
             } else if (prevOverride && 'temperature' in prevOverride) {

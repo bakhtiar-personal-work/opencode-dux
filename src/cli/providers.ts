@@ -9,49 +9,49 @@ export const GENERATED_PRESETS = ['openai', 'opencode-go'] as const;
 export const MODEL_MAPPINGS = {
   openai: {
     orchestrator: { model: 'openai/gpt-5.5' },
-    oracle: { model: 'openai/gpt-5.5', variant: 'high' },
-    librarian: { model: 'openai/gpt-5.4-mini', variant: 'low' },
-    explorer: { model: 'openai/gpt-5.4-mini', variant: 'low' },
-    designer: { model: 'openai/gpt-5.4-mini', variant: 'medium' },
-    fixer: { model: 'openai/gpt-5.4-mini', variant: 'low' },
+    oracle: { model: 'openai/gpt-5.5', variants: ['high'] },
+    librarian: { model: 'openai/gpt-5.4-mini', variants: ['low'] },
+    explorer: { model: 'openai/gpt-5.4-mini', variants: ['low'] },
+    designer: { model: 'openai/gpt-5.4-mini', variants: ['medium'] },
+    fixer: { model: 'openai/gpt-5.4-mini', variants: ['low'] },
   },
   kimi: {
     orchestrator: { model: 'kimi-for-coding/k2p5' },
-    oracle: { model: 'kimi-for-coding/k2p5', variant: 'high' },
-    librarian: { model: 'kimi-for-coding/k2p5', variant: 'low' },
-    explorer: { model: 'kimi-for-coding/k2p5', variant: 'low' },
-    designer: { model: 'kimi-for-coding/k2p5', variant: 'medium' },
-    fixer: { model: 'kimi-for-coding/k2p5', variant: 'low' },
+    oracle: { model: 'kimi-for-coding/k2p5', variants: ['high'] },
+    librarian: { model: 'kimi-for-coding/k2p5', variants: ['low'] },
+    explorer: { model: 'kimi-for-coding/k2p5', variants: ['low'] },
+    designer: { model: 'kimi-for-coding/k2p5', variants: ['medium'] },
+    fixer: { model: 'kimi-for-coding/k2p5', variants: ['low'] },
   },
   copilot: {
     orchestrator: { model: 'github-copilot/claude-opus-4.6' },
-    oracle: { model: 'github-copilot/claude-opus-4.6', variant: 'high' },
-    librarian: { model: 'github-copilot/grok-code-fast-1', variant: 'low' },
-    explorer: { model: 'github-copilot/grok-code-fast-1', variant: 'low' },
+    oracle: { model: 'github-copilot/claude-opus-4.6', variants: ['high'] },
+    librarian: { model: 'github-copilot/grok-code-fast-1', variants: ['low'] },
+    explorer: { model: 'github-copilot/grok-code-fast-1', variants: ['low'] },
     designer: {
       model: 'github-copilot/gemini-3.1-pro-preview',
-      variant: 'medium',
+      variants: ['medium'],
     },
-    fixer: { model: 'github-copilot/claude-sonnet-4.6', variant: 'low' },
+    fixer: { model: 'github-copilot/claude-sonnet-4.6', variants: ['low'] },
   },
   'zai-plan': {
     orchestrator: { model: 'zai-coding-plan/glm-5' },
-    oracle: { model: 'zai-coding-plan/glm-5', variant: 'high' },
-    librarian: { model: 'zai-coding-plan/glm-5', variant: 'low' },
-    explorer: { model: 'zai-coding-plan/glm-5', variant: 'low' },
-    designer: { model: 'zai-coding-plan/glm-5', variant: 'medium' },
-    fixer: { model: 'zai-coding-plan/glm-5', variant: 'low' },
+    oracle: { model: 'zai-coding-plan/glm-5', variants: ['high'] },
+    librarian: { model: 'zai-coding-plan/glm-5', variants: ['low'] },
+    explorer: { model: 'zai-coding-plan/glm-5', variants: ['low'] },
+    designer: { model: 'zai-coding-plan/glm-5', variants: ['medium'] },
+    fixer: { model: 'zai-coding-plan/glm-5', variants: ['low'] },
   },
   'opencode-go': {
     orchestrator: {
       model: 'neuralwatt/zai-org/GLM-5.1-FP8',
-      variant: 'medium',
+      variants: ['medium'],
     },
-    oracle: { model: 'opencode-go/deepseek-v4-flash', variant: 'medium' },
-    librarian: { model: 'opencode-go/deepseek-v4-flash', variant: 'low' },
-    explorer: { model: 'neuralwatt/qwen3.5-397b-fast', variant: 'low' },
-    designer: { model: 'opencode-go/mimo-v2.5-pro', variant: 'medium' },
-    fixer: { model: 'opencode-go/deepseek-v4-flash', variant: 'low' },
+    oracle: { model: 'opencode-go/deepseek-v4-flash', variants: ['medium'] },
+    librarian: { model: 'opencode-go/deepseek-v4-flash', variants: ['low'] },
+    explorer: { model: 'neuralwatt/qwen3.5-397b-fast', variants: ['low'] },
+    designer: { model: 'opencode-go/mimo-v2.5-pro', variants: ['medium'] },
+    fixer: { model: 'opencode-go/deepseek-v4-flash', variants: ['low'] },
   },
 } as const;
 
@@ -94,11 +94,11 @@ export function generateLiteConfig(
 
   const createAgentConfig = (
     agentName: string,
-    modelInfo: { model: string; variant?: string },
+    modelInfo: { model: string; variants?: string[] },
   ) => {
     return {
       model: modelInfo.model,
-      variant: modelInfo.variant,
+      variants: modelInfo.variants,
     };
   };
 

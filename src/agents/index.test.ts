@@ -67,16 +67,6 @@ describe('agent alias backward compatibility', () => {
     expect(explorer?.config.temperature).toBe(0.5);
   });
 
-  test('variant override via old alias', async () => {
-    const config: PluginConfig = {
-      agents: {
-        explore: { variant: 'low' },
-      },
-    };
-    const agents = await createAgents(config);
-    const explorer = agents.find((a) => a.name === 'explorer');
-    expect(explorer?.config.variant).toBe('low');
-  });
 });
 
 describe('fixer agent model selection', () => {
@@ -135,15 +125,22 @@ describe('orchestrator agent', () => {
     expect(orchestrator?.config.temperature).toBe(0.3);
   });
 
-  test('orchestrator accepts variant override', async () => {
+  test('orchestrator prompt shows simple top-level thinking variants for non-oracle agents', async () => {
     const config: PluginConfig = {
       agents: {
-        orchestrator: { variant: 'high' },
+        explorer: {
+          model: 'github-copilot/grok-code-fast-1',
+          thinking: true,
+          variants: ['low', 'high'],
+        },
       },
     };
     const agents = await createAgents(config);
     const orchestrator = agents.find((a) => a.name === 'orchestrator');
-    expect(orchestrator?.config.variant).toBe('high');
+
+    expect(orchestrator?.config.prompt).toContain(
+      '- @explorer: default=github-copilot/grok-code-fast-1 (variants=low < high)',
+    );
   });
 
   test('orchestrator prompt includes configured subagent model roster', async () => {
@@ -348,7 +345,7 @@ describe('options passthrough', () => {
       agents: {
         oracle: {
           model: 'openai/gpt-5.5',
-          variant: 'high',
+          variants: ['high'],
           temperature: 0.7,
           options: { textVerbosity: 'low', reasoningEffort: 'medium' },
         },
@@ -357,7 +354,7 @@ describe('options passthrough', () => {
     const agents = await createAgents(config);
     const oracle = agents.find((a) => a.name === 'oracle');
     expect(oracle?.config.model).toBe('openai/gpt-5.5');
-    expect(oracle?.config.variant).toBe('high');
+    expect(oracle?.config.variant).toBeUndefined();
     expect(oracle?.config.temperature).toBe(0.7);
     expect(oracle?.config.options).toEqual({
       textVerbosity: 'low',
@@ -439,6 +436,15 @@ describe('AgentOverrideConfigSchema options validation', () => {
     expect(result.success).toBe(true);
   });
 
+  test('accepts simple top-level thinking and variants', () => {
+    const result = AgentOverrideConfigSchema.safeParse({
+      model: 'opencode-go/mimo-v2.5',
+      thinking: true,
+      variants: ['high'],
+    });
+    expect(result.success).toBe(true);
+  });
+
   test('rejects variants when thinking is false', () => {
     const result = AgentOverrideConfigSchema.safeParse({
       default: {
@@ -450,13 +456,13 @@ describe('AgentOverrideConfigSchema options validation', () => {
     expect(result.success).toBe(false);
   });
 
-  test('new default tier wins over legacy model and variant', async () => {
+  test('default tier wins over top-level model', async () => {
     const config: PluginConfig = {
       agents: {
         oracle: {
           default: { model: 'new/default', variants: ['max'] },
           model: 'legacy/default',
-          variant: 'high',
+          variants: ['high'],
         },
       },
     };
@@ -490,7 +496,7 @@ describe('AgentOverrideConfigSchema options validation', () => {
   test('accepts options alongside other fields', () => {
     const result = AgentOverrideConfigSchema.safeParse({
       model: 'openai/gpt-5.5',
-      variant: 'high',
+      variants: ['high'],
       temperature: 0.7,
       options: {
         smart: 'openai/gpt-5.5-pro',
@@ -504,6 +510,14 @@ describe('AgentOverrideConfigSchema options validation', () => {
         textVerbosity: 'low',
       });
     }
+  });
+
+  test('rejects legacy variant field', () => {
+    const result = AgentOverrideConfigSchema.safeParse({
+      model: 'openai/gpt-5.5',
+      variant: 'high',
+    });
+    expect(result.success).toBe(false);
   });
 
   test('config without options is valid', () => {

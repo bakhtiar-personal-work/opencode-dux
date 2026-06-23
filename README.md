@@ -106,32 +106,90 @@ Merged from two locations, project overrides user:
 
 | Field         | Type           | Description                            |
 | ------------- | -------------- | -------------------------------------- |
+| `model`       | `string`       | Simple form for all agents             |
+| `thinking`    | `boolean`      | Simple form: enable/disable variants   |
+| `variants`    | `string[]`     | Simple form: ordered allowed variants  |
 | `default`     | `object`       | Default tier: `model`, optional `thinking` and ordered `variants` |
 | `smart`       | `object`       | Oracle-only higher-capability tier with the same fields |
 | `temperature` | `number` (0-2) | Model temperature                      |
 | `options`     | `object`       | Provider-specific model options        |
 | `displayName` | `string`       | Custom agent display name              |
 
+Simple top-level form applies to:
+
+- `orchestrator`
+- `explorer`
+- `librarian`
+- `designer`
+- `fixer`
+- `steward`
+- `interpreter`
+
+For those agents, use top-level `model`, optional `thinking`, optional
+`variants`, plus any other direct options like `temperature`.
+
 `variants` are ordered from lower to higher thinking effort. When omitted,
 opencode-dux leaves variant selection to orchestrator/provider default.
-`thinking: false` suppresses variant field. Legacy `model`, `variant`, and
+`thinking: false` suppresses variant field. Legacy `model` and
 `options.smart` remain supported.
 
-Oracle dual-model example:
+Standard agent example:
 
 ```jsonc
 {
-  "agents": {
-    "oracle": {
-      "default": {
-        "model": "opencode-go/glm-5.2",
+  "presets": {
+    "default": {
+      "orchestrator": {
+        "model": "neuralwatt/moonshotai/Kimi-K2.7-Code",
         "thinking": true,
-        "variants": ["high", "max"]
+        "variants": ["high"]
       },
-      "smart": {
-        "model": "openai/gpt-5.5",
+      "explorer": {
+        "model": "opencode-go/mimo-v2.5"
+      },
+      "librarian": {
+        "model": "opencode-go/mimo-v2.5"
+      },
+      "designer": {
+        "model": "neuralwatt/glm-5.2",
         "thinking": true,
-        "variants": ["max"]
+        "variants": ["high", "max"],
+        "temperature": 0.3
+      },
+      "fixer": {
+        "model": "opencode-go/mimo-v2.5-pro",
+        "thinking": true,
+        "variants": ["high"]
+      },
+      "steward": {
+        "model": "opencode-go/mimo-v2.5"
+      },
+      "interpreter": {
+        "model": "opencode-go/minimax-m3"
+      }
+    }
+  }
+}
+```
+
+`oracle` is special. Its top-level `model` / `thinking` / `variants` act as
+default tier, and optional `smart` adds higher-capability routing.
+
+Oracle example:
+
+```jsonc
+{
+  "presets": {
+    "default": {
+      "oracle": {
+        "model": "neuralwatt/glm-5.2",
+        "thinking": true,
+        "variants": ["high", "max"],
+        "smart": {
+          "model": "openai/gpt-5.4",
+          "thinking": true,
+          "variants": ["high", "xhigh"]
+        }
       }
     }
   }

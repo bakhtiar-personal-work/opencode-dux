@@ -6,7 +6,7 @@ describe('resolveDelegatedAgentConfig', () => {
   test('uses explicit requested model over config', () => {
     const config: PluginConfig = {
       agents: {
-        explorer: { model: 'config/explorer-model', variant: 'high' },
+        explorer: { model: 'config/explorer-model', variants: ['high'] },
       },
     };
 
@@ -16,7 +16,7 @@ describe('resolveDelegatedAgentConfig', () => {
     });
 
     expect(resolved.model).toBe('requested/explorer-model');
-    expect(resolved.variant).toBe('high');
+    expect(resolved.variant).toBe('low');
   });
 
   test('uses configured model for direct agent key when no explicit model is passed', () => {

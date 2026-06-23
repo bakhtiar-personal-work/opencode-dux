@@ -24,10 +24,27 @@ export const AgentOverrideConfigSchema = z
     default: AgentTierConfigSchema.optional(),
     smart: AgentTierConfigSchema.optional(),
     model: z.string().optional(),
+    thinking: z.boolean().optional(),
+    variants: z.array(z.string().min(1)).min(1).optional(),
     temperature: z.number().min(0).max(2).optional(),
-    variant: z.string().optional().catch(undefined),
     options: z.record(z.string(), z.unknown()).optional(), // provider-specific model options (e.g., textVerbosity, thinking budget)
     displayName: z.string().min(1).optional(),
+  })
+  .superRefine((override, ctx) => {
+    if ('variant' in override) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'variant is no longer supported; use variants',
+        path: ['variant'],
+      });
+    }
+    if (override.thinking === false && override.variants?.length) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'variants cannot be set when thinking is false',
+        path: ['variants'],
+      });
+    }
   })
   .passthrough();
 

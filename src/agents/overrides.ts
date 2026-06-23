@@ -4,7 +4,7 @@ import type { AgentDefinition } from './orchestrator';
 
 /**
  * Apply user-provided overrides to an agent's configuration.
- * Supports overriding model, variant, and temperature.
+ * Supports overriding model and temperature.
  */
 export function applyOverrides(
   agent: AgentDefinition,
@@ -14,9 +14,7 @@ export function applyOverrides(
   if (model) {
     agent.config.model = model;
   }
-  if (override.default) {
-    agent.config.variant = undefined;
-  } else if (override.variant) agent.config.variant = override.variant;
+  agent.config.variant = undefined;
   if (override.temperature !== undefined)
     agent.config.temperature = override.temperature;
   if (override.options) {

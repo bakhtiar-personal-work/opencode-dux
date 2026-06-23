@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import type { PluginConfig } from './schema';
-import { getAgentOverride, resolveAgentTier } from './utils';
+import { getAgentOverride, getAgentTier, resolveAgentTier } from './utils';
 
 describe('getAgentOverride', () => {
   test('reads override by explicit custom agent key', () => {
@@ -70,6 +70,54 @@ describe('resolveAgentTier', () => {
       model: 'test/model',
       thinking: false,
       variants: undefined,
+    });
+  });
+});
+
+describe('getAgentTier', () => {
+  test('reads simple top-level thinking and variants for non-oracle agents', () => {
+    const config = {
+      agents: {
+        explorer: {
+          model: 'test/explorer',
+          thinking: true,
+          variants: ['low', 'high'],
+        },
+      },
+    } as PluginConfig;
+
+    expect(getAgentTier(config, 'explorer')).toEqual({
+      model: 'test/explorer',
+      thinking: true,
+      variants: ['low', 'high'],
+    });
+  });
+
+  test('reads oracle top-level fields as default tier while keeping smart nested', () => {
+    const config = {
+      agents: {
+        oracle: {
+          model: 'neuralwatt/glm-5.2',
+          thinking: true,
+          variants: ['high', 'max'],
+          smart: {
+            model: 'openai/gpt-5.4',
+            thinking: true,
+            variants: ['high', 'xhigh'],
+          },
+        },
+      },
+    } as PluginConfig;
+
+    expect(getAgentTier(config, 'oracle')).toEqual({
+      model: 'neuralwatt/glm-5.2',
+      thinking: true,
+      variants: ['high', 'max'],
+    });
+    expect(getAgentTier(config, 'oracle', 'smart')).toEqual({
+      model: 'openai/gpt-5.4',
+      thinking: true,
+      variants: ['high', 'xhigh'],
     });
   });
 });

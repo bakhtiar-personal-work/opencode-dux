@@ -44,7 +44,8 @@ export function getAgentTier(
   if (tier === 'default' && override?.model) {
     return {
       model: override.model,
-      variants: override.variant ? [override.variant] : undefined,
+      thinking: override.thinking,
+      variants: override.variants,
     };
   }
 
