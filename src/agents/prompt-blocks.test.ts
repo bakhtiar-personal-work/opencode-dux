@@ -198,6 +198,12 @@ describe('USER_CHOICE_POLICY_BLOCK', () => {
   test('contains compact choice policy', () => {
     expect(USER_CHOICE_POLICY_BLOCK).toContain('## When to Ask the User');
     expect(USER_CHOICE_POLICY_BLOCK).toContain('clear winner');
+    expect(USER_CHOICE_POLICY_BLOCK).toContain(
+      'If the user already answered a prior question',
+    );
+    expect(USER_CHOICE_POLICY_BLOCK).toContain(
+      "user's answers or referenced artifacts",
+    );
     expect(USER_CHOICE_POLICY_BLOCK).toContain('Balanced tradeoffs');
   });
 });

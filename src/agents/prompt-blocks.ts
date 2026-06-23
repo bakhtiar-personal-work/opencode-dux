@@ -72,7 +72,11 @@ or data loss — report the conflict in <blocked> and do NOT proceed.`;
 /** User choice policy block. */
 export const USER_CHOICE_POLICY_BLOCK = `## When to Ask the User
 - One clear winner from evidence -> decide directly.
-- Balanced tradeoffs or ambiguous product scope -> <needs_user> with options.
+- If the user already answered a prior question, treat that decision as resolved.
+- New material blocker or new decision-critical ambiguity not resolved by the
+  user's answers or referenced artifacts -> <needs_user> with options.
+- Balanced tradeoffs or ambiguous product scope that remain unresolved ->
+  <needs_user> with options.
 - Preference among equals -> <needs_user>, not silent best-practice pick.`;
 
 /** Compact <blocked> output format block for all specialists. */
