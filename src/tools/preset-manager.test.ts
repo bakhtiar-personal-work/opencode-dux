@@ -199,7 +199,7 @@ describe('createPresetManager', () => {
           thinker: {
             oracle: {
               model: 'anthropic/claude-sonnet-4-6',
-              variant: 'thinking',
+              variants: ['thinking'],
             },
           },
         },
@@ -217,7 +217,7 @@ describe('createPresetManager', () => {
           agent: {
             oracle: {
               model: 'anthropic/claude-sonnet-4-6',
-              variant: 'thinking',
+              variants: ['thinking'],
             },
           },
         },
@@ -472,7 +472,7 @@ describe('createPresetManager', () => {
           thinker: {
             oracle: {
               model: 'anthropic/claude-sonnet-4-6',
-              variant: 'thinking',
+              variants: ['thinking'],
             },
           },
         },
@@ -490,7 +490,7 @@ describe('createPresetManager', () => {
           agent: {
             oracle: {
               model: 'anthropic/claude-sonnet-4-6',
-              variant: 'thinking',
+              variants: ['thinking'],
             },
           },
         },
@@ -522,7 +522,13 @@ describe('createPresetManager', () => {
 
       expect(ctx.client.config.update).toHaveBeenCalledWith({
         body: {
-          agent: { oracle: { model: 'opencode-go/glm-5.2' } },
+          agent: {
+            oracle: {
+              model: 'opencode-go/glm-5.2',
+              thinking: true,
+              variants: ['high', 'max'],
+            },
+          },
         },
       });
     });
@@ -534,7 +540,7 @@ describe('createPresetManager', () => {
           thinker: {
             oracle: {
               model: 'anthropic/claude-sonnet-4-6',
-              variant: 'thinking',
+              variants: ['thinking'],
               options: { thinking: { type: 'enabled', budgetTokens: 10000 } },
             },
           },
@@ -549,7 +555,7 @@ describe('createPresetManager', () => {
       );
 
       const text = getOutputText(output);
-      expect(text).toContain('variant: thinking');
+      expect(text).toContain('variants: thinking');
       expect(text).toContain('options: yes');
     });
 

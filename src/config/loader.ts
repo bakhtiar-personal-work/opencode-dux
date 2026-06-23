@@ -170,6 +170,10 @@ export function loadPluginConfig(directory: string): PluginConfig {
         config.contextPressure,
         projectConfig.contextPressure,
       ),
+      handoffArtifacts: deepMerge(
+        config.handoffArtifacts,
+        projectConfig.handoffArtifacts,
+      ),
     };
   }
 

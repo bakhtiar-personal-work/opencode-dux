@@ -197,6 +197,30 @@ describe('deepMerge behavior', () => {
     expect(config.agents?.designer?.model).toBe('project/designer-model');
   });
 
+  test('merges handoffArtifacts with project override', () => {
+    const userOpencodeDir = path.join(userConfigDir, 'opencode');
+    fs.mkdirSync(userOpencodeDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(userOpencodeDir, 'opencode-dux.json'),
+      JSON.stringify({
+        handoffArtifacts: { location: 'project' },
+      }),
+    );
+
+    const projectDir = path.join(tempDir, 'project');
+    const projectConfigDir = path.join(projectDir, '.opencode');
+    fs.mkdirSync(projectConfigDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(projectConfigDir, 'opencode-dux.json'),
+      JSON.stringify({
+        handoffArtifacts: { location: 'cache' },
+      }),
+    );
+
+    const config = loadPluginConfig(projectDir);
+    expect(config.handoffArtifacts?.location).toBe('cache');
+  });
+
   test('handles missing user config gracefully', () => {
     // Don't create user config, only project
     const projectDir = path.join(tempDir, 'project');

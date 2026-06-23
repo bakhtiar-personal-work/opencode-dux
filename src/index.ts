@@ -532,7 +532,9 @@ const OpenCodeDux: Plugin = async (ctx) => {
     }
 
     depthTracker = new SubagentDepthTracker();
-    handoffArtifactStore = new HandoffArtifactStore(ctx.directory);
+    handoffArtifactStore = new HandoffArtifactStore(ctx.directory, {
+      location: config.handoffArtifacts?.location,
+    });
     handoffArtifactStore.pruneExpired();
 
     // Initialize delegate tools for orchestrator variant-based subagent spawning

@@ -135,6 +135,19 @@ export const ContextPressureConfigSchema = z.object({
 
 export type ContextPressureConfig = z.infer<typeof ContextPressureConfigSchema>;
 
+export const HandoffArtifactsConfigSchema = z.object({
+  location: z
+    .enum(['project', 'cache'])
+    .default('project')
+    .describe(
+      'Store subagent handoff artifacts in the project (.opencode-dux) or in the app cache to avoid repo clutter.',
+    ),
+});
+
+export type HandoffArtifactsConfig = z.infer<
+  typeof HandoffArtifactsConfigSchema
+>;
+
 export const PluginConfigSchema = z
   .object({
     preset: z.string().optional(),
@@ -160,6 +173,7 @@ export const PluginConfigSchema = z
     sessionManager: SessionManagerConfigSchema.optional(),
     todoContinuation: TodoContinuationConfigSchema.optional(),
     contextPressure: ContextPressureConfigSchema.optional(),
+    handoffArtifacts: HandoffArtifactsConfigSchema.optional(),
   })
   .superRefine((config, ctx) => {
     const rejectNonOracleSmart = (

@@ -284,6 +284,20 @@
           "maximum": 99
         }
       }
+    },
+    "handoffArtifacts": {
+      "type": "object",
+      "properties": {
+        "location": {
+          "default": "project",
+          "description": "Store subagent handoff artifacts in the project (.opencode-dux) or in the app cache to avoid repo clutter.",
+          "type": "string",
+          "enum": [
+            "project",
+            "cache"
+          ]
+        }
+      }
     }
   },
   "title": "opencode-dux",

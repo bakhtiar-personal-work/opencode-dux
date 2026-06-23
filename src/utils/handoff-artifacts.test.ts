@@ -4,6 +4,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import {
   extractArtifactPathsFromPrompt,
+  getHandoffArtifactCacheDir,
   HandoffArtifactStore,
   slugifyArtifactPurpose,
 } from './handoff-artifacts';
@@ -41,6 +42,17 @@ describe('extractArtifactPathsFromPrompt', () => {
     expect(extractArtifactPathsFromPrompt(prompt)).toEqual([
       '.opencode-dux/oracle/a.md',
       '.opencode-dux/designer/b.md',
+    ]);
+  });
+
+  test('extracts absolute artifact paths from structured prompt lines', () => {
+    const prompt = [
+      '- Artifact: C:/Users/Test/AppData/Local/opencode-dux/artifacts/oracle/a.md',
+      '- Orchestrator index: /tmp/opencode-dux/artifacts/orchestrator/parent.md',
+    ].join('\n');
+    expect(extractArtifactPathsFromPrompt(prompt)).toEqual([
+      'C:/Users/Test/AppData/Local/opencode-dux/artifacts/oracle/a.md',
+      '/tmp/opencode-dux/artifacts/orchestrator/parent.md',
     ]);
   });
 });
@@ -163,6 +175,43 @@ describe('HandoffArtifactStore', () => {
 
     expect(fs.existsSync(oldFile)).toBe(false);
     expect(fs.existsSync(outsidePath)).toBe(true);
+  });
+
+  test('cache mode writes outside workspace and returns absolute paths', () => {
+    const workspace = makeTempDir();
+    const externalRoot = path.join(makeTempDir(), 'artifact-cache');
+    const store = new HandoffArtifactStore(workspace, {
+      now: () => new Date('2026-06-02T03:04:05.000Z'),
+      location: 'cache',
+      rootDir: externalRoot,
+    });
+
+    const artifact = store.seedArtifact({
+      agent: 'oracle',
+      childSessionId: 'child-1',
+      parentSessionId: 'parent-1',
+      model: 'test/oracle',
+      mode: 'blocking',
+      purpose: 'External artifact',
+      promptText: 'External artifact',
+    });
+
+    expect(artifact.artifactPath).toBe(
+      path
+        .join(externalRoot, 'oracle', 'child-1_20260602-030405_external-artifact.md')
+        .split(path.sep)
+        .join('/'),
+    );
+    expect(artifact.indexPath).toBe(
+      path.join(externalRoot, 'orchestrator', 'parent-1.md').split(path.sep).join('/'),
+    );
+    expect(artifact.artifactAbsolutePath.startsWith(workspace)).toBe(false);
+    expect(fs.existsSync(artifact.artifactAbsolutePath)).toBe(true);
+  });
+
+  test('cache dir helper follows app cache convention', () => {
+    const cacheDir = getHandoffArtifactCacheDir().split(path.sep).join('/');
+    expect(cacheDir.endsWith('/opencode-dux/artifacts')).toBe(true);
   });
 });
 

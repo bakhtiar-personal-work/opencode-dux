@@ -118,3 +118,36 @@ describe('PluginConfigSchema - smart tier', () => {
     ).toBe(false);
   });
 });
+
+describe('PluginConfigSchema - handoffArtifacts', () => {
+  test('defaults location to project', () => {
+    const result = PluginConfigSchema.safeParse({
+      handoffArtifacts: {},
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.handoffArtifacts?.location).toBe('project');
+    }
+  });
+
+  test('accepts project and cache locations', () => {
+    expect(
+      PluginConfigSchema.safeParse({
+        handoffArtifacts: { location: 'project' },
+      }).success,
+    ).toBe(true);
+    expect(
+      PluginConfigSchema.safeParse({
+        handoffArtifacts: { location: 'cache' },
+      }).success,
+    ).toBe(true);
+  });
+
+  test('rejects invalid location', () => {
+    expect(
+      PluginConfigSchema.safeParse({
+        handoffArtifacts: { location: 'temp' },
+      }).success,
+    ).toBe(false);
+  });
+});

@@ -97,6 +97,7 @@ Merged from two locations, project overrides user:
 | `todoContinuation.autoEnable`        | `boolean`  | `false` | Auto-enable when enough todos exist           |
 | `contextPressure.enabled`            | `boolean`  | `true`  | Warn when context usage is high               |
 | `contextPressure.warnThresholdPct`   | `number`   | `75`    | Trigger at this context usage % (1-99)        |
+| `handoffArtifacts.location`          | `"project"` or `"cache"` | `"project"` | `"project"` keeps `.opencode-dux/` in repo. `"cache"` stores artifacts outside repo in app cache. |
 | `websearch.provider`                 | `string`   | `"exa"` | `"exa"` or `"tavily"`                         |
 | `setDefaultAgent`                    | `boolean`  | `true`  | Sets default_agent to `orchestrator`          |
 | `autoUpdate`                         | `boolean`  | `true`  | Auto-update when loaded via npm name          |
@@ -209,11 +210,31 @@ Discovery runs automatically for non-trivial tasks.
 
 ### Handoff Artifacts
 
-Delegated subagent runs now persist handoff artifacts in the workspace:
+Delegated subagent runs now persist handoff artifacts for later reuse:
 
-- Root: `.opencode-dux/`
-- Child session artifacts: `.opencode-dux/<agent>/<sessionId>_<yyyymmdd-hhmmss>_<slug>.md`
-- Orchestrator index: `.opencode-dux/orchestrator/<orchestratorSessionId>.md`
+Set it like this in `opencode-dux.jsonc`:
+
+```jsonc
+{
+  "handoffArtifacts": {
+    "location": "project" // or "cache"
+  }
+}
+```
+
+What to put:
+
+- `"project"`: current behavior. Creates `.opencode-dux/` inside repo.
+- `"cache"`: stores artifacts outside repo so project tree stays clean.
+
+- `handoffArtifacts.location: "project"` (default):
+  - Root: `.opencode-dux/`
+  - Child session artifacts: `.opencode-dux/<agent>/<sessionId>_<yyyymmdd-hhmmss>_<slug>.md`
+  - Orchestrator index: `.opencode-dux/orchestrator/<orchestratorSessionId>.md`
+- `handoffArtifacts.location: "cache"`:
+  - Windows: `%LOCALAPPDATA%/opencode-dux/artifacts`
+  - non-Windows: `~/.cache/opencode-dux/artifacts`
+  - Prompts and envelopes use absolute artifact paths in this mode
 
 Behavior:
 
@@ -226,7 +247,7 @@ Behavior:
 - Only orchestration-critical sections stay inline: `needs_user`, `blocked`, oracle `plan`, designer `design_plan` + `implementation_notes`, fixer `summary` + `verification`.
 - The orchestrator system prompt keeps the routing control surface inline. Built-in tool availability does not let the orchestrator bypass specialist-only routing constraints.
 - Resumed child sessions via `continue_session_id` append additional turns into the same artifact file.
-- Artifacts are retained for 7 days and then pruned from `.opencode-dux/` by the plugin.
+- Artifacts are retained for 7 days and then pruned from the configured artifact root by the plugin.
 
 Install new skills: `npx skills add <owner/repo> --skill <skill-name> -g -a opencode -y`
 

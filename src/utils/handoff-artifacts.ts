@@ -1,4 +1,5 @@
 import * as fs from 'node:fs';
+import { homedir } from 'node:os';
 import * as path from 'node:path';
 import type { AgentName } from '../config';
 
@@ -25,7 +26,7 @@ interface ArtifactTurnRecord {
 
 interface ChildArtifactRecord {
   absolutePath: string;
-  relativePath: string;
+  artifactPath: string;
   agent: Exclude<AgentName, 'orchestrator'>;
   childSessionId: string;
   parentSessionId: string;
@@ -47,7 +48,7 @@ interface ChildArtifactRecord {
 interface OrchestratorIndexEntry {
   agent: Exclude<AgentName, 'orchestrator'>;
   childSessionId: string;
-  artifactRelativePath: string;
+  artifactPath: string;
   model: string;
   variant?: string;
   purpose: string;
@@ -61,15 +62,19 @@ interface OrchestratorIndexEntry {
 
 interface OrchestratorIndexRecord {
   absolutePath: string;
-  relativePath: string;
+  indexPath: string;
   parentSessionId: string;
   updatedAtIso: string;
   entries: Map<string, OrchestratorIndexEntry>;
 }
 
+export type HandoffArtifactLocation = 'project' | 'cache';
+
 interface HandoffArtifactStoreOptions {
   now?: () => Date;
   retentionMs?: number;
+  location?: HandoffArtifactLocation;
+  rootDir?: string;
 }
 
 export interface ArtifactSeedInput {
@@ -162,6 +167,43 @@ function normalizeWhitespace(value: string): string {
   return value.replace(/\s+/g, ' ').trim();
 }
 
+function normalizeDisplayPath(value: string): string {
+  return value.split(path.sep).join('/');
+}
+
+export function getHandoffArtifactCacheDir(): string {
+  return process.platform === 'win32'
+    ? path.join(
+        process.env.LOCALAPPDATA ?? homedir(),
+        'opencode-dux',
+        'artifacts',
+      )
+    : path.join(homedir(), '.cache', 'opencode-dux', 'artifacts');
+}
+
+function resolveArtifactRootDir(
+  workspaceRoot: string,
+  location: HandoffArtifactLocation,
+): string {
+  return location === 'cache'
+    ? getHandoffArtifactCacheDir()
+    : path.join(workspaceRoot, ARTIFACT_ROOT_DIRNAME);
+}
+
+function buildArtifactPath(
+  workspaceRoot: string,
+  rootDir: string,
+  location: HandoffArtifactLocation,
+  ...segments: string[]
+): { absolutePath: string; artifactPath: string } {
+  const absolutePath = path.join(rootDir, ...segments);
+  const artifactPath =
+    location === 'cache'
+      ? normalizeDisplayPath(absolutePath)
+      : normalizeDisplayPath(path.relative(workspaceRoot, absolutePath));
+  return { absolutePath, artifactPath };
+}
+
 function derivePurpose(raw: string, fallback: string): string {
   const firstLine = raw
     .split(/\r?\n/)
@@ -229,7 +271,7 @@ function renderChildArtifact(record: ChildArtifactRecord): string {
     `- Agent: ${record.agent}`,
     `- Child Session ID: ${record.childSessionId}`,
     `- Parent Orchestrator Session ID: ${record.parentSessionId}`,
-    `- Artifact Path: ${record.relativePath}`,
+    `- Artifact Path: ${record.artifactPath}`,
     `- Model: ${record.model}`,
     `- Variant: ${record.variant ?? '(default)'}`,
     `- Mode: ${record.mode}`,
@@ -300,7 +342,7 @@ function renderOrchestratorIndex(record: OrchestratorIndexRecord): string {
     '# Orchestrator Handoff Index',
     '',
     `- Orchestrator Session ID: ${record.parentSessionId}`,
-    `- Index Path: ${record.relativePath}`,
+    `- Index Path: ${record.indexPath}`,
     `- Updated: ${record.updatedAtIso}`,
     '',
     '| Agent | Child Session ID | Status | Variant | Purpose | Artifact | Created | Updated |',
@@ -309,7 +351,7 @@ function renderOrchestratorIndex(record: OrchestratorIndexRecord): string {
 
   for (const entry of entries) {
     lines.push(
-      `| ${entry.agent} | ${entry.childSessionId} | ${entry.latestStatus} | ${entry.variant ?? '(default)'} | ${entry.purpose} | ${entry.artifactRelativePath} | ${entry.createdAtIso} | ${entry.updatedAtIso} |`,
+      `| ${entry.agent} | ${entry.childSessionId} | ${entry.latestStatus} | ${entry.variant ?? '(default)'} | ${entry.purpose} | ${entry.artifactPath} | ${entry.createdAtIso} | ${entry.updatedAtIso} |`,
     );
   }
 
@@ -319,6 +361,7 @@ function renderOrchestratorIndex(record: OrchestratorIndexRecord): string {
 export class HandoffArtifactStore {
   private readonly workspaceRoot: string;
   private readonly rootDir: string;
+  private readonly location: HandoffArtifactLocation;
   private readonly now: () => Date;
   private readonly retentionMs: number;
   private readonly childRecords = new Map<string, ChildArtifactRecord>();
@@ -339,7 +382,9 @@ export class HandoffArtifactStore {
     options: HandoffArtifactStoreOptions = {},
   ) {
     this.workspaceRoot = workspaceRoot;
-    this.rootDir = path.join(workspaceRoot, ARTIFACT_ROOT_DIRNAME);
+    this.location = options.location ?? 'project';
+    this.rootDir =
+      options.rootDir ?? resolveArtifactRootDir(workspaceRoot, this.location);
     this.now = options.now ?? (() => new Date());
     this.retentionMs = options.retentionMs ?? DEFAULT_RETENTION_MS;
   }
@@ -391,7 +436,9 @@ export class HandoffArtifactStore {
   }
 
   getRootDirRelative(): string {
-    return ARTIFACT_ROOT_DIRNAME;
+    return this.location === 'cache'
+      ? normalizeDisplayPath(this.rootDir)
+      : ARTIFACT_ROOT_DIRNAME;
   }
 
   pruneExpired(): void {
@@ -460,13 +507,16 @@ export class HandoffArtifactStore {
 
     const timestamp = formatTimestampForFilename(now);
     const filename = `${input.childSessionId}_${timestamp}_${slug}.md`;
-    const relativePath = path
-      .join(ARTIFACT_ROOT_DIRNAME, input.agent, filename)
-      .split(path.sep)
-      .join('/');
+    const artifactFile = buildArtifactPath(
+      this.workspaceRoot,
+      this.rootDir,
+      this.location,
+      input.agent,
+      filename,
+    );
     const record: ChildArtifactRecord = {
-      absolutePath: path.join(this.workspaceRoot, relativePath),
-      relativePath,
+      absolutePath: artifactFile.absolutePath,
+      artifactPath: artifactFile.artifactPath,
       agent: input.agent,
       childSessionId: input.childSessionId,
       parentSessionId: input.parentSessionId,
@@ -550,7 +600,7 @@ export class HandoffArtifactStore {
   }
 
   getArtifactPath(childSessionId: string): string | undefined {
-    return this.childRecords.get(childSessionId)?.relativePath;
+    return this.childRecords.get(childSessionId)?.artifactPath;
   }
 
   getSessionInfo(childSessionId: string): ArtifactSessionInfo | undefined {
@@ -571,7 +621,7 @@ export class HandoffArtifactStore {
   }
 
   getIndexPath(parentSessionId: string): string {
-    return this.getOrCreateIndex(parentSessionId).relativePath;
+    return this.getOrCreateIndex(parentSessionId).indexPath;
   }
 
   listSessionArtifacts(
@@ -666,7 +716,7 @@ export class HandoffArtifactStore {
     const remaining: ChildArtifactRecord[] = [];
 
     for (const r of artifacts) {
-      if (explicitSet.has(r.relativePath)) {
+      if (explicitSet.has(r.artifactPath)) {
         explicit.push(r);
       } else {
         remaining.push(r);
@@ -739,7 +789,7 @@ export class HandoffArtifactStore {
       '- Do NOT ask for context that is already present in these artifacts.',
       '- If a listed artifact is missing or unreadable, report that exact path in <blocked>.',
       '',
-      `- Orchestrator index (relative): ${index.relativePath}`,
+      `- Orchestrator index: ${index.indexPath}`,
     ];
 
     for (const artifact of artifacts) {
@@ -750,7 +800,7 @@ export class HandoffArtifactStore {
         `  - Status: ${artifact.latestStatus}`,
         `  - Variant: ${artifact.variant ?? '(default)'}`,
         `  - Purpose: ${artifact.purpose}`,
-        `  - Relative artifact path: ${artifact.artifactPath}`,
+        `  - Artifact path: ${artifact.artifactPath}`,
       );
     }
 
@@ -761,9 +811,9 @@ export class HandoffArtifactStore {
   private toResult(record: ChildArtifactRecord): ArtifactRecordResult {
     const index = this.getOrCreateIndex(record.parentSessionId);
     return {
-      artifactPath: record.relativePath,
+      artifactPath: record.artifactPath,
       artifactAbsolutePath: record.absolutePath,
-      indexPath: index.relativePath,
+      indexPath: index.indexPath,
       indexAbsolutePath: index.absolutePath,
       purpose: record.purpose,
       sessionId: record.childSessionId,
@@ -776,17 +826,16 @@ export class HandoffArtifactStore {
       return existing;
     }
 
-    const relativePath = path
-      .join(
-        ARTIFACT_ROOT_DIRNAME,
-        ORCHESTRATOR_INDEX_DIRNAME,
-        `${parentSessionId}.md`,
-      )
-      .split(path.sep)
-      .join('/');
+    const indexFile = buildArtifactPath(
+      this.workspaceRoot,
+      this.rootDir,
+      this.location,
+      ORCHESTRATOR_INDEX_DIRNAME,
+      `${parentSessionId}.md`,
+    );
     const record: OrchestratorIndexRecord = {
-      absolutePath: path.join(this.workspaceRoot, relativePath),
-      relativePath,
+      absolutePath: indexFile.absolutePath,
+      indexPath: indexFile.artifactPath,
       parentSessionId,
       updatedAtIso: formatIso(this.now()),
       entries: new Map(),
@@ -801,7 +850,7 @@ export class HandoffArtifactStore {
     index.entries.set(record.childSessionId, {
       agent: record.agent,
       childSessionId: record.childSessionId,
-      artifactRelativePath: record.relativePath,
+      artifactPath: record.artifactPath,
       model: record.model,
       variant: record.variant,
       purpose: record.purpose,
@@ -822,17 +871,43 @@ export class HandoffArtifactStore {
 }
 
 export function extractArtifactPathsFromPrompt(promptText: string): string[] {
-  const matches = promptText.match(
-    /(?:^|[\s`(])(\.opencode-dux\/[A-Za-z0-9._\-/]+\.md)(?=$|[\s`)])/gm,
-  );
-  if (!matches) {
-    return [];
+  const extracted: string[] = [];
+  for (const line of promptText.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    const colonIdx = trimmed.indexOf(':');
+    if (colonIdx >= 0) {
+      const label = trimmed.slice(0, colonIdx).toLowerCase();
+      if (
+        label.endsWith('artifact') ||
+        label.endsWith('artifact path') ||
+        label.endsWith('orchestrator index') ||
+        label.endsWith('index path')
+      ) {
+        const maybePath = trimmed
+          .slice(colonIdx + 1)
+          .trim()
+          .replace(/^`|`$/g, '');
+        if (
+          maybePath.endsWith('.md') &&
+          (maybePath.startsWith('.opencode-dux/') ||
+            /^[A-Za-z]:\//.test(maybePath) ||
+            maybePath.startsWith('/'))
+        ) {
+          extracted.push(maybePath);
+        }
+      }
+    }
   }
 
   return unique(
-    matches
-      .map((match) => match.replace(/^[\s`(]+/, '').replace(/[\s`)]+$/, ''))
-      .filter(Boolean),
+    [
+      ...extracted,
+      ...((promptText.match(
+        /(?:^|[\s`(])((?:\.opencode-dux\/|[A-Za-z]:\/|\/)[^`\r\n]+?\.md)(?=$|[\s`)])/gm,
+      ) ?? [])
+        .map((match) => match.replace(/^[\s`(]+/, '').replace(/[\s`)]+$/, ''))
+        .filter(Boolean)),
+    ],
   );
 }
 

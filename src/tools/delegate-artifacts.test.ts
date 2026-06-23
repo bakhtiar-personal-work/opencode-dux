@@ -39,6 +39,7 @@ function createDelegateFixture(input: {
     sessionId: string;
     body: Record<string, unknown>;
   }) => void;
+  artifactStoreOptions?: ConstructorParameters<typeof HandoffArtifactStore>[1];
 }) {
   let createIndex = 0;
   const promptCounts = new Map<string, number>();
@@ -97,6 +98,7 @@ function createDelegateFixture(input: {
 
   const store = new HandoffArtifactStore(input.workspace, {
     now: () => new Date('2026-06-02T03:04:05.000Z'),
+    ...input.artifactStoreOptions,
   });
 
   const config: PluginConfig = {
@@ -223,6 +225,50 @@ describe('delegate artifact flow', () => {
     expect(oracleBody).toContain('<upstream_handoff_artifacts>');
     expect(oracleBody).toContain(stewardArtifact);
     expect(oracleBody).toContain('HARD REQUIREMENT:');
+  });
+
+  test('cache mode envelopes show absolute paths and downstream prompts reuse them', async () => {
+    const workspace = makeTempDir();
+    const externalRoot = path.join(makeTempDir(), 'artifact-cache');
+    const { delegateSubagent } = createDelegateFixture({
+      workspace,
+      artifactStoreOptions: {
+        location: 'cache',
+        rootDir: externalRoot,
+      },
+      sessionIds: ['steward-1', 'oracle-1'],
+      outputsBySession: {
+        'steward-1': [
+          '<rules_applicable>- `AGENTS.md` - follow bun</rules_applicable>',
+        ],
+        'oracle-1': ['<plan>Use the steward rules</plan>'],
+      },
+    });
+
+    const steward = await delegateSubagent.execute(
+      {
+        agent: 'steward',
+        prompt: 'Find and cite verbatim all relevant conventions',
+        variant: 'medium',
+      },
+      { sessionID: 'parent-1' },
+    );
+    const stewardArtifact = parseEnvelopeField(steward, 'Artifact');
+    expect(path.isAbsolute(stewardArtifact)).toBe(true);
+
+    const oracle = await delegateSubagent.execute(
+      {
+        agent: 'oracle',
+        prompt: 'Analyze the implementation approach',
+        variant: 'high',
+      },
+      { sessionID: 'parent-1' },
+    );
+    const oracleArtifact = parseEnvelopeField(oracle, 'Artifact');
+    const oracleBody = fs.readFileSync(oracleArtifact, 'utf8');
+
+    expect(path.isAbsolute(oracleArtifact)).toBe(true);
+    expect(oracleBody).toContain(stewardArtifact.split(path.sep).join('/'));
   });
 
   test('reuses the same artifact file for continue_session_id', async () => {

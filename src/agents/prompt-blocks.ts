@@ -109,7 +109,7 @@ How to use them:
 - Never assume fields or capabilities that aren't present.`;
 
 export const HANDOFF_ARTIFACTS_BLOCK = `## Handoff Artifacts
-Artifact files may be passed into your prompt as paths under \`.opencode-dux/\`.
+Artifact files may be passed into your prompt as project-relative \`.opencode-dux/...\` paths or absolute paths when external artifact storage is enabled.
 
 How to handle them:
 - Treat referenced artifact files as canonical prior subagent findings and handoffs.
@@ -120,9 +120,9 @@ How to handle them:
 - If an artifact path is referenced but missing or unreadable, report that exact path in <blocked>.`;
 
 export const ORCHESTRATOR_HANDOFF_ARTIFACTS_BLOCK = `## Artifact Routing
-Subagent handoffs are stored under \`.opencode-dux/\`:
-- Child artifacts: \`.opencode-dux/<agent>/<sessionId>_<yyyymmdd-hhmmss>_<slug>.md\`
-- Per-orchestrator index: \`.opencode-dux/orchestrator/<orchestratorSessionId>.md\`
+Subagent handoffs are stored as artifact files. In project mode they live under \`.opencode-dux/\`; in external-storage mode the paths may be absolute.
+- Project-mode child artifact example: \`.opencode-dux/<agent>/<sessionId>_<yyyymmdd-hhmmss>_<slug>.md\`
+- Project-mode orchestrator index example: \`.opencode-dux/orchestrator/<orchestratorSessionId>.md\`
 
 **Selectivity rules:**
 - HARD REQUIREMENT: pass ONLY relevant artifact paths in downstream delegations.
