@@ -29,6 +29,7 @@ describe('createOracleAgent', () => {
     expect(prompt).toContain('## Execution Todo Contract');
     expect(prompt).toContain('<execution_todo>');
     expect(prompt).toContain('canonical implementation spec');
+    expect(prompt).toContain('optional exact snippet or diff hunk');
   });
 
   test('has temperature 0.15', () => {
@@ -139,6 +140,14 @@ describe('createOracleAgent', () => {
     );
     expect(prompt).toContain('NOT AVAILABLE');
     expect(prompt).toContain('edit, write, task, patch, or apply_patch');
+  });
+
+  test('prompt tells oracle to include concrete code for fixer when possible', () => {
+    const agent = createOracleAgent('test/oracle-model');
+    const prompt = agent.config.prompt ?? '';
+    expect(prompt).toContain('include exact proposed code');
+    expect(prompt).toContain('tasks[].code');
+    expect(prompt).toContain('exact replacement/addition code safely');
   });
 
   test('config denies edit, write, and task permissions', () => {

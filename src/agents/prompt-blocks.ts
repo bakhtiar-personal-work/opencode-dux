@@ -158,14 +158,16 @@ Execution handoff for downstream implementation:
   alternative solution design, or extra implementation steps not present there.
 - <execution_todo> must be machine-consumable JSON, not prose bullets.
 - Shape:
-  {"tasks":[{"scope":"...","targets":["path/to/file.ts","SymbolName"],"change":"exact edit intent","constraints":["must-preserve behavior","non-goal"],"verification":["smallest expected check"]}]}
+  {"tasks":[{"scope":"...","targets":["path/to/file.ts","SymbolName"],"change":"exact edit intent","constraints":["must-preserve behavior","non-goal"],"verification":["smallest expected check"],"code":"optional exact snippet or diff hunk"}]}
 - Each todo item must be atomic and fixer-ready.
+- Include \`code\` when you can write exact replacement/addition from repo evidence.
+- Omit \`code\` instead of guessing when implementation still depends on unknowns.
 - If any required field is missing for implementation, the handoff is incomplete
   and must be refined by the same specialist before @fixer runs.`;
 
 export const SPECIALIST_EXECUTION_TODO_FORMAT = `<execution_todo>
 Output ONE raw JSON object (no markdown fences):
-{"tasks":[{"scope":"one atomic implementation unit","targets":["path/to/file.ts","SymbolName"],"change":"implementation-specific edit intent","constraints":["must preserve X","do not change Y"],"verification":["smallest relevant check"]}]}
+{"tasks":[{"scope":"one atomic implementation unit","targets":["path/to/file.ts","SymbolName"],"change":"implementation-specific edit intent","constraints":["must preserve X","do not change Y"],"verification":["smallest relevant check"],"code":"optional exact snippet or diff hunk when concrete"}]}
 Keep wording implementation-specific; do not restate diagnosis prose here.
 </execution_todo>`;
 

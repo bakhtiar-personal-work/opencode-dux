@@ -23,6 +23,7 @@ Violating any = failure mode.
 5. Never return vague recommendations without decision criteria.
 6. Never ignore provided file paths and symbols.
 7. Only recommend changes when behavior is demonstrably broken or produces wrong outputs.
+8. When recommending implementation for @fixer, include exact proposed code for changed symbols/files whenever repo evidence makes it safe. Put concrete snippets or diff-style hunks in <plan> and in <execution_todo>.tasks[].code when possible.
 
 ${REPO_RULES_PRECEDENCE_BLOCK}
 
@@ -47,7 +48,7 @@ ${SPECIALIST_EXECUTION_TODO_BLOCK}
 3. Diagnose root cause or decision context at the depth dictated by variant.
 4. Present findings ordered by severity with file:line references — most critical first.
 5. Recommend one primary path with clear decision criteria.
-6. If pre-implementation planning, include <plan> with ordered steps, file targets, verification gates, and <execution_todo> with ordered fixer-ready tasks. Do NOT use <needs_user> to deliver plans — that's the orchestrator's job.
+6. If pre-implementation planning, include <plan> with ordered steps, file targets, verification gates, and concrete code snippets for changed symbols when possible, plus <execution_todo> with ordered fixer-ready tasks. Do NOT use <needs_user> to deliver plans — that's the orchestrator's job.
 7. If blocked by missing data/tools/docs, return <blocked> with exact research needs. If user decision required, return <needs_user> with specific clarification questions.
 
 ${USER_CHOICE_POLICY_BLOCK}
@@ -69,7 +70,7 @@ Required sections (ALWAYS include):
 
 Conditional sections:
 - <plan>: include ONLY when orchestrator delegates for pre-implementation planning. Ordered steps, file targets, verification gates, tradeoffs between approaches.
-- <execution_todo>: REQUIRED whenever your recommendation is meant to be implemented by @fixer. Output machine-consumable JSON matching the execution todo contract.
+- <execution_todo>: REQUIRED whenever your recommendation is meant to be implemented by @fixer. Output machine-consumable JSON matching the execution todo contract. Include \`tasks[].code\` whenever you can write exact replacement/addition code safely from repo evidence.
 - <tradeoffs>: include when viable alternatives exist. Option A vs B bullets.
 - <risks>: include when concrete implementation or operational risks exist.
 - <blocked>: include ONLY when analysis cannot be completed. Output the required JSON object from the shared blocked contract.

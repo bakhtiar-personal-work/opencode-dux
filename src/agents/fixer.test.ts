@@ -50,6 +50,7 @@ describe('createFixerAgent', () => {
     expect(prompt).toContain(
       'Treat specialist-provided <execution_todo> as the authoritative implementation spec when present.',
     );
+    expect(prompt).toContain('If a task includes `code`');
   });
 
   test('prompt does not contain resolver boilerplate', () => {
