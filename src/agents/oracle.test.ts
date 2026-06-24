@@ -29,7 +29,8 @@ describe('createOracleAgent', () => {
     expect(prompt).toContain('## Execution Todo Contract');
     expect(prompt).toContain('<execution_todo>');
     expect(prompt).toContain('canonical implementation spec');
-    expect(prompt).toContain('optional exact snippet or diff hunk');
+    expect(prompt).toContain('concise markdown list inside XML tags, not JSON');
+    expect(prompt).toContain('Code: optional exact snippet or diff hunk');
   });
 
   test('has temperature 0.15', () => {
@@ -98,6 +99,9 @@ describe('createOracleAgent', () => {
       '<execution_todo>: REQUIRED whenever your recommendation is meant to be implemented by @fixer',
     );
     expect(prompt).toContain(
+      'Output concise markdown list matching execution todo contract',
+    );
+    expect(prompt).toContain(
       '<blocked>: include ONLY when analysis cannot be completed',
     );
   });
@@ -142,12 +146,13 @@ describe('createOracleAgent', () => {
     expect(prompt).toContain('edit, write, task, patch, or apply_patch');
   });
 
-  test('prompt tells oracle to include concrete code for fixer when possible', () => {
+  test('prompt tells oracle to keep execution todo terse and include code when possible', () => {
     const agent = createOracleAgent('test/oracle-model');
     const prompt = agent.config.prompt ?? '';
     expect(prompt).toContain('include exact proposed code');
-    expect(prompt).toContain('tasks[].code');
+    expect(prompt).toContain('under `Code:` lines in <execution_todo>');
     expect(prompt).toContain('exact replacement/addition code safely');
+    expect(prompt).toContain('For long tasks, keep list terse');
   });
 
   test('config denies edit, write, and task permissions', () => {
