@@ -1,6 +1,6 @@
 {
   "name": "opencode-dux",
-  "version": "1.4.24",
+  "version": "1.4.25",
   "description": "Agent orchestration, management, and operations plugin for OpenCode",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
