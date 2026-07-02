@@ -9,6 +9,8 @@
 import type { CodexUsageEntry, UsageWindow } from './types';
 
 const CODEX_WHAM_URL = 'https://chatgpt.com/backend-api/wham/usage';
+const CODEX_RESET_CREDITS_URL =
+  'https://chatgpt.com/backend-api/wham/rate-limit-reset-credits';
 
 const EMPTY_WINDOW: UsageWindow = {
   usagePercent: 0,
@@ -34,6 +36,46 @@ function windowFromApi(
   };
 }
 
+/** Best-effort fetch of banked rate-limit reset credits. Returns undefined on any failure. */
+async function fetchRateLimitResetCredits(
+  accessToken: string,
+  signal: AbortSignal | undefined,
+  accountId?: string,
+): Promise<
+  { availableCount: number; credits: Array<{ expiresAt: string }> } | undefined
+> {
+  try {
+    const res = await fetch(CODEX_RESET_CREDITS_URL, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: 'application/json',
+        ...(accountId ? { 'ChatGPT-Account-Id': accountId } : {}),
+      },
+      signal,
+    });
+    if (!res.ok) return undefined;
+    const data = (await res.json()) as {
+      available_count?: number;
+      credits?: Array<{ expires_at?: number }>;
+    };
+    const credits = (data.credits ?? [])
+      .filter(
+        (c): c is { expires_at: number } => typeof c.expires_at === 'number',
+      )
+      .map((c) => ({
+        expiresAt: new Date(c.expires_at * 1000).toISOString(),
+      }))
+      .sort((a, b) => a.expiresAt.localeCompare(b.expiresAt));
+    return {
+      availableCount: Math.max(0, Number(data.available_count) || 0),
+      credits,
+    };
+  } catch {
+    // 404/403/network/abort — feature may be unavailable for this account.
+    return undefined;
+  }
+}
+
 /**
  * Fetch Codex quota data via the WHAM usage API.
  */
@@ -45,14 +87,26 @@ export async function scrapeCodexQuota(
   const accountName = ''; // filled by caller
 
   try {
-    const res = await fetch(CODEX_WHAM_URL, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        Accept: 'application/json',
-        ...(accountId ? { 'ChatGPT-Account-Id': accountId } : {}),
-      },
-      signal,
-    });
+    const [usageResult, resetResult] = await Promise.allSettled([
+      fetch(CODEX_WHAM_URL, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Accept: 'application/json',
+          ...(accountId ? { 'ChatGPT-Account-Id': accountId } : {}),
+        },
+        signal,
+      }),
+      fetchRateLimitResetCredits(accessToken, signal, accountId),
+    ]);
+
+    // Reset-credits is best-effort: only a fulfilled value is surfaced.
+    const rateLimitResetCredits =
+      resetResult.status === 'fulfilled' ? resetResult.value : undefined;
+
+    if (usageResult.status !== 'fulfilled') {
+      throw usageResult.reason; // routed to outer catch
+    }
+    const res = usageResult.value;
 
     if (!res.ok) {
       return {
@@ -98,6 +152,7 @@ export async function scrapeCodexQuota(
         balance: Number(data.credits?.balance) || 0,
       },
       planType: data.plan_type ?? undefined,
+      rateLimitResetCredits,
     };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);

@@ -683,6 +683,27 @@ function renderCodexUsage(
     ]),
   );
 
+  // Banked rate-limit reset credits row
+  if (
+    entry.rateLimitResetCredits &&
+    entry.rateLimitResetCredits.availableCount > 0
+  ) {
+    const rlc = entry.rateLimitResetCredits;
+    const expiries = rlc.credits
+      .map((c) => formatUsageTime(c.expiresAt))
+      .slice(0, 3);
+    const extra = rlc.credits.length - 3;
+    const expiryText =
+      extra > 0 ? `${expiries.join(', ')} +${extra}` : expiries.join(', ');
+    rows.push(
+      box({ width: '100%', flexDirection: 'row' }, [
+        text({ fg: theme.textMuted }, [
+          `   Resets: ${rlc.availableCount} · expires ${expiryText}`,
+        ]),
+      ]),
+    );
+  }
+
   // Plan type row
   if (entry.planType) {
     const displayPlan =
@@ -1378,12 +1399,16 @@ function buildOrchestratingRows(
       ),
     );
     const bundle = snapshot.sessions[orchId];
-    const projectName = bundle?.projectPath ? basename(bundle.projectPath) : undefined;
+    const projectName = bundle?.projectPath
+      ? basename(bundle.projectPath)
+      : undefined;
     if (projectName) {
       rows.push(
         box({ width: '100%', flexDirection: 'row' }, [
           text({ fg: theme.textMuted }, ['  ']),
-          text({ fg: theme.text }, [truncate(projectName, ORCH_ROOT_TITLE_DISPLAY_MAX)]),
+          text({ fg: theme.text }, [
+            truncate(projectName, ORCH_ROOT_TITLE_DISPLAY_MAX),
+          ]),
         ]),
       );
     }

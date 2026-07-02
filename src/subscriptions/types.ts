@@ -224,6 +224,11 @@ export interface CodexUsageEntry {
   };
   /** Plan type (e.g., "Plus", "Team", "Enterprise") */
   planType?: string;
+  /** Banked rate-limit reset credits. Omitted when the endpoint is unavailable or fails. */
+  rateLimitResetCredits?: {
+    availableCount: number;
+    credits: Array<{ expiresAt: string }>;
+  };
 }
 
 export type SubscriptionUsageEntry =
