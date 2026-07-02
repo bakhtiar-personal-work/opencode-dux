@@ -97,4 +97,57 @@ describe('scrapeCodexQuota', () => {
     expect(result.error).toContain('Codex API returned 401');
     expect(result.rateLimitResetCredits).toBeUndefined();
   });
+
+  test('parses ISO-string expires_at into valid ISO string', async () => {
+    globalThis.fetch = mockFetchByUrl({
+      '/wham/usage': () =>
+        new Response(
+          JSON.stringify({
+            credits: { has_credits: false, unlimited: false, balance: 0 },
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      '/wham/rate-limit-reset-credits': () =>
+        new Response(
+          JSON.stringify({
+            available_count: 1,
+            credits: [{ id: 'x1', expires_at: '2026-07-12T03:16:44.727Z' }],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+    });
+
+    const result = await scrapeCodexQuota('cx-token');
+
+    expect(result.rateLimitResetCredits?.availableCount).toBe(1);
+    expect(result.rateLimitResetCredits?.credits).toHaveLength(1);
+    expect(result.rateLimitResetCredits?.credits[0].expiresAt).toBe(
+      new Date('2026-07-12T03:16:44.727Z').toISOString(),
+    );
+  });
+
+  test('missing expires_at yields empty credits array with correct availableCount', async () => {
+    globalThis.fetch = mockFetchByUrl({
+      '/wham/usage': () =>
+        new Response(
+          JSON.stringify({
+            credits: { has_credits: false, unlimited: false, balance: 0 },
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      '/wham/rate-limit-reset-credits': () =>
+        new Response(
+          JSON.stringify({
+            available_count: 3,
+            credits: [{ id: 'x' }],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+    });
+
+    const result = await scrapeCodexQuota('cx-token');
+
+    expect(result.rateLimitResetCredits?.availableCount).toBe(3);
+    expect(result.rateLimitResetCredits?.credits).toHaveLength(0);
+  });
 });

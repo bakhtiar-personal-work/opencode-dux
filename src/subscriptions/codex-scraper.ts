@@ -21,6 +21,21 @@ const EMPTY_WINDOW: UsageWindow = {
 
 const EMPTY_CREDITS = { hasCredits: false, unlimited: false, balance: 0 };
 
+// ponytail: ms-vs-seconds heuristic — values > 1e12 are already ms
+function parseExpiresAt(value: unknown): string | undefined {
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value) || value <= 0) return undefined;
+    const ms = value > 1e12 ? value : value * 1000;
+    const d = new Date(ms);
+    return Number.isNaN(d.getTime()) ? undefined : d.toISOString();
+  }
+  if (typeof value === 'string') {
+    const d = new Date(value);
+    return Number.isNaN(d.getTime()) ? undefined : d.toISOString();
+  }
+  return undefined;
+}
+
 function windowFromApi(
   w:
     | { used_percent: number; reset_at: number; limit_window_seconds: number }
@@ -56,15 +71,11 @@ async function fetchRateLimitResetCredits(
     if (!res.ok) return undefined;
     const data = (await res.json()) as {
       available_count?: number;
-      credits?: Array<{ expires_at?: number }>;
+      credits?: Array<{ expires_at?: number | string }>;
     };
     const credits = (data.credits ?? [])
-      .filter(
-        (c): c is { expires_at: number } => typeof c.expires_at === 'number',
-      )
-      .map((c) => ({
-        expiresAt: new Date(c.expires_at * 1000).toISOString(),
-      }))
+      .map((c) => ({ expiresAt: parseExpiresAt(c.expires_at) }))
+      .filter((c): c is { expiresAt: string } => c.expiresAt !== undefined)
       .sort((a, b) => a.expiresAt.localeCompare(b.expiresAt));
     return {
       availableCount: Math.max(0, Number(data.available_count) || 0),
